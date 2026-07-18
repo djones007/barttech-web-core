@@ -47,6 +47,14 @@ export interface BartmailOptinParams {
   referrer?: string;
   source_page?: string;
   country?: string;
+  /**
+   * Accepted for backwards-compat with a consumer (cloud-plus-v2's quote-accept
+   * flow) that passes it; NOT currently used by the write (silently dropped —
+   * matches the prior per-repo behaviour). Wire it through as a custom field if
+   * a real use appears. Keeping it here keeps the shared interface a superset of
+   * every consumer's params so their shims are true drop-ins.
+   */
+  quote_url?: string;
   tags?: string[];
 }
 
