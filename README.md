@@ -14,6 +14,7 @@ site's Next.js build, exactly like `barton-lms-engine`.
 |------|---------|
 | `security.ts` | `escHtml`, `timingSafeTokenEqual`, `verifyHmacSignature`, `isSafePathSegment`, `safeRedirectPath`, `isHoneypotTripped` |
 | `validation.ts` | `MAX_BODY_BYTES` / `BODY_BYTE_CAP`, `readBodyWithCap`, `exceedsBodyCap`, `isValidEmail`, `isUuid`, `fieldLengthError` (per-form field maps stay LOCAL to each route) |
+| `bartmail.ts` | `bartmailOptin`, `bartmailPurchase`, `bartmailVerify` — the canonical BartMail lead-write path (brand passed by caller). Imports `@supabase/supabase-js` (resolved from each consumer's node_modules). Excludes: barttech-website's bespoke REST variant, command-center's read-only client factory, the LMS engine's own copy. |
 
 **Only genuinely-identical primitives belong here.** Brand-specific security
 logic (e.g. a per-product upsell token) stays in that repo's own
