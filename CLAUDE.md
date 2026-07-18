@@ -18,12 +18,18 @@ each brand site and transpiled by that site's Next.js build, exactly like
 
 ## Consumers (keep this list current — it drives the propagate script)
 
-| Site | Mount path | Import |
-|------|-----------|--------|
-| ownerfoundry-website | `src/web-core` | `@/web-core/security` |
-| be-more-boundless | `web-core` | `@/web-core/security` |
+| Site | Mount path | Branch | Notes |
+|------|-----------|--------|-------|
+| ownerfoundry-website | `src/web-core` | main | LMS private-submodule plumbing (predates public) |
+| be-more-boundless | `web-core` | main | + local `signUpsellToken`/`verifyUpsellToken` |
+| chillingscreams-website | `web-core` | main | canary for public-submodule rollout |
+| cloud-plus-v2 | `src/web-core` | main | canonical security-reference repo |
+| command-center | `src/web-core` | **master** | CI trigger is `main` — only runs on PRs |
+| bartmail | `src/web-core` | main | alias `timingSafeEqualStr`; local `verifyEmailitSignature` |
+| chillingscreams-games | `web-core` | main | alias `timingSafeStringEqual` |
+| nuttyorange-games-website | `web-core` | main | `registration-token.ts` (Edge) stays local, NOT via web-core |
 
-Each site's `lib/security.ts` is a shim: `export * from "@/web-core/security"` (+ any brand-specific helpers). Route code imports `@/lib/security` and never needs to know about the submodule.
+Each site's `security.ts` is a shim: `export * from "@/web-core/security"` (+ name aliases and/or brand-specific helpers). Route code imports `@/lib/security` and never needs to know about the submodule. **Mount is `src/web-core` when the site's `@/*` maps to `./src/*`, else `web-core` at repo root.**
 
 ## Adding a new consumer
 
