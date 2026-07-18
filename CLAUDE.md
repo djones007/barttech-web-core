@@ -5,6 +5,10 @@ security primitives). Source-only, no build — mounted as a **git submodule** i
 each brand site and transpiled by that site's Next.js build, exactly like
 `barton-lms-engine`. **Not a deployable app — no Vercel project.**
 
+## ⚠️ THIS REPO IS PUBLIC
+
+`barttech-web-core` is a **public** GitHub repo (made public 2026-07-18 so consumers need no submodule auth token). **NEVER commit a secret, key, token value, DSN, `.env`, or anything brand-identifying/sensitive here.** Only generic, non-sensitive security *mechanisms* — the security of these functions comes from the secret keys they operate on (which live in each app's env vars), never from hiding this code. GitHub secret scanning + push protection are auto-enabled on public repos; do not disable them.
+
 ## Golden rules
 
 1. **Only genuinely-identical primitives belong here.** Brand-specific logic (per-product tokens, per-brand config, business rules) stays in the consuming repo's own `lib/`, which re-exports this module and adds its own helpers. Do not force differing rules through one flag-riddled function.
@@ -24,8 +28,8 @@ Each site's `lib/security.ts` is a shim: `export * from "@/web-core/security"` (
 ## Adding a new consumer
 
 1. `cd repos/<site> && git submodule add https://github.com/djones007/barttech-web-core.git <mount-path>` (inside `src/` if the site's `@/*` maps to `./src/*`, else repo root).
-2. Point the site's `lib/security.ts` (and any future shared shim) at `@/web-core/*`.
-3. Confirm the site's `build` script runs `sh scripts/fetch-submodules.sh && next build` and `GITHUB_GIT_TOKEN` is in its Vercel env (both true for OF/BMB — copy from there).
+2. Convert the site's `lib/security.ts` into a shim: `export * from "@/web-core/security"` (+ `export { timingSafeTokenEqual as <localName> }` aliases if the site's call sites use a different name, so route imports don't change; keep any brand-specific/edge helpers local).
+3. **CI:** add `submodules: recursive` to the repo's `actions/checkout` step in `.github/workflows/ci.yml` (public submodule → no token). **Vercel** clones public submodules natively — no `GITHUB_GIT_TOKEN` or `fetch-submodules.sh` needed. (OF/BMB predate this and still use the LMS private-submodule plumbing; it keeps working, just isn't required for a public submodule.)
 4. Add the site to the table above and to `tools/web-core-propagate.sh`.
 
 ## Keeping This Skill Current
