@@ -1,0 +1,7 @@
+{
+  "name": "@barttech/web-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared Barttech web helpers (security primitives, etc.) — mounted as a git submodule (src/web-core or web-core) in each brand site. Source-only, no build step; consumers transpile it via Next. Fix once here → tools/web-core-propagate.sh bumps the pointer + redeploys every consumer.",
+  "license": "UNLICENSED"
+}
