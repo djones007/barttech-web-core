@@ -18,16 +18,24 @@ each brand site and transpiled by that site's Next.js build, exactly like
 
 ## Consumers (keep this list current — it drives the propagate script)
 
-| Site | Mount path | Branch | Notes |
-|------|-----------|--------|-------|
-| ownerfoundry-website | `src/web-core` | main | LMS private-submodule plumbing (predates public) |
-| be-more-boundless | `web-core` | main | + local `signUpsellToken`/`verifyUpsellToken` |
-| chillingscreams-website | `web-core` | main | canary for public-submodule rollout |
-| cloud-plus-v2 | `src/web-core` | main | canonical security-reference repo |
-| command-center | `src/web-core` | **master** | CI trigger is `main` — only runs on PRs |
-| bartmail | `src/web-core` | main | alias `timingSafeEqualStr`; local `verifyEmailitSignature` |
-| chillingscreams-games | `web-core` | main | alias `timingSafeStringEqual` |
-| nuttyorange-games-website | `web-core` | main | `registration-token.ts` (Edge) stays local, NOT via web-core |
+Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts.
+
+| Site | Mount path | Branch | Uses | Notes |
+|------|-----------|--------|------|-------|
+| ownerfoundry-website | `src/web-core` | main | sec, bm | LMS private-submodule plumbing (predates public) |
+| be-more-boundless | `web-core` | main | sec, bm | + local `signUpsellToken`/`verifyUpsellToken`; bartmail.ts is a verbatim copy of this repo's former canonical |
+| chillingscreams-website | `web-core` | main | sec, bm | canary for public-submodule rollout |
+| cloud-plus-v2 | `src/web-core` | main | sec, val, bm | canonical security-reference repo; bartmail canary |
+| command-center | `src/web-core` | **master** | sec | read-only `supabase/bartmail.ts` factory NOT folded (different purpose) |
+| bartmail | `src/web-core` | main | sec | alias `timingSafeEqualStr`; local `verifyEmailitSignature` |
+| chillingscreams-games | `web-core` | main | sec | alias `timingSafeStringEqual` |
+| nuttyorange-games-website | `web-core` | main | sec, val, bm | `registration-token.ts` (Edge) stays local, NOT via web-core |
+| compare-it-support | `web-core` | main | bm | mounted for bartmail |
+| berekindled | `web-core` | main | bm | mounted for bartmail |
+
+**NOT folded (deliberate):** barttech-website's bartmail.ts (bespoke REST variant, no `@supabase` dep), command-center's read-only client factory, dominic-jones-website's bartmail.ts (has `applyOptinTags` consent feature + `custom_fields` the canonical doesn't implement).
+
+**Gotcha for OF/BMB (the two using `scripts/fetch-submodules.sh` for the private LMS submodule):** Vercel can restore a build cache that predates a web-core pointer bump, leaving `web-core/` EMPTY after `git submodule update --init` (it thinks it's already initialised) → every `@/web-core/*` import breaks, even with CI green. Their `fetch-submodules.sh` now has an empty-submodule-worktree guard (purge `.git/modules/<sub>` + `--force` re-init). Keep those two scripts in sync.
 
 Each site's `security.ts` is a shim: `export * from "@/web-core/security"` (+ name aliases and/or brand-specific helpers). Route code imports `@/lib/security` and never needs to know about the submodule. **Mount is `src/web-core` when the site's `@/*` maps to `./src/*`, else `web-core` at repo root.**
 
