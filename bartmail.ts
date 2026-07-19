@@ -56,6 +56,22 @@ export interface BartmailOptinParams {
    */
   quote_url?: string;
   tags?: string[];
+  /**
+   * Extra structured fields stored on the contact record (e.g. a scorecard
+   * score). Merged into any existing custom_fields on re-optin, never dropped.
+   * Consumer: dominic-jones-website.
+   */
+  custom_fields?: Record<string, string>;
+  /**
+   * When false, skips adding the default `${brand}-optin` / `${brand}-${form_type}`
+   * tags AND does not clear existing suppression — for a form whose opt-in
+   * checkbox was left unticked (the visitor did NOT consent to marketing). The
+   * contact record + custom_fields are still stored, so the lead is retained for
+   * internal segmentation but is not enrolled or un-suppressed. Defaults to true
+   * (existing behaviour for every other caller). Consumers: checkout-engine,
+   * dominic-jones-website.
+   */
+  applyOptinTags?: boolean;
 }
 
 export async function bartmailOptin(params: BartmailOptinParams): Promise<void> {
@@ -74,6 +90,8 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     source_page,
     country,
     tags: extraTags,
+    custom_fields,
+    applyOptinTags = true,
   } = params;
 
   const supabase = getBartmailSupabase();
@@ -98,7 +116,7 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   const { data: existing, error: lookupError } = await supabase
     .from("contacts")
     .select(
-      "id, first_name, last_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, source_page, country"
+      "id, first_name, last_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, source_page, country, custom_fields"
     )
     .eq("email", email)
     .eq("tenant_id", tenantId)
@@ -124,6 +142,7 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
         referrer: referrer ?? null,
         source_page: source_page ?? null,
         country: country ?? null,
+        custom_fields: custom_fields ?? null,
       })
       .select("id")
       .single();
@@ -133,8 +152,11 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     }
     contactId = (contact as { id: string }).id;
   } else {
-    const ex = existing as Record<string, string | null> & { id: string };
-    const updates: Record<string, string> = {};
+    const ex = existing as Record<string, string | null> & {
+      id: string;
+      custom_fields: Record<string, string> | null;
+    };
+    const updates: Record<string, unknown> = {};
     if (first_name && !ex.first_name) updates.first_name = first_name;
     if (last_name && !ex.last_name) updates.last_name = last_name;
     if (utm_source && !ex.utm_source) updates.utm_source = utm_source;
@@ -145,6 +167,10 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     if (referrer && !ex.referrer) updates.referrer = referrer;
     if (source_page && !ex.source_page) updates.source_page = source_page;
     if (country && !ex.country) updates.country = country;
+    if (custom_fields) {
+      // Custom fields always merge in fresh values (e.g. a re-taken scorecard score)
+      updates.custom_fields = { ...(ex.custom_fields ?? {}), ...custom_fields };
+    }
 
     if (Object.keys(updates).length > 0) {
       const { error: updateError } = await supabase
@@ -157,17 +183,21 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     contactId = ex.id;
   }
 
-  // Remove any brand-level suppression (resubscribe)
-  await supabase
-    .from("contact_suppressions")
-    .delete()
-    .eq("contact_id", contactId)
-    .eq("tenant_id", tenantId)
-    .eq("brand_id", brandId);
+  if (applyOptinTags) {
+    // Remove any brand-level suppression (resubscribe). Skipped when consent
+    // wasn't given — an unticked opt-in must not silently un-suppress a contact.
+    await supabase
+      .from("contact_suppressions")
+      .delete()
+      .eq("contact_id", contactId)
+      .eq("tenant_id", tenantId)
+      .eq("brand_id", brandId);
+  }
 
-  // Build tag list
-  const tagsToInsert = [`${brand}-optin`];
-  if (form_type) tagsToInsert.push(`${brand}-${form_type}`);
+  // Build tag list — skip the default optin tags when consent wasn't given.
+  // extraTags (explicit non-optin tags) are still applied regardless.
+  const tagsToInsert = applyOptinTags ? [`${brand}-optin`] : [];
+  if (applyOptinTags && form_type) tagsToInsert.push(`${brand}-${form_type}`);
   if (Array.isArray(extraTags)) {
     for (const t of extraTags) {
       if (typeof t === "string" && t.trim()) tagsToInsert.push(`${brand}-${t.trim()}`);
