@@ -33,8 +33,9 @@ Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts.
 | compare-it-support | `web-core` | main | bm | mounted for bartmail |
 | berekindled | `web-core` | main | bm | mounted for bartmail |
 | checkout-engine | `src/web-core` | main | sec, val, bm | the ORIGIN web-core's security.ts was copied from — now consumes it (closed the two-canonical-copies gap). `isTestModeToken` lives in web-core for this repo. |
+| dominic-jones-website | `web-core` | main | bm | shim keeps `import "server-only"`; uses `getBartmailClient` (web-core exports it as an alias); source of the `applyOptinTags`/`custom_fields` logic now in the canonical |
 
-**bartmail.ts NOT folded (deliberate):** barttech-website's (bespoke REST variant, no `@supabase` dep), command-center's read-only client factory. **dominic-jones-website is now FOLDABLE** — the canonical implements its `applyOptinTags` + `custom_fields` (added 2026-07-19) — but it also exports a `getBartmailClient` factory its `rateLimit.ts` uses; fold it by first exporting the client factory from web-core (its internal `getBartmailSupabase`), then shim dominic-jones re-exporting web-core + aliasing `getBartmailClient`.
+**bartmail.ts NOT folded (deliberate — the only two left):** barttech-website's (bespoke REST variant, no `@supabase` dep, minimal corporate site), command-center's read-only client factory (14-line, different purpose). Every other repo's bartmail.ts is now a shim over this module.
 
 **Gotcha for OF/BMB (the two using `scripts/fetch-submodules.sh` for the private LMS submodule):** Vercel can restore a build cache that predates a web-core pointer bump, leaving `web-core/` EMPTY after `git submodule update --init` (it thinks it's already initialised) → every `@/web-core/*` import breaks, even with CI green. Their `fetch-submodules.sh` now has an empty-submodule-worktree guard (purge `.git/modules/<sub>` + `--force` re-init). Keep those two scripts in sync.
 
