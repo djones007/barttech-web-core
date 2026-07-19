@@ -83,6 +83,18 @@ export function safeRedirectPath(next: string | null): string {
 }
 
 /**
+ * Test-mode gate. A checkout runs against the brand's Stripe TEST account only
+ * when the caller presents the shared `CHECKOUT_TEST_TOKEN` (constant-time
+ * compared). Keeps fake-purchase mode ours, not the public's. (Used by
+ * checkout-engine; harmless elsewhere — returns false when the env var is unset.)
+ */
+export function isTestModeToken(token: string | null | undefined): boolean {
+  const expected = process.env.CHECKOUT_TEST_TOKEN;
+  if (!expected) return false;
+  return timingSafeTokenEqual(token ?? null, expected);
+}
+
+/**
  * Simple honeypot check for public forms — a hidden field real users never
  * fill in. Bots that auto-fill every field trip it. Silent-reject (return 200)
  * rather than 4xx so bots don't learn the field name.

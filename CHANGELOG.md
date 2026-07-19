@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-19] — security.ts: add isTestModeToken (superset for checkout-engine)
+
+### Added
+- `isTestModeToken(token)` to `security.ts` — the Stripe TEST-mode gate (constant-time compares a `CHECKOUT_TEST_TOKEN`), restoring the one export checkout-engine's original `security.ts` had that web-core lacked. web-core is now a true superset of the checkout-engine origin (it was already safer on `escHtml` [+`'`] and `timingSafeTokenEqual` [null/undefined + try/catch]), so checkout-engine can adopt the shared module without losing anything. Returns false when `CHECKOUT_TEST_TOKEN` is unset — inert in every other consumer.
+
 ## [2026-07-19] — Add bartmail.ts (canonical BartMail lead-write path)
 
 ### Added
