@@ -24,7 +24,14 @@ const BARTMAIL_SUPABASE_URL = process.env.BARTMAIL_SUPABASE_URL ?? "";
 const BARTMAIL_SUPABASE_SERVICE_ROLE_KEY =
   process.env.BARTMAIL_SUPABASE_SERVICE_ROLE_KEY ?? "";
 
-function getBartmailSupabase() {
+/**
+ * The single BartMail Supabase client factory (service-role, no session
+ * persistence). Used internally by the optin write, and exported for consumers
+ * that need the raw client for other server-side work (e.g. dominic-jones-website's
+ * durable rate limiter). Throws if credentials are missing — callers that must
+ * fail open should check the env vars first. Also exported as `getBartmailClient`.
+ */
+export function getBartmailSupabase() {
   if (!BARTMAIL_SUPABASE_URL || !BARTMAIL_SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("BartMail Supabase credentials not configured");
   }
@@ -32,6 +39,9 @@ function getBartmailSupabase() {
     auth: { persistSession: false },
   });
 }
+
+/** Alias of {@link getBartmailSupabase} for consumers that named it `getBartmailClient`. */
+export { getBartmailSupabase as getBartmailClient };
 
 export interface BartmailOptinParams {
   email: string;

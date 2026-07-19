@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-19] — bartmail.ts: export the client factory (getBartmailSupabase / getBartmailClient)
+
+### Added
+- Exported the internal BartMail Supabase client factory as `getBartmailSupabase`, plus a `getBartmailClient` alias — so consumers needing the raw client for other server-side work (dominic-jones-website's durable rate limiter) can adopt the shared module. Unblocks folding dominic-jones-website's bartmail.ts.
+
 ## [2026-07-19] — validation.ts: add parse-with-cap dialect (superset for checkout-engine)
 
 ### Added
