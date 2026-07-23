@@ -34,6 +34,7 @@ Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts.
 | berekindled | `web-core` | main | bm | mounted for bartmail |
 | checkout-engine | `src/web-core` | main | sec, val, bm | the ORIGIN web-core's security.ts was copied from — now consumes it (closed the two-canonical-copies gap). `isTestModeToken` lives in web-core for this repo. |
 | dominic-jones-website | `web-core` | main | bm | shim keeps `import "server-only"`; uses `getBartmailClient` (web-core exports it as an alias); source of the `applyOptinTags`/`custom_fields` logic now in the canonical |
+| barttech-next-template | `src/web-core` | main | sec, val, bm | THE SCAFFOLD — every new site inherits web-core from day one. No Vercel project (propagate script skips the deploy wait). New sites must `git submodule update --init` on clone — see the template's README/CLAUDE.md. |
 
 **bartmail.ts NOT folded (deliberate — the only two left):** barttech-website's (bespoke REST variant, no `@supabase` dep, minimal corporate site), command-center's read-only client factory (14-line, different purpose). Every other repo's bartmail.ts is now a shim over this module.
 
