@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-25e] — consent.ts: consent travels across a brand's subdomains (cookie-backed)
+
+### Changed
+- **The consent record now lives in a cookie scoped to the registrable domain**, with `localStorage` kept as a mirror. `localStorage` is per-origin, so a buyer who accepted on `<brand>.com` was invisible to `checkout.<brand>.com` and got a **second banner mid-purchase** — friction at the worst possible moment, and a re-prompt caused by blindness rather than by law. A `Domain=.<brand>.com` cookie is readable by both, same controller and same site, so the choice carries lawfully and the checkout shows no banner at all.
+- **Domain resolved by attempt-and-verify, not by parsing.** Stripping the first label gets `checkout.<brand>.com` → `<brand>.com` right but turns `<brand>.co.uk` into the public suffix `co.uk`, which browsers reject. Instead each candidate is written and read back, keeping the broadest that actually sticks — no public-suffix list, no per-app config, correct on apex domains, `.co.uk`, subdomains, IP literals and `localhost`.
+- Cookie attributes: `SameSite=Lax` (must survive a top-level navigation from an ad click or an email — `Strict` would break exactly the visitor we care about), `Secure` off-localhost, `Path=/`, 12-month `Max-Age`, and deliberately **not** `HttpOnly` — the banner and the head snippet are client-side and must read it, and nothing secret is stored (it is the visitor's own choice).
+- `CONSENT_MODE_HEAD_SNIPPET` now reads the **cookie first**, falling back to the mirror. This is the point of the change: on `checkout.<brand>.com` the cookie is the only place the grant exists, and replaying it before `wait_for_update` expires is what stops the first checkout pageview — the conversion event itself — being *modelled* instead of *measured*.
+
+### Fixed
+- `clearConsent()` now calls `deleteConsentCookieEverywhere()` **before** touching the mirror. It previously cleared `localStorage` only, which — once the cookie became the source of truth — would have left a visitor who clicked **Reject all** still consented, on every sibling subdomain, invisibly from the host that "cleared" it. The module's own comments already called this out as the worst failure it could have; the deletion helper existed but was never wired up.
+
+### Notes
+- **Does not carry to `assuredcheckout.com`** — a different registrable domain from any brand site, so consent cannot and must not travel there. That host still shows a banner. checkout-engine resolves tenants by host, so behaviour differs between `checkout.<brand>.com` and the generic domain by design.
+- `onConsentChange` still does not fire across subdomains (`storage` is origin-scoped and never fires for cookie writes). The consent itself travels; a live in-page callback in an already-open tab on another subdomain does not. Documented on the export rather than papered over — Consent Mode's own signal is what actually gates Google there.
+- Cookies are blocked more often than `localStorage`, so every cookie path fails soft to the mirror and no storage failure can break a banner.
+
 ## [2026-07-25d] — adPlatforms.ts: add ad.doubleclick.net to the Google Ads CSP hosts
 
 ### Fixed

@@ -14,6 +14,20 @@
 //   3. Consent for analytics can NEVER be silently upgraded into consent for
 //      marketing. See the storage-key note below.
 //
+// WHERE THE CHOICE IS STORED — a first-party COOKIE scoped to the registrable
+// domain, mirrored into localStorage. This is not a storage preference, it is a
+// conversion fix: localStorage is per-ORIGIN, so a visitor who accepted on the
+// brand site and then clicked through to `checkout.<brand>.com` was asked AGAIN,
+// mid-purchase, because the checkout literally could not read the choice. A
+// cookie with `Domain=<brand>.com` is readable by the apex and every subdomain
+// under it, so the same company, the same data controller and the same site
+// carry one consent — the checkout shows no banner when a choice already exists.
+//
+// The one thing this must never become is "hide the banner on checkout hosts".
+// Suppressing a banner because you assume consent you cannot read is unlawful;
+// the fix is to make the record READABLE, then let the normal `readConsent()`
+// logic decide. See {@link CONSENT_STORAGE_KEY} for the cross-domain limit.
+//
 // Deliberately framework-agnostic and UI-free: web-core is source-only and holds
 // no React. The banner is a per-repo component (brand styling differs); it calls
 // into this module for state, and into `adPlatforms.ts` for tag loading.
@@ -45,7 +59,29 @@ export type ConsentCategory = "necessary" | "analytics" | "marketing";
 export const CONSENT_VERSION = 2;
 
 /**
- * localStorage key holding the visitor's choice.
+ * Name of the cookie holding the visitor's choice — and the localStorage key of
+ * the mirror. One name for both stores, so nothing has to be kept in sync.
+ *
+ * **The cookie is the source of truth; localStorage is a mirror.** The cookie is
+ * written with `Domain=<registrable domain>` (see {@link CONSENT_COOKIE_MAX_AGE_SECONDS}
+ * for the rest of the attributes), which makes one choice readable across the
+ * apex and every subdomain of the same site — `<brand>.com` and
+ * `checkout.<brand>.com` share it. localStorage cannot do that: it is keyed by
+ * ORIGIN, so the checkout subdomain sees an empty store and re-prompts a visitor
+ * who already decided, in the middle of paying. The mirror stays because
+ * cookies are blocked far more often than localStorage is, and because a
+ * `storage` event is still the only cross-tab signal available (see
+ * {@link onConsentChange}).
+ *
+ * **What consent CANNOT carry across.** A cookie's `Domain` may only be the
+ * host's own registrable domain or a parent of it — never another site. So a
+ * SHARED, multi-tenant checkout served from its own registrable domain (rather
+ * than from `checkout.<brand>.com`) is a different site to the browser and must
+ * show its own banner: there is no lawful or technical way to inherit the brand
+ * site's choice there. Since a multi-tenant checkout resolves the tenant from
+ * the request host, the SAME product behaves differently on the two hosts —
+ * banner-free on the brand's own subdomain, banner-showing on the shared domain.
+ * That is correct, not a bug; do not "fix" it by assuming consent.
  *
  * **Why `_v2`, and why the old key is not read:** the estate's original banner
  * stored a binary string under `cookie_consent` (`"accepted"` / `"declined"`),
@@ -64,7 +100,10 @@ export const CONSENT_VERSION = 2;
  */
 export const CONSENT_STORAGE_KEY = "cookie_consent_v2";
 
-/** Legacy binary keys — for cleanup only. NEVER read one of these as a grant. */
+/**
+ * Legacy binary localStorage keys — for cleanup only. NEVER read one of these as
+ * a grant. (They were only ever localStorage; there is no legacy cookie to tidy.)
+ */
 export const LEGACY_CONSENT_KEYS = ["cookie_consent", "cookie-consent"] as const;
 
 /** The visitor's recorded choice, as persisted. */
@@ -136,6 +175,219 @@ function ensureGtag(w: ConsentWindow): GtagFn {
   return w.gtag;
 }
 
+// --- cookie storage --------------------------------------------------------
+//
+// Everything in this section is best-effort and MUST NOT throw: a browser with
+// cookies blocked, a sandboxed iframe, or a `file://` page all make
+// `document.cookie` unusable, and none of that may be allowed to break a banner
+// the visitor has to interact with to use the site.
+
+/**
+ * How long the consent cookie lives: **12 months**.
+ *
+ * Chosen deliberately. There is no statutory expiry in PECR/UK GDPR, but the
+ * regulators' consistent position is that consent must be refreshed at
+ * "appropriate intervals" (the ICO's cookie guidance; the CNIL puts a number on
+ * it — 6 months minimum, 13 months as the outer limit for the cookie itself).
+ * 12 months is the interval the industry settled on inside that window: long
+ * enough that a returning customer is not re-interrogated every visit, short
+ * enough that consent is never treated as permanent. {@link CONSENT_VERSION}
+ * handles the other refresh trigger — a policy change re-prompts immediately,
+ * regardless of how much of this window is left.
+ *
+ * Two browser caps sit UNDER this and cannot be raised, which is why the
+ * localStorage mirror and a well-behaved banner still matter:
+ * - Chrome clamps any cookie to 400 days.
+ * - Safari's ITP caps ALL script-writable storage (`document.cookie` **and**
+ *   localStorage) to 7 days of no interaction with the site, so some Safari
+ *   visitors will be asked again after a week no matter what is set here.
+ */
+export const CONSENT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+
+/** Resolved once per page: the cookie `Domain`, or null for a host-only cookie. */
+let cookieDomain: string | null | undefined;
+/** Guard so a blocked-cookie browser doesn't re-attempt migration on every read. */
+let migrationAttempted = false;
+
+/** Is this hostname an IP literal? Those can never carry a `Domain` attribute. */
+function isIpLiteral(hostname: string): boolean {
+  // IPv6 arrives bracketed (`[::1]`) or, defensively, bare — either way it has
+  // a colon, which no DNS hostname does.
+  return hostname.includes(":") || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
+}
+
+/**
+ * Candidate cookie domains for a hostname, **broadest first**.
+ *
+ * Single-label hosts (`localhost`), IP literals and bare TLDs yield nothing —
+ * those get a host-only cookie (no `Domain` attribute), which is exactly right.
+ * `checkout.<brand>.com` yields `<brand>.com` then `checkout.<brand>.com`;
+ * `<brand>.co.uk` yields `co.uk` then `<brand>.co.uk`.
+ *
+ * Note that `co.uk` is deliberately still OFFERED. This function does not know
+ * about public suffixes and must not pretend to — the browser is the authority,
+ * and {@link resolveCookieDomain} asks it. See there.
+ */
+function cookieDomainCandidates(hostname: string): string[] {
+  const host = hostname.toLowerCase().replace(/\.+$/, "");
+  if (!host || isIpLiteral(host)) return [];
+
+  const labels = host.split(".");
+  const candidates: string[] = [];
+  // Stop at two labels: a single label is a TLD, and no browser accepts one.
+  for (let i = labels.length - 2; i >= 0; i--) candidates.push(labels.slice(i).join("."));
+  return candidates;
+}
+
+/**
+ * `Secure` on HTTPS, omitted on plain HTTP.
+ *
+ * Not a weakening: a `Secure` cookie set over `http://` is DISCARDED, so
+ * hard-coding the flag would silently disable consent storage on every local
+ * dev server and leave the banner re-appearing on each page. Production is
+ * HTTPS everywhere (HSTS is in the estate's security standard), so production
+ * always gets `Secure`. `http://localhost` is treated as a trustworthy origin by
+ * browsers, so its host-only cookie works without the flag.
+ */
+function cookieSecureFlag(): string {
+  return typeof window !== "undefined" && window.location?.protocol === "https:" ? "; Secure" : "";
+}
+
+/**
+ * Write one cookie. `domain` null = host-only. `maxAge` 0 deletes it.
+ *
+ * `SameSite=Lax` because the record is read by first-party page scripts only and
+ * must survive an ordinary top-level navigation from an ad or an email — which
+ * `Strict` would break for exactly the visitor we care about (arriving from a
+ * Google Ads click, straight into the funnel). `Path=/` so every route sees it.
+ * NOT `HttpOnly`: the banner and the head snippet are client-side and have to
+ * read it, and there is no server round-trip in this design to set it any other
+ * way. Nothing secret is stored here — it is the visitor's own choice.
+ */
+function writeRawCookie(name: string, value: string, domain: string | null, maxAge: number): void {
+  if (typeof document === "undefined") return;
+  const parts = [`${name}=${value}`, "Path=/", `Max-Age=${maxAge}`, "SameSite=Lax"];
+  if (domain) parts.push(`Domain=${domain}`);
+  try {
+    document.cookie = parts.join("; ") + cookieSecureFlag();
+  } catch {
+    // Cookies disabled / sandboxed document — the caller falls back to the mirror.
+  }
+}
+
+/** Read one cookie's raw (still URL-encoded) value, or null. */
+function readRawCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  let jar = "";
+  try {
+    jar = document.cookie || "";
+  } catch {
+    return null;
+  }
+  const prefix = `${name}=`;
+  for (const part of jar.split(";")) {
+    const entry = part.trim();
+    if (entry.startsWith(prefix)) return entry.slice(prefix.length);
+  }
+  return null;
+}
+
+/**
+ * The broadest domain the BROWSER actually accepts for this host — found by
+ * attempt-and-verify, not by parsing.
+ *
+ * **Why not just strip the first label.** `checkout.<brand>.com` → `<brand>.com`
+ * is right; `<brand>.co.uk` → `co.uk` is a public suffix, which browsers reject
+ * outright (and which would be wrong even if they didn't — it would offer the
+ * cookie to every other `.co.uk` site). Getting that right by rule needs the
+ * Public Suffix List: ~9,000 entries, updated continuously, that would have to
+ * be shipped and refreshed in every consumer bundle. So instead: write a probe
+ * cookie at each candidate from broadest to narrowest, read it back, and keep
+ * the first one that STUCK. The browser's own PSL does the work, no data ships,
+ * and it stays correct when the list changes.
+ *
+ * The probe name is randomised per resolution so a leftover probe from an
+ * earlier page load can never be mistaken for a successful write. Falls back to
+ * null (host-only cookie) when nothing sticks — `localhost`, an IP literal, a
+ * cookie-blocking browser. Cached for the page's lifetime; the hostname cannot
+ * change without a navigation.
+ */
+function resolveCookieDomain(): string | null {
+  if (cookieDomain !== undefined) return cookieDomain;
+
+  cookieDomain = null;
+  if (typeof window === "undefined" || typeof document === "undefined") return cookieDomain;
+
+  const probe = `__bt_cd_${Math.random().toString(36).slice(2, 10)}`;
+  for (const candidate of cookieDomainCandidates(window.location?.hostname ?? "")) {
+    writeRawCookie(probe, "1", candidate, 60);
+    const stuck = readRawCookie(probe) === "1";
+    // Always tidy up: on a rejected candidate this is a no-op, on an accepted
+    // one it stops a stray probe cookie riding along on every request.
+    writeRawCookie(probe, "", candidate, 0);
+    if (stuck) {
+      cookieDomain = candidate;
+      break;
+    }
+  }
+
+  return cookieDomain;
+}
+
+/**
+ * Delete the consent cookie at EVERY scope it could have been written to —
+ * host-only plus every candidate domain, not just the currently-resolved one.
+ *
+ * This is the important one. A cookie left behind at a broader scope after a
+ * visitor clicks Reject would keep granting consent on every other subdomain,
+ * and would be invisible from the host that "cleared" it — the worst failure
+ * this module could have. It also runs before each write, so a host-only copy
+ * from an earlier visit can never shadow the domain-scoped one (two cookies of
+ * the same name with the same path have an unspecified order in
+ * `document.cookie`, so the only safe answer is to never have two).
+ */
+function deleteConsentCookieEverywhere(): void {
+  if (typeof window === "undefined") return;
+  writeRawCookie(CONSENT_STORAGE_KEY, "", null, 0);
+  for (const candidate of cookieDomainCandidates(window.location?.hostname ?? "")) {
+    writeRawCookie(CONSENT_STORAGE_KEY, "", candidate, 0);
+  }
+}
+
+/** The choice as stored in the cookie, or null. Never throws. */
+function readConsentCookie(): ConsentState | null {
+  const raw = readRawCookie(CONSENT_STORAGE_KEY);
+  if (raw === null) return null;
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    // A malformed `%` sequence — hand-edited or truncated. `parseConsent` will
+    // reject it, which is the correct outcome: no choice, not a grant.
+  }
+  return parseConsent(decoded);
+}
+
+/**
+ * Persist the choice to the domain-scoped cookie. Returns whether it stuck, so
+ * the caller can tell a real write from a cookie-blocked browser. Never throws.
+ *
+ * The JSON is URL-encoded because a cookie value may not contain `;`, `,` or
+ * whitespace — and the payload is JSON, which contains all three.
+ */
+function writeConsentCookie(state: ConsentState): boolean {
+  if (typeof document === "undefined") return false;
+  const domain = resolveCookieDomain();
+  deleteConsentCookieEverywhere();
+  writeRawCookie(
+    CONSENT_STORAGE_KEY,
+    encodeURIComponent(JSON.stringify(state)),
+    domain,
+    CONSENT_COOKIE_MAX_AGE_SECONDS
+  );
+  return readConsentCookie() !== null;
+}
+
 // --- state -----------------------------------------------------------------
 
 const listeners = new Set<ConsentListener>();
@@ -171,18 +423,39 @@ function parseConsent(raw: string | null): ConsentState | null {
  * The visitor's stored choice, or `null` if they have not chosen yet, the record
  * is corrupt, or it predates the current {@link CONSENT_VERSION}.
  *
+ * **Cookie first, localStorage second.** The cookie is the cross-subdomain
+ * record; the localStorage mirror only wins when there is no cookie — a visitor
+ * who chose before this module moved to cookies, or one whose cookie write was
+ * blocked. A mirror-only record is MIGRATED into the cookie here (once per page,
+ * best-effort), so the next hop to `checkout.<brand>.com` reads it without ever
+ * re-asking. That makes this read mildly side-effecting, deliberately: the
+ * alternative is re-prompting every existing visitor for a choice they already
+ * lawfully made under the same policy version.
+ *
  * `null` is the state in which a banner must be shown and NOTHING but
  * strictly-necessary storage may fire. Returns `null` on the server — never
  * render a consent-dependent tag during SSR; decide on the client after mount.
  */
 export function readConsent(): ConsentState | null {
   if (typeof window === "undefined") return null;
+
+  const fromCookie = readConsentCookie();
+  if (fromCookie) return fromCookie;
+
+  let fromMirror: ConsentState | null = null;
   try {
-    return parseConsent(window.localStorage.getItem(CONSENT_STORAGE_KEY));
+    fromMirror = parseConsent(window.localStorage.getItem(CONSENT_STORAGE_KEY));
   } catch {
     // localStorage throws in Safari private mode / when storage is disabled.
     return null;
   }
+  if (!fromMirror) return null;
+
+  if (!migrationAttempted) {
+    migrationAttempted = true;
+    writeConsentCookie(fromMirror);
+  }
+  return fromMirror;
 }
 
 /**
@@ -212,12 +485,22 @@ export function writeConsent(choice: ConsentChoice): ConsentState {
 
   if (typeof window === "undefined") return state;
 
+  // Cookie first — it is the record every subdomain of this site can read, and
+  // the one the checkout depends on to not re-ask mid-purchase.
+  writeConsentCookie(state);
+
   try {
+    // The mirror. Kept written even when the cookie succeeded: it is what the
+    // `storage` event fires on (the only cross-tab signal available), what
+    // pre-cookie consumer code still reads, and the fallback for a browser that
+    // blocks cookies but allows localStorage.
     window.localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(state));
   } catch {
     // Storage disabled: the choice still applies to THIS page view (the signals
     // below are pushed either way), it just won't survive a reload.
   }
+  // A choice was just made; nothing left to migrate.
+  migrationAttempted = true;
 
   // Tell Google before telling the app — so any tag a listener loads starts up
   // with the correct consent already in effect.
@@ -257,6 +540,15 @@ function notify(state: ConsentState | null): void {
  * Fires for changes made in ANY tab: the `storage` event only fires in OTHER
  * tabs, so a visitor who withdraws consent in one tab must stop being tracked in
  * the others. Same-tab changes are delivered directly by {@link writeConsent}.
+ *
+ * **Known limitation — does NOT fire across subdomains.** The `storage` event is
+ * scoped to one origin and does not fire at all for cookie writes, so a change
+ * made on `<brand>.com` will not notify an already-open `checkout.<brand>.com`
+ * tab (or vice versa). The consent itself still travels — the cookie is
+ * domain-scoped, so the other tab picks it up on its next read/navigation — but
+ * a live in-page callback will not run. Do not rely on this for withdrawal
+ * taking effect instantly in an already-open tab on another subdomain; Consent
+ * Mode's own signal is what actually gates Google there.
  *
  * The callback is NOT invoked on subscribe — read the current state with
  * {@link readConsent} first if you need it. No-op (returns a no-op unsubscribe)
@@ -398,7 +690,17 @@ gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personali
 gtag('set','ads_data_redaction',true);
 gtag('set','url_passthrough',true);
 try{
-  var s=JSON.parse(window.localStorage.getItem(${JSON.stringify(CONSENT_STORAGE_KEY)})||'null');
+  var k=${JSON.stringify(CONSENT_STORAGE_KEY)};
+  var raw=null;
+  /* Cookie FIRST: it is the source of truth and, unlike localStorage, it is
+     readable across the brand's subdomains. On checkout.<brand>.com this is the
+     ONLY place the grant exists, and replaying it here — before wait_for_update
+     expires — is what stops the first checkout pageview being modelled instead
+     of measured. Falls back to the localStorage mirror when cookies are blocked. */
+  var m=document.cookie.match(new RegExp('(?:^|; *)'+k+'=([^;]*)'));
+  if(m){try{raw=decodeURIComponent(m[1]);}catch(e){raw=m[1];}}
+  if(!raw){try{raw=window.localStorage.getItem(k);}catch(e){}}
+  var s=JSON.parse(raw||'null');
   if(s&&s.version===${CONSENT_VERSION}){
     gtag('consent','update',{ad_storage:s.marketing?'granted':'denied',ad_user_data:s.marketing?'granted':'denied',ad_personalization:s.marketing?'granted':'denied',analytics_storage:s.analytics?'granted':'denied'});
   }
@@ -468,6 +770,12 @@ export function denyAll(): ConsentState {
  */
 export function clearConsent(): void {
   if (typeof window === "undefined") return;
+  // Cookie FIRST, and at every domain scope. The cookie is the source of truth
+  // (readConsent prefers it), so clearing only the localStorage mirror would
+  // leave the visitor still consented — and consented on every sibling
+  // subdomain, invisibly from whichever host ran this. See
+  // deleteConsentCookieEverywhere.
+  deleteConsentCookieEverywhere();
   try {
     window.localStorage.removeItem(CONSENT_STORAGE_KEY);
     // Tidy up the pre-v2 binary keys while we're here (cleanup only — these are
