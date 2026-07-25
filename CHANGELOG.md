@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-25g] — Dependabot for the dev toolchain
+
+### Added
+- `.github/dependabot.yml` — grouped monthly npm + github-actions updates (limit 5 each), matching the estate baseline. This repo ships no runtime dependencies; the npm block covers only the dev-only toolchain that lets web-core check itself. Without it that toolchain would silently rot, which matters more here than in a normal app — a stale checker on the estate's shared module is a blind spot in 11 repos at once.
+- Same major holds as the rest of the estate (`typescript`, `eslint`, `@eslint/*`), though for a slightly different reason: web-core deliberately does not use `eslint-config-next`, so the `eslint-plugin-react` breakage does not apply — but it uses `typescript-eslint` directly, and that is the package that hard-refuses TS 7.
+- No `vercel.json` `ignoreCommand` needed: this repo has no Vercel project (it is a submodule library, not a deployable app), so Dependabot branches cannot trigger a preview build.
+
 ## [2026-07-25f] — web-core gets its own lint + typecheck CI
 
 ### Added

@@ -1,0 +1,39 @@
+version: 2
+updates:
+  # This repo ships no runtime dependencies — everything below is the dev-only
+  # toolchain that lets web-core lint and type-check ITSELF in CI. Consumers never
+  # install any of it. Without Dependabot that toolchain would silently rot, which
+  # matters more here than in a normal app: this is the estate's shared module, so a
+  # stale checker here is a blind spot in 11 repos at once.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    ignore:
+      # Same major holds as the rest of the estate ([[feedback_dependabot_upstream_holds]]),
+      # though the reason here is slightly different: web-core deliberately does NOT use
+      # eslint-config-next, so the eslint-plugin-react breakage does not apply — but it
+      # DOES use typescript-eslint directly, and that is the package that hard-refuses
+      # TS 7 ("typescript-eslint does not support TS 7.0"). Holding the ESLint majors
+      # alongside it keeps a shared module's toolchain moving deliberately rather than
+      # on a monthly auto-bump. Minor and patch still flow.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/*"
+        update-types: ["version-update:semver-major"]
+    open-pull-requests-limit: 5
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
