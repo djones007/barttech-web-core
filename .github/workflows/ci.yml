@@ -1,0 +1,35 @@
+name: CI
+
+# web-core is consumed as a git submodule by 9+ repos. Until 2026-07-25 it had no CI
+# of its own and was linted only as a side effect of being vendored into consumers —
+# which meant a lint error introduced here reddened every consumer's build at once,
+# against files none of them is allowed to edit (a fix there is lost on the next
+# pointer bump). The gate belongs where the source lives. Consumers now exclude
+# src/web-core/** from their own lint.
+#
+# One job, not three: GitHub rounds every job up to a full billed minute
+# (see memory/feedback_github_actions_billing.md). This repo is public, so its
+# minutes are free — but the estate pattern stays consistent.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # `if: always()` so a lint failure never hides a type error — both are
+      # reported in one run rather than one masking the other.
+      - if: always()
+        run: npm run typecheck

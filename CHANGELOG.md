@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-25f] — web-core gets its own lint + typecheck CI
+
+### Added
+- `.github/workflows/ci.yml` — one job running `npm ci` → `npm run lint` → `npm run typecheck` on push and PR (`if: always()` on typecheck so a lint failure never hides a type error). This repo is public, so its Actions minutes are free.
+- `tsconfig.json` (noEmit, `strict`, `noUnusedLocals`/`noUnusedParameters`) and `eslint.config.mjs` (plain `typescript-eslint`, deliberately NOT `eslint-config-next` — this library ships no React). `@typescript-eslint/no-explicit-any` is an **error** here rather than a warning: an implicit any in a module consumed by 9+ repos becomes an untyped value in all of them.
+- Dev-only devDependencies + `lint`/`typecheck` scripts. Consumers never install these; `node_modules/` stays gitignored, so the submodule checkout remains source-only.
+
+### Why
+Until now web-core was linted only as a **side effect** of being vendored into consuming repos. A lint error introduced here reddened 9 builds at once, against files none of those repos is permitted to edit — a fix made in a consumer copy is discarded on the next submodule pointer bump. The gate now sits where the source lives, and consumers exclude `src/web-core/**` from their own lint. Both checks passed clean on the first run across all 2,220 lines, so the gate ships strict with no baseline.
+
 ## [2026-07-25e] — consent.ts: consent travels across a brand's subdomains (cookie-backed)
 
 ### Changed

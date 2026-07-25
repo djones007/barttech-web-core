@@ -4,9 +4,22 @@ Shared web helpers for the Barttech estate — the **single source of truth** fo
 cross-cutting code that was previously copy-pasted into every brand site (and
 drifted out of sync). Fix once here, propagate to every consumer.
 
-This is a **source-only** repo — no build, no `node_modules`, no tsconfig. It is
-mounted into each consuming site as a **git submodule** and transpiled by that
-site's Next.js build, exactly like `barton-lms-engine`.
+This is a **source-only** repo — nothing here is built or published. It is mounted
+into each consuming site as a **git submodule** and transpiled by that site's
+Next.js build, exactly like `barton-lms-engine`.
+
+It does now carry a dev-only toolchain (`tsconfig.json`, `eslint.config.mjs`, and
+devDependencies) purely so it can check **itself** in CI — `npm run lint` and
+`npm run typecheck`, both `noEmit`. None of that reaches consumers: they never
+install this package's dependencies, and `node_modules/` is gitignored, so the
+submodule checkout in `src/web-core` stays source-only exactly as before.
+
+**Why it has its own CI (added 2026-07-25):** before this, web-core was linted only
+as a side effect of being vendored into 9 consuming repos. That meant a lint error
+introduced here turned 9 builds red simultaneously, against files none of those
+repos may edit — a fix made in a consumer's copy is lost on the next pointer bump.
+The gate belongs where the source lives. Consumers now exclude `src/web-core/**`
+from their own lint.
 
 ## What lives here
 
