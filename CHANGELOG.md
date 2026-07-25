@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-25j] — validation: export `EMAIL_RE` / `UUID_RE`
+
+### Added
+- `validation.ts` — `EMAIL_RE` and `UUID_RE` are now exported. Purely additive; no existing export changed. The doc comment steers new code to `isValidEmail`/`isUuid` instead, since those also narrow the type and reject non-strings.
+
+### Why
+`barton-lms-engine` tests these patterns directly in four route handlers (`UUID_RE.test(lessonId)`) rather than going through the guards. Exporting them lets that repo drop its own duplicate `validation.ts` — whose regexes were already byte-identical to these — and consume this module instead. Adding an export was the least invasive option: the alternative was rewriting those call sites, which changes behaviour rather than just wiring.
+
 ## [2026-07-25i] — bartmail: the optin path no longer pulls in `node:crypto`
 
 ### Changed

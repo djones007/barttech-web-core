@@ -17,8 +17,14 @@ export const MAX_BODY_BYTES = 32 * 1024;
 /** Alias for callers that named the cap `BODY_BYTE_CAP`. */
 export const BODY_BYTE_CAP = MAX_BODY_BYTES;
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * Exported for call sites that test the pattern directly rather than through
+ * the guards below (barton-lms-engine's route handlers do this). Prefer
+ * `isValidEmail` / `isUuid` in new code — they also narrow the type and reject
+ * non-strings, which a bare `.test()` on an `unknown` will not.
+ */
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Read a request body as text with a hard byte cap. Content-Length can be absent
