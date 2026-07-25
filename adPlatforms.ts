@@ -176,14 +176,25 @@ export const AD_PLATFORMS: Record<string, AdPlatform> = {
         "https://googleads.g.doubleclick.net",
         "https://www.googleadservices.com",
         "https://stats.g.doubleclick.net",
+        // Cross-domain conversion measurement (`/ccm/s/collect`). NOT the same
+        // host as googleads.g.doubleclick.net, and easy to miss because the tag
+        // only calls it once the `_gcl_au` linker cookie exists — so a quick
+        // first-load test passes and a returning visitor gets a CSP error.
+        // Found in a real browser 2026-07-25 while rolling ads out to the
+        // brand sites; vendor docs do not list it.
+        "https://ad.doubleclick.net",
         "https://www.google.com",
         "https://www.google.co.uk",
       ],
-      // Conversion pings and the `ga-audiences` remarketing beacon are IMAGE
-      // requests to google.com / google.<ccTLD> — hence the country host too.
+      // Conversion pings and the `pagead/1p-user-list` remarketing beacon are
+      // IMAGE requests to google.com / google.<ccTLD> — hence the country host
+      // too. Confirmed live: with both present, the remarketing user-list call
+      // fires on google.com AND google.co.uk; drop either and half the audience
+      // signal is silently blocked.
       imgSrc: [
         "https://googleads.g.doubleclick.net",
         "https://stats.g.doubleclick.net",
+        "https://ad.doubleclick.net",
         "https://www.google.com",
         "https://www.google.co.uk",
         "https://www.googleadservices.com",
