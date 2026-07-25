@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-25i] — bartmail: the optin path no longer pulls in `node:crypto`
+
+### Changed
+- `bartmail.ts` — `node:crypto` is no longer imported at module scope. It is imported lazily **inside** `bartmailPurchase`, the only function that uses it (HMAC-signing the purchase webhook body), and only when `BARTMAIL_PURCHASES_SECRET` is actually set. The header and the call site both carry a "do not hoist this back" note.
+
+### Why
+Importing this module dragged `node:crypto` into the graph for every consumer, even though almost all of them only ever call `bartmailOptin`. That module-scope import was one of **two** blockers stopping `barton-lms-engine` from consuming this module: it deliberately carries a hand-maintained partial copy of `bartmailOptin` in order to stay free of `node:crypto`, and that copy silently misses every fix made here to suppression and consent handling. This removes that blocker.
+
+The second blocker still stands — `barton-lms-engine` is itself a submodule of `barton-lms`, `ownerfoundry-website` and `be-more-boundless`, so consuming web-core there would mean nested submodules, compounding the empty-worktree/stale-cache bug those repos already carry `fetch-submodules.sh` workarounds for. Folding it in is therefore still a separate decision, not an automatic follow-on.
+
+Behaviour is unchanged. With no signing secret the signature was `undefined` before and is `undefined` now, and the import never executes. `tsc --noEmit` and `eslint` both clean.
+
 ## [2026-07-25h] — adPlatforms: document that the `next.config.ts` import works
 
 ### Changed

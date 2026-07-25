@@ -6,15 +6,18 @@
 // every consuming site uses the same code and its own brand value. Copied from
 // the long-standing canonical `be-more-boundless/lib/bartmail.ts`.
 //
-// Node-runtime only (imports @supabase/supabase-js + node:crypto). Each consumer
-// resolves @supabase/supabase-js from its own node_modules (web-core is
-// source-only, no deps). Requires env: BARTMAIL_SUPABASE_URL,
+// Imports @supabase/supabase-js at module scope; each consumer resolves it from
+// its own node_modules (web-core is source-only, no deps). `node:crypto` is
+// deliberately NOT imported at module scope — it is lazily imported inside
+// bartmailPurchase, the only function that needs it. That keeps the optin path
+// (bartmailOptin, all most consumers use) free of node:crypto, so this module
+// stays usable from runtimes and packages that cannot take that dependency.
+// Do not hoist it back to a top-level import. Requires env: BARTMAIL_SUPABASE_URL,
 // BARTMAIL_SUPABASE_SERVICE_ROLE_KEY (+ BARTMAIL_URL / BARTMAIL_PURCHASES_SECRET
 // for bartmailPurchase/Verify) — set in each app's env, NEVER committed here.
 // Exports: bartmailOptin, bartmailPurchase, bartmailVerify.
 // ---------------------------------------------------------------------------
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
 
 const BARTMAIL_URL_RAW = process.env.BARTMAIL_URL ?? "https://bartmail.vercel.app";
 const ALLOWED_BARTMAIL = /^https:\/\/bartmail\.vercel\.app(\/|$)/i;
@@ -246,9 +249,14 @@ export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<
   try {
     const bodyStr = JSON.stringify(params);
     const secret = process.env.BARTMAIL_PURCHASES_SECRET;
-    const sig = secret
-      ? `sha256=${crypto.createHmac("sha256", secret).update(bodyStr).digest("hex")}`
-      : undefined;
+    // Lazy, INSIDE the function: importing this module must not pull node:crypto
+    // into the graph. See the header note — do not hoist this to a top-level
+    // import. Only reached when a signing secret is configured.
+    let sig: string | undefined;
+    if (secret) {
+      const { createHmac } = await import("node:crypto");
+      sig = `sha256=${createHmac("sha256", secret).update(bodyStr).digest("hex")}`;
+    }
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (sig) headers["x-bartmail-signature"] = sig;
     await fetch(`${BARTMAIL_URL}/api/purchases`, {
