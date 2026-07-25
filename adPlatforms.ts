@@ -312,12 +312,27 @@ function mergeHosts(...lists: readonly (readonly string[])[]): readonly string[]
  * drifted wrong in seven repos at once.
  *
  * ```ts
+ * // next.config.ts — import this module DIRECTLY. Do not re-declare the lists.
+ * import { AD_CSP_HOSTS, ANALYTICS_CSP_HOSTS } from "./web-core/adPlatforms";
+ * //                                       …or "./src/web-core/adPlatforms"
  * const csp = [
  *   `script-src 'self' 'unsafe-inline' ${[...ANALYTICS_CSP_HOSTS.scriptSrc, ...AD_CSP_HOSTS.scriptSrc].join(" ")}`,
  *   `connect-src 'self' ${[...ANALYTICS_CSP_HOSTS.connectSrc, ...AD_CSP_HOSTS.connectSrc].join(" ")}`,
  *   `img-src 'self' data: ${[...ANALYTICS_CSP_HOSTS.imgSrc, ...AD_CSP_HOSTS.imgSrc].join(" ")}`,
  * ].join("; ");
  * ```
+ *
+ * **A relative `.ts` import from `next.config.ts` WORKS — never "fix" it by
+ * copying the hostnames inline.** Next 16's `next-config-ts` loader bundles
+ * relative imports rather than leaving them as bare `require()` calls, so the
+ * submodule path resolves at config-load time. Every consumer imports it this
+ * way. Two consumers briefly held hand-copied lists on 2026-07-25 under the
+ * mistaken belief that the import could not work; re-verified with a full
+ * `npm run build` **and** a served `content-security-policy` header check on
+ * both, then reverted to the import the same day. A second hand-maintained copy
+ * is how `ad.doubleclick.net` went missing from live headers in the first place
+ * — if an import ever genuinely breaks, fix the resolution, do not fork the
+ * data.
  *
  * **Only add these to a site that actually runs ads AND discloses advertising /
  * remarketing cookies in its `/privacy`.** Several estate sites deliberately

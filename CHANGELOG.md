@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-25h] — adPlatforms: document that the `next.config.ts` import works
+
+### Changed
+- `adPlatforms.ts` — the `AD_CSP_HOSTS` doc block now shows the exact `next.config.ts` import line and states plainly that a relative `.ts` import from `next.config.ts` **works**, so the hostnames must never be copied inline again.
+
+### Why
+On 2026-07-25 two consumer repos replaced the import with hand-copied host lists, on the belief that Next's `next-config-ts` loader emits relative imports as bare `require()` calls that cannot resolve a `.ts` file. That is not true on Next 16.2.11 — the loader bundles them. Eleven other consumers had been importing this module from `next.config.ts` in production the entire time. Re-verified on both with a full `npm run build` **and** a served `content-security-policy` header check before reverting them to the import.
+
+That second hand-maintained copy is not a cosmetic issue: it is the exact mechanism by which `ad.doubleclick.net` reached live headers on some sites and not others. The rule is now written where the data lives — if an import ever genuinely fails to resolve, fix the resolution; never fork the list.
+
 ## [2026-07-25g] — Dependabot for the dev toolchain
 
 ### Added
