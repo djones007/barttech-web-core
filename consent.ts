@@ -355,6 +355,57 @@ export function initConsentMode(): void {
 }
 
 /**
+ * The same Consent Mode v2 default as {@link initConsentMode}, as a raw inline
+ * script for the document `<head>`.
+ *
+ * **Why this exists as a string.** `initConsentMode()` is module code: in a
+ * Next.js app it cannot execute until the client bundle has been parsed and the
+ * component tree has mounted. That is early enough only while every Google/Meta
+ * tag on the page is itself consent-gated and client-injected — one
+ * `<Script src="…gtag/js">` rendered server-side into the HTML and the ordering
+ * silently inverts, Google discards the late default, and the site is back to
+ * unconsented storage with no error anywhere. Putting the default in the head as
+ * a parser-blocking inline script makes the ordering a property of the HTML
+ * itself rather than of component mount order, which is the only version of this
+ * you can actually verify (view source, or a browser network waterfall).
+ *
+ * Render it first inside the root layout's `<head>`:
+ *
+ * ```tsx
+ * <head>
+ *   <script dangerouslySetInnerHTML={{ __html: CONSENT_MODE_HEAD_SNIPPET }} />
+ * </head>
+ * ```
+ *
+ * Do NOT reach for `next/script` with `strategy="beforeInteractive"` here: in
+ * the App Router an inline `beforeInteractive` script is not emitted as a plain
+ * `<script>` at all — Next wraps the body in `(self.__next_s=…).push(…)` and
+ * replays it from its own runtime, so what lands in the HTML is a queue entry,
+ * not an executed consent default.
+ *
+ * It replays a stored choice too, so a returning visitor's grant is in effect
+ * before the first tag rather than 500ms later. The storage key and version are
+ * interpolated from the constants above — they cannot drift from
+ * {@link readConsent}, which is the entire reason this lives here rather than
+ * being hand-copied into four root layouts. Still call {@link initConsentMode}
+ * from the app as well (it is idempotent): this snippet covers the pre-hydration
+ * window, that call covers everything after it.
+ */
+export const CONSENT_MODE_HEAD_SNIPPET = `
+window.dataLayer=window.dataLayer||[];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});
+gtag('set','ads_data_redaction',true);
+gtag('set','url_passthrough',true);
+try{
+  var s=JSON.parse(window.localStorage.getItem(${JSON.stringify(CONSENT_STORAGE_KEY)})||'null');
+  if(s&&s.version===${CONSENT_VERSION}){
+    gtag('consent','update',{ad_storage:s.marketing?'granted':'denied',ad_user_data:s.marketing?'granted':'denied',ad_personalization:s.marketing?'granted':'denied',analytics_storage:s.analytics?'granted':'denied'});
+  }
+}catch(e){}
+`.trim();
+
+/**
  * Push a Consent Mode v2 **update** reflecting the visitor's choice. Call it on
  * every change (`writeConsent` already does this for you).
  *
