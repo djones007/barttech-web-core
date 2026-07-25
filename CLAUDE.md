@@ -18,7 +18,7 @@ each brand site and transpiled by that site's Next.js build, exactly like
 
 ## Consumers (keep this list current — it drives the propagate script)
 
-Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts.
+Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts, **up** = uploads.ts, **aud** = audit.ts.
 
 | Site | Mount path | Branch | Uses | Notes |
 |------|-----------|--------|------|-------|

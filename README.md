@@ -15,6 +15,8 @@ site's Next.js build, exactly like `barton-lms-engine`.
 | `security.ts` | `escHtml`, `timingSafeTokenEqual`, `verifyHmacSignature`, `isSafePathSegment`, `safeRedirectPath`, `isHoneypotTripped` |
 | `validation.ts` | `MAX_BODY_BYTES` / `BODY_BYTE_CAP`, `readBodyWithCap`, `exceedsBodyCap`, `isValidEmail`, `isUuid`, `fieldLengthError` (per-form field maps stay LOCAL to each route) |
 | `bartmail.ts` | `bartmailOptin`, `bartmailPurchase`, `bartmailVerify` — the canonical BartMail lead-write path (brand passed by caller). Imports `@supabase/supabase-js` (resolved from each consumer's node_modules). Excludes: barttech-website's bespoke REST variant, command-center's read-only client factory, the LMS engine's own copy. |
+| `uploads.ts` | `UPLOAD_LIMITS`, `IMAGE_MIME_TYPES`, `DOCUMENT_MIME_TYPES`, `sniffMimeType`, `safeUploadFilename`, `validateUpload` — server-side upload validation. Never trusts the client-declared MIME type or the extension; sniffs magic bytes. Sanitises filenames for storage keys (path-traversal guard). |
+| `audit.ts` | `AUDIT_ACTIONS`, `AuditAction`, `writeAuditLog`, `requestAuditContext` — append-only audit log of privileged actions, written to the app's own Supabase `audit_log` table. `writeAuditLog` never throws, and **must be awaited** (an un-awaited call is killed when a serverless function returns). |
 
 **Only genuinely-identical primitives belong here.** Brand-specific security
 logic (e.g. a per-product upsell token) stays in that repo's own
