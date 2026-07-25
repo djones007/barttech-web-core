@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-25h] — charts.ts: shared chart presentation for internal dashboards
+
+### Added
+- `charts.ts` — `SERIES_COLORS` (the slate→blue ramp lifted from command-center's `YEAR_FILLS`, the estate's only chart palette in real production use), `SIGNAL_COLORS`, `CHART_GRID`, `CHART_AXIS`, plus `asChartNumber`, `compactNumber`, `chartCurrency`, `chartPercent`.
+- `asChartNumber` exists because recharts 3 widened its Tooltip/axis formatter value to `ValueType`, so a `(v: number) => …` callback no longer type-checks. Narrowing beats casting: a cast would silently hide a genuinely non-numeric series. Non-numeric returns `null`, so formatters render an em dash instead of NaN.
+
+### Why only the constants, not a ChartCard
+Command Centre already defines `ChartCard` **three times** (`orders-view`, `kpi-client`, `seasonality-view`) and two of them have already drifted — two wrap shadcn `Card`, one hand-rolls a `div`, and all three pick a different fixed height. So the duplication is real. But the card shell is ~15 lines of JSX coupled to each app's `Card` primitive and spacing, and this repo is deliberately React-free (same reason the cookie banner stays per-repo). The parts that actually drift and matter are the colours and formatting — those are here. Charts are for INTERNAL dashboards only; brand marketing sites follow their own per-brand palettes.
+
 ## [2026-07-25k] — docs: record barton-lms-engine as a submodule-less consumer
 
 ### Changed
