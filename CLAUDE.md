@@ -7,7 +7,11 @@ each brand site and transpiled by that site's Next.js build, exactly like
 
 ## ⚠️ THIS REPO IS PUBLIC
 
-`barttech-web-core` is a **public** GitHub repo (made public 2026-07-18 so consumers need no submodule auth token). **NEVER commit a secret, key, token value, DSN, `.env`, or anything brand-identifying/sensitive here.** Only generic, non-sensitive security *mechanisms* — the security of these functions comes from the secret keys they operate on (which live in each app's env vars), never from hiding this code. GitHub secret scanning + push protection are auto-enabled on public repos; do not disable them.
+`barttech-web-core` is a **public** GitHub repo (made public 2026-07-18 so consumers need no submodule auth token). **NEVER commit a secret, key, token value, DSN, `.env`, or anything brand-identifying/sensitive here.** Only generic, non-sensitive security *mechanisms* — the security of these functions comes from the secret keys they operate on (which live in each app's env vars), never from hiding this code. GitHub secret scanning + push protection **are NOT automatic — verify them.** This file previously claimed they were auto-enabled on public repos; on 2026-07-25 both were found **disabled** on this repo, i.e. it had been public since 2026-07-18 with no push protection at all. Enabled that day. Check with:
+```bash
+gh api repos/djones007/<repo> --jq '.security_and_analysis'
+```
+and enable via `gh api -X PATCH` if either reads `disabled`. Do not disable them.
 
 ## Golden rules
 
