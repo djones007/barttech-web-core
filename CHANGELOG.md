@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-25k] — docs: record barton-lms-engine as a submodule-less consumer
+
+### Changed
+- `CLAUDE.md` — consumer table records `barton-lms-engine` as a consumer *without* a submodule (it imports `@/web-core/*` through its host's path alias, because it is itself a submodule and nesting would compound the OF/BMB stale-cache bug).
+
+Docs only, no code change. Logged because `a45c15b` was pushed as its own commit and the changelog rule has no size exemption.
+
 ## [2026-07-25j] — validation: export `EMAIL_RE` / `UUID_RE`
 
 ### Added
