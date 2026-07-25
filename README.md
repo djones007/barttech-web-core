@@ -17,6 +17,8 @@ site's Next.js build, exactly like `barton-lms-engine`.
 | `bartmail.ts` | `bartmailOptin`, `bartmailPurchase`, `bartmailVerify` — the canonical BartMail lead-write path (brand passed by caller). Imports `@supabase/supabase-js` (resolved from each consumer's node_modules). Excludes: barttech-website's bespoke REST variant, command-center's read-only client factory, the LMS engine's own copy. |
 | `uploads.ts` | `UPLOAD_LIMITS`, `IMAGE_MIME_TYPES`, `DOCUMENT_MIME_TYPES`, `sniffMimeType`, `safeUploadFilename`, `validateUpload` — server-side upload validation. Never trusts the client-declared MIME type or the extension; sniffs magic bytes. Sanitises filenames for storage keys (path-traversal guard). |
 | `audit.ts` | `AUDIT_ACTIONS`, `AuditAction`, `writeAuditLog`, `requestAuditContext` — append-only audit log of privileged actions, written to the app's own Supabase `audit_log` table. `writeAuditLog` never throws, and **must be awaited** (an un-awaited call is killed when a serverless function returns). |
+| `consent.ts` | `ConsentCategory`, `ConsentState`, `ConsentChoice`, `ConsentListener`, `CONSENT_VERSION`, `CONSENT_STORAGE_KEY`, `LEGACY_CONSENT_KEYS`, `readConsent`, `writeConsent`, `hasConsent`, `onConsentChange`, `initConsentMode`, `updateConsentMode`, `grantAll`, `denyAll`, `clearConsent` — three-category (necessary/analytics/marketing) cookie consent state + **Google Consent Mode v2** signals. Browser-oriented but SSR-safe (every export no-ops server-side). `initConsentMode()` **must run before any gtag/ads script loads**. No React here — the banner UI stays per-repo. |
+| `adPlatforms.ts` | `AdPlatform`, `AdPlatformCsp`, `AdPlatformConfig`, `AD_PLATFORMS` (`google_ads`, `meta`), `AD_CSP_HOSTS`, `ANALYTICS_CSP_HOSTS`, `loadAdPlatforms`, `eligibleAdPlatforms` — the ad/remarketing registry. **Adding a platform is one entry in `AD_PLATFORMS`**, not an estate-wide sweep. Tag ids are always passed in from the consuming app's env vars — never hardcoded here (public repo). |
 
 **Only genuinely-identical primitives belong here.** Brand-specific security
 logic (e.g. a per-product upsell token) stays in that repo's own
@@ -24,6 +26,12 @@ logic (e.g. a per-product upsell token) stays in that repo's own
 
 `security.ts` imports Node `crypto` — **Node runtime only**. Never import it from
 an Edge middleware/proxy; those use WebCrypto in a local helper.
+
+`consent.ts` and `adPlatforms.ts` are the opposite: browser-oriented, and every
+export no-ops when `window` is undefined so they can be imported anywhere. They
+contain **no React** — web-core is framework-agnostic source, so the cookie
+banner itself stays a per-repo component (brand styling differs) and calls into
+these modules for state, signals and tag loading.
 
 ## How it's consumed
 

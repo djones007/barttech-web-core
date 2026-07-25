@@ -15,10 +15,11 @@ each brand site and transpiled by that site's Next.js build, exactly like
 2. **`security.ts` is Node-runtime only** (imports Node `crypto`). Never import it from an Edge middleware/proxy — those keep a local WebCrypto helper.
 3. **Fix once → propagate.** After committing + pushing a change here, run `tools/web-core-propagate.sh` from the Barttech OS root to bump every consumer's submodule pointer and redeploy. Never `vercel --prod` a consumer to pick up a bump (a CLI snapshot has no `.git`, so `fetch-submodules.sh` fails) — the git push is the only correct path.
 4. **Keep the export surface backwards-compatible.** Consumers re-export this whole module; renaming/removing an export breaks every site at once. Add, don't break; deprecate before removing.
+5. **No React, ever.** This repo is framework-agnostic source. `consent.ts`/`adPlatforms.ts` own consent state, Consent Mode v2 signals, CSP host constants and tag loading — the cookie-banner **component** stays per-repo because brand styling differs. Related: **no tag IDs here** (public repo) — a `AW-…`/pixel id is always passed in by the consuming app from its own env var, and adding an ad platform is **one entry in `AD_PLATFORMS`**, never an estate-wide sweep. Never `declare global` for `gtag`/`fbq`: several consumers already declare those, and a second augmentation with a different signature is a hard TS error that breaks them on mount — use a local structural type + one cast (both modules do).
 
 ## Consumers (keep this list current — it drives the propagate script)
 
-Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts, **up** = uploads.ts, **aud** = audit.ts.
+Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts, **up** = uploads.ts, **aud** = audit.ts, **con** = consent.ts, **ads** = adPlatforms.ts.
 
 | Site | Mount path | Branch | Uses | Notes |
 |------|-----------|--------|------|-------|
