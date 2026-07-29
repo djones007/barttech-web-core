@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-29e] — emailit.ts: shared transport for direct audience calls
+
+### Added
+- `emailit.ts` — `emailitPost()`, `subscribeToAudience()`, `subscribeViaToken()`.
+
+### What it shares, and what it deliberately doesn't
+Emailit rate-limits at ~2 msg/sec and answers a breach with `429` plus a `retry_after` **in the body, not a header**. Several call sites never inspected the response at all, so a 429 resolved normally, the code carried on, and the subscribe simply never happened — the same silent-drop class that lost a customer's quote email on 2026-07-29. The retry, the `retry_after` handling, and the "409 = already subscribed = success" rule now live here.
+
+It is **not** one subscribe function for everyone. The estate genuinely uses two endpoints with different auth — `POST /audiences/{id}/subscribers` with a Bearer key (Cloud Plus, Nutty Orange, Owner Foundry) and the public `POST /v1/audiences/subscribe/{token}` with no key at all (Chilling Screams' waitlist) — plus different API versions (NO on v2, CP on v1). Each keeps a thin wrapper; they share the part that actually matters. Merging them would be the flag-riddled function golden rule 1 exists to prevent.
+
+### Out of scope
+Broadcast and sequence sends. Those go through BartMail's `claim_send_slot()` gate using per-brand `emailit_send_rate` / `emailit_daily_cap`. Never route a bulk send through this module, and never hardcode a rate.
+
 ## [2026-07-29d] — graph.ts: one Microsoft Graph client, with the retry five routes were missing
 
 ### Added
