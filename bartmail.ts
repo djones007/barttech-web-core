@@ -14,13 +14,19 @@
 // stays usable from runtimes and packages that cannot take that dependency.
 // Do not hoist it back to a top-level import. Requires env: BARTMAIL_SUPABASE_URL,
 // BARTMAIL_SUPABASE_SERVICE_ROLE_KEY (+ BARTMAIL_URL / BARTMAIL_PURCHASES_SECRET
-// for bartmailPurchase/Verify) — set in each app's env, NEVER committed here.
-// Exports: bartmailOptin, bartmailPurchase, bartmailVerify.
+// for bartmailPurchase/Verify, CONTACT_EVENTS_SECRET for bartmailEvent) — set in
+// each app's env, NEVER committed here.
+// Exports: bartmailOptin, bartmailPurchase, bartmailEvent, bartmailVerify.
 // ---------------------------------------------------------------------------
 import { createClient } from "@supabase/supabase-js";
 
 const BARTMAIL_URL_RAW = process.env.BARTMAIL_URL ?? "https://bartmail.vercel.app";
-const ALLOWED_BARTMAIL = /^https:\/\/bartmail\.vercel\.app(\/|$)/i;
+// SSRF guard: BARTMAIL_URL is an env var, so an allowlist (not a "looks like a
+// URL" check) decides where signed request bodies may be sent. Both hosts serve
+// the same deployment; `bartmail.barttech.co.uk` is the canonical custom domain
+// and was added 2026-07-29 — before that, a consumer setting it was silently
+// rewritten to the vercel.app host, which worked but made the env var a lie.
+const ALLOWED_BARTMAIL = /^https:\/\/bartmail\.(vercel\.app|barttech\.co\.uk)(\/|$)/i;
 const BARTMAIL_URL = ALLOWED_BARTMAIL.test(BARTMAIL_URL_RAW) ? BARTMAIL_URL_RAW : "https://bartmail.vercel.app";
 
 const BARTMAIL_SUPABASE_URL = process.env.BARTMAIL_SUPABASE_URL ?? "";
@@ -275,6 +281,121 @@ export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<
     });
   } catch {
     // fire-and-forget
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Contact timeline events
+// ---------------------------------------------------------------------------
+// The "what did this person DO" half of the contact record. Email activity
+// already lives in `email_events` and purchases in `purchases`; `contact_events`
+// is deliberately NOT a copy of either — BartMail's contact page UNIONs the
+// three at read time. This holds touchpoints that otherwise have nowhere to go:
+// a quote request, an order, an enquiry, an onboarding submission, a hand-typed
+// note. It replaced the retired Teable "Brand Interaction" table on 2026-07-29.
+//
+// Posted over HTTP rather than written direct to Supabase (unlike bartmailOptin)
+// because the route owns rules the caller shouldn't reimplement: the event-type
+// vocabulary, brand-slug → brand_id/tenant_id resolution, and the
+// contact-not-found → skip decision. One producer, one set of rules.
+
+/**
+ * The fixed event vocabulary, mirroring BartMail's `/api/contacts/event`.
+ * Not free text: these drive segmentation later ("requested a quote but never
+ * accepted"), and an open string becomes forty spellings of "quote" that no
+ * query can group. Adding a type means adding it in BOTH places — here and in
+ * the route — and the route is the authority; an unknown value is rejected 400.
+ */
+export const BARTMAIL_EVENT_TYPES = [
+  "quote_requested",
+  "quote_viewed",
+  "quote_accepted",
+  "order_placed",
+  "enquiry_submitted",
+  "onboarding_submitted",
+  "form_submitted",
+  /** A touchpoint no automated producer saw (e.g. mail to a shared support@
+   *  inbox, which is outside BartMail's inbound reply pipeline). Describe it in
+   *  `metadata.summary`. */
+  "note",
+] as const;
+
+export type BartmailEventType = (typeof BARTMAIL_EVENT_TYPES)[number];
+
+export interface BartmailEventParams {
+  email: string;
+  /** Brand SLUG (e.g. "cloud-plus"), resolved to brand_id/tenant_id by the route. */
+  brand: string;
+  event_type: BartmailEventType;
+  /** Free-form context. Undefined/null/empty values are dropped before sending. */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Record a non-email touchpoint against a contact.
+ *
+ * Returns `true` only when BartMail accepted the event. Never throws, and never
+ * rejects — a timeline write must not be able to break the lead capture or
+ * checkout it is attached to. Callers should still `await` it: on Vercel the
+ * isolate can be frozen the moment the response is returned, which silently
+ * kills an un-awaited promise (the fire-and-forget failure mode that hid the
+ * 25–29 July optin outage for four days).
+ *
+ * A missing `CONTACT_EVENTS_SECRET` is a no-op returning `false`, not a throw,
+ * so a site that hasn't been given the secret yet degrades to "no timeline"
+ * rather than 500s on every form.
+ *
+ * Note the contact must already exist — call `bartmailOptin` FIRST. An unknown
+ * contact is a no-op on BartMail's side (200 `skipped: contact_not_found`),
+ * which this reports as `true`: the event was handled as intended, and the
+ * missing contact means the optin write failed, which the optin health monitor
+ * already alerts on.
+ */
+export async function bartmailEvent(params: BartmailEventParams): Promise<boolean> {
+  // Same env var name as BartMail's own route and the Cloud Plus edge function —
+  // one secret, one name estate-wide. A second alias would be exactly the drift
+  // this module exists to prevent.
+  const secret = process.env.CONTACT_EVENTS_SECRET;
+  if (!secret || !params?.email || !params?.brand || !params?.event_type) return false;
+
+  try {
+    // Strip empty values so stored metadata stays queryable rather than a
+    // scatter of nulls every later read has to special-case.
+    const metadata: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(params.metadata ?? {})) {
+      if (v !== undefined && v !== null && v !== "") metadata[k] = v;
+    }
+
+    const bodyStr = JSON.stringify({
+      email: String(params.email).trim().toLowerCase(),
+      brand: params.brand,
+      event_type: params.event_type,
+      metadata,
+    });
+
+    // Lazy import, INSIDE the function — see the module header. Importing this
+    // module must not pull node:crypto into the optin path's graph.
+    const { createHmac } = await import("node:crypto");
+    const sig = `sha256=${createHmac("sha256", secret).update(bodyStr).digest("hex")}`;
+
+    const res = await fetch(`${BARTMAIL_URL}/api/contacts/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-bartmail-signature": sig },
+      body: bodyStr,
+    });
+
+    if (!res.ok) {
+      // Logged, not thrown. Silence here is what let the last write failure run
+      // undetected for four days.
+      console.error(
+        `[bartmailEvent] ${params.event_type} rejected: ${res.status} ${(await res.text()).slice(0, 200)}`
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[bartmailEvent]", err instanceof Error ? err.message : String(err));
+    return false;
   }
 }
 

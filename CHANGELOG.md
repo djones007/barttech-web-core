@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-29] — bartmail.ts: `bartmailEvent` — contact timeline events for every repo
+
+### Added
+- `bartmailEvent(params)` — posts a non-email touchpoint to BartMail's `POST /api/contacts/event` (HMAC-SHA256 over the body with `CONTACT_EVENTS_SECRET`, same scheme as `bartmailPurchase`). Plus `BARTMAIL_EVENT_TYPES` and the `BartmailEventType` union, mirroring the route's fixed vocabulary.
+- Why: `contact_events` shipped 2026-07-29 with exactly ONE producer — Cloud Plus's `send-email` Deno edge function, which hand-rolls WebCrypto signing because a Deno function can't import this module. Every Next.js repo in the estate had no path to the contact timeline at all, so the CDP could only ever show Cloud Plus quotes. This is that path.
+- Returns `boolean`, never throws and never rejects: a timeline write must not be able to break the lead capture or checkout it hangs off. Callers still `await` it — an un-awaited promise dies when Vercel freezes the isolate on response, which is precisely the fire-and-forget failure mode that hid the 25–29 July optin outage for four days.
+- A missing `CONTACT_EVENTS_SECRET` is a no-op returning `false`, not a throw, so a repo that hasn't been given the secret degrades to "no timeline" rather than 500s on every form. Same env var name as the route and the edge function — deliberately no second alias.
+- `node:crypto` is imported lazily inside the function, matching `bartmailPurchase`. The optin path must stay free of it (see the module header) — do not hoist.
+
+### Changed
+- `ALLOWED_BARTMAIL` now also permits `https://bartmail.barttech.co.uk`, the canonical custom domain. Both hosts serve the same deployment; previously a consumer setting `BARTMAIL_URL` to the custom domain was silently rewritten to the `vercel.app` host, which worked but made the env var a lie. The allowlist (rather than a shape check) stays — it is the SSRF guard on where signed bodies may be sent.
+
 ## [2026-07-25h] — charts.ts: shared chart presentation for internal dashboards
 
 ### Added
