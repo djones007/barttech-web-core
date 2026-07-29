@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-29d] — graph.ts: one Microsoft Graph client, with the retry five routes were missing
+
+### Added
+- `graph.ts` — `getGraphToken()`, `sendMail()`, `createDraft()`, `isGraphConfigured()`, `GRAPH_MAILBOX`.
+
+### The problem
+Six routes hand-rolled the same OAuth-then-sendMail dance and **five had no retry at all**. That is the exact failure that lost a customer's quote email on 2026-07-29 — one transient rejection, one dropped message, nothing surfaced. These sends are how Dom learns a lead arrived: when one fails there is no bounce, no alert, and the visitor still sees a success screen. Silence is the failure mode, so the retry belongs in the shared module rather than in whichever route remembers it.
+
+### Retry policy (tested before shipping)
+- `fetch()` throwing — retried. Graph intermittently resets the TLS socket mid-handshake; barttech-website's `fetchWithRetry` was the only correct handling of this anywhere in the estate, and it is now everyone's.
+- `429` and `5xx` — retried, honouring `Retry-After` when present, capped at 10s so a pathological value can't hang a request.
+- **Every other 4xx — not retried.** A malformed message or bad credential fails identically the second time.
+- Three attempts, 300ms exponential backoff.
+
+### Env vars — all three schemes read
+The same Azure app is configured as `GRAPH_*` (barttech-website, Chilling Screams, Nutty Orange), `MS_GRAPH_*` (Owner Foundry) and `MS_*` (compare-it-support, cloud-plus-v2). The module reads all three in that order rather than standardising them: renaming would mean editing six Vercel projects for no functional gain, and one missed rename silently kills that brand's notifications.
+
+### Note
+No `server-only` import — this module must stay framework-free. Consumers wanting that guard add it in their own shim, as cloud-plus-v2's does.
+
 ## [2026-07-29c] — reoon.ts: one optin-time email-verification rule
 
 ### Added
