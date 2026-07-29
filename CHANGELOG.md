@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+
+## [2026-07-29g] — validation.ts: isOptinHealthSentinel()
+
+### Added
+- `isOptinHealthSentinel(email)` — true for BartMail's optin-health monitor addresses (`dom+optin-health-<brand>@dcbjones.com`).
+
+### Why
+The monitor POSTs through each brand's **real** optin route every 6 hours, which is exactly what makes it worth having. But two of those routes email Dom on a new signup, so he was receiving **8 fake lead notifications a day** — indistinguishable at a glance from a real one, which is worse than noise because it trains you to ignore the alert.
+
+### Contract
+Routes skip the **notification email only**. Never skip the contact write: that is the thing being tested, and short-circuiting it would turn the monitor into a check that proves nothing.
+
 ## [2026-07-29f] — emailit.ts REMOVED (added earlier the same day)
 
 ### Removed

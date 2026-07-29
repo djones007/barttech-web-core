@@ -173,3 +173,22 @@ export const DEFAULT_MAX_LENGTHS: Record<string, number> = {
   utm_content: 200,
   utm_term: 200,
 };
+
+/**
+ * True when an address is one of BartMail's optin-health monitor sentinels
+ * (`dom+optin-health-<brand>@dcbjones.com`).
+ *
+ * The monitor deliberately POSTs through each brand's REAL optin route every 6
+ * hours, so it exercises the genuine write path — that is the whole point of it.
+ * The side effect is that any route which emails Dom on a new signup emailed him
+ * about a fake one four times a day, and those notifications are indistinguishable
+ * from a real lead at a glance. Worse than noise: it trains you to ignore them.
+ *
+ * Routes should skip **notification email only** for these addresses — never the
+ * contact write, which is the thing being tested. Introduced 2026-07-29 after the
+ * monitor started reporting Chilling Screams and Nutty Orange "sign-ups".
+ */
+export function isOptinHealthSentinel(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return /^dom\+optin-health-[a-z0-9-]+@dcbjones\.com$/i.test(email.trim());
+}
