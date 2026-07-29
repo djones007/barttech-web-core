@@ -54,6 +54,9 @@ No `server-only` import — this module must stay framework-free. Consumers want
 ### The bug this fixes
 Three routes asked that question and gave three different answers — Chilling Screams and Nutty Orange blocked `invalid`/`disposable`/`unsafe`; Cloud Plus's contact route used an allowlist of `safe`/`valid` for its ESP subscribe. **Neither of the first two blocked `spamtrap`, so those addresses were accepted outright.** Spamtraps exist to catch senders who don't clean their lists, and Nutty Orange is already dealing with a Microsoft IP-pool demotion — it was one of the two accepting them. The blocked set is now the union of every rule that was in production: no brand is looser than before, two are correctly stricter. Verified as strictly tightening before shipping — every Reoon status either behaves identically or moves from accepted to blocked, and only `spamtrap` and `unsafe` move.
 
+### Added shortly after (`a530208`)
+- A `mode` parameter (`quick` | `power`). It is an API depth setting, not a policy knob: `power` probes the mailbox and is the only mode that returns `safe`, which is why cloud-plus-v2's contact route uses it and the high-volume consumer forms use `quick`. Shipped in its own commit without a changelog entry; recorded here during the session wrap audit.
+
 ### Deliberate non-changes
 - `unknown` still passes. It means Reoon could not decide, which is a verification failure, not evidence of a bad address; treating it as bad throws away real leads on the verifier's bad day.
 - Fail-open is preserved exactly — no API key, non-2xx, timeout and malformed responses all return `valid: true`.
