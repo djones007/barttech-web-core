@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-29c] — reoon.ts: one optin-time email-verification rule
+
+### Added
+- `reoon.ts` — `verifyEmail()`, `isBlocked()`, `isConfirmedGood()`, `REOON_BLOCKED_STATUSES`, `REOON_GOOD_STATUSES`. Scope is deliberately narrow: **one address, checked live during a form submission, to decide whether to accept the signup.**
+
+### The bug this fixes
+Three routes asked that question and gave three different answers — Chilling Screams and Nutty Orange blocked `invalid`/`disposable`/`unsafe`; Cloud Plus's contact route used an allowlist of `safe`/`valid` for its ESP subscribe. **Neither of the first two blocked `spamtrap`, so those addresses were accepted outright.** Spamtraps exist to catch senders who don't clean their lists, and Nutty Orange is already dealing with a Microsoft IP-pool demotion — it was one of the two accepting them. The blocked set is now the union of every rule that was in production: no brand is looser than before, two are correctly stricter. Verified as strictly tightening before shipping — every Reoon status either behaves identically or moves from accepted to blocked, and only `spamtrap` and `unsafe` move.
+
+### Deliberate non-changes
+- `unknown` still passes. It means Reoon could not decide, which is a verification failure, not evidence of a bad address; treating it as bad throws away real leads on the verifier's bad day.
+- Fail-open is preserved exactly — no API key, non-2xx, timeout and malformed responses all return `valid: true`.
+- Cloud Plus keeps its stricter ESP gate through `isConfirmedGood()` rather than being flattened into the common rule. Protecting list quality is a stricter question than admitting a form submission.
+- **`bartmail/src/lib/reoon.ts` was NOT folded in.** It answers "should we stop emailing an existing contact?" via the bulk API and Reoon's boolean fields. It already blocks spamtraps and deliberately keeps catch-all/unknown/role accounts. Merging the two would be one flag-riddled function serving two policies — golden rule 1.
+
+### Not done here
+The wider "consolidate ~25 optin routes into one shared handler" idea was **abandoned after inventory**: 28 routes call `bartmailOptin`, ~21 are public forms, and they run 60–244 lines with genuinely different jobs (quiz mapping, e-signature, Shopify webhooks, referral codes). One handler for all of them is the monolith golden rule 1 exists to prevent. The real duplication is per-external-system, and this is the first of those. Remaining, measured: 37 routes hand-roll the 32KB body cap that `validation.ts` already exports, 5 duplicate the Microsoft Graph OAuth-and-send dance, 6 call Emailit directly.
+
 ## [2026-07-29b] — bartmail.ts: SSRF guard on the Supabase host
 
 ### Added
