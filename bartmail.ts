@@ -155,7 +155,10 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
         referrer: referrer ?? null,
         source_page: source_page ?? null,
         country: country ?? null,
-        custom_fields: custom_fields ?? null,
+        // NOT NULL with a '{}' default in BartMail's schema — an explicit null
+        // overrides the default and fails the insert, silently killing every
+        // optin from a caller that doesn't pass custom_fields. Never send null.
+        custom_fields: custom_fields ?? {},
       })
       .select("id")
       .single();
