@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+
+## [2026-07-29f] — emailit.ts REMOVED (added earlier the same day)
+
+### Removed
+- `emailit.ts`, added a few hours earlier in `2026-07-29e`. It shared the transport for **adding contacts to Emailit audiences** — and that is a banned operation estate-wide: **BartMail owns contacts; Emailit is delivery transport only.** The rule was already recorded in `memory/reference_bartmail.md` (set 2026-06-30) and in bartmail/CLAUDE.md don't #4; it simply was not enforced, so two routes were still doing it.
+- I made those two call sites *more reliable* instead of noticing they should not exist. Adding a retry to a banned operation is worse than leaving it broken — it entrenches it. The right fix was to delete the calls, which is what happened in cloud-plus-v2 and chillingscreams-website on the same day.
+- No shared helper for audience-subscribe should exist here, because its presence invites the pattern back. `nuttyorange-games-website` keeps a LOCAL `lib/emailit.ts` for now: its purchase-confirmation emails are Emailit automations triggered by `contact.added_to_audience`, so removing the audience add there would stop customers receiving confirmation after registering a game. That needs the confirmations moved to BartMail sequences first — a migration, not a deletion.
+
+### Kept
+- `graph.ts` (2026-07-29d) is unaffected — Microsoft Graph notification email is a transactional send to Dom, not list management.
+
 ## [2026-07-29e] — emailit.ts: shared transport for direct audience calls
 
 ### Added
