@@ -75,15 +75,28 @@ export function isBlocked(status: string): boolean {
 }
 
 /**
+ * Reoon's verification depth. `quick` is a syntax/domain/MX check; `power` also
+ * probes the mailbox — slower, more credits, and the only one that can return
+ * `safe`. This is an API parameter, not a policy knob: it changes how hard Reoon
+ * looks, never what we do with the answer. cloud-plus-v2's contact form uses
+ * `power` because its B2B leads are individually worth the credits; the
+ * high-volume consumer forms use `quick`. Mind the 4,300/day account cap.
+ *
+ * Note the two modes name a good address differently — `power` returns `safe`,
+ * `quick` returns `valid` — which is why REOON_GOOD_STATUSES holds both.
+ */
+export type ReoonMode = "quick" | "power";
+
+/**
  * Verify one address. Never throws. See the header for the fail-open contract
  * and the daily credit limit.
  */
-export async function verifyEmail(email: string): Promise<ReoonResult> {
+export async function verifyEmail(email: string, mode: ReoonMode = "quick"): Promise<ReoonResult> {
   const key = process.env.REOON_API_KEY;
   if (!key) return { valid: true, status: "skipped" };
 
   try {
-    const url = `${REOON_VERIFY_URL}?email=${encodeURIComponent(email)}&key=${key}&mode=quick`;
+    const url = `${REOON_VERIFY_URL}?email=${encodeURIComponent(email)}&key=${key}&mode=${mode}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(REOON_TIMEOUT_MS) });
     if (!res.ok) return { valid: true, status: "reoon_error" };
     const data = (await res.json()) as { status?: string };
