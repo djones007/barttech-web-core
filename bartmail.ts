@@ -61,11 +61,12 @@ export interface BartmailOptinParams {
   source_page?: string;
   country?: string;
   /**
-   * Accepted for backwards-compat with a consumer (cloud-plus-v2's quote-accept
-   * flow) that passes it; NOT currently used by the write (silently dropped —
-   * matches the prior per-repo behaviour). Wire it through as a custom field if
-   * a real use appears. Keeping it here keeps the shared interface a superset of
-   * every consumer's params so their shims are true drop-ins.
+   * The lead's personalised quote link, stored on `contacts.quote_url` for use
+   * as an email merge field. Unlike the attribution fields below it is
+   * LAST-write-wins, not fill-blanks-only: it points at current state, so a
+   * returning lead with a fresh quote must get the fresh link, never the stale
+   * one from their first visit. (It was silently dropped by this module until
+   * 2026-07-29, so contacts optin'd before then have no quote_url.)
    */
   quote_url?: string;
   tags?: string[];
@@ -102,6 +103,7 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     referrer,
     source_page,
     country,
+    quote_url,
     tags: extraTags,
     custom_fields,
     applyOptinTags = true,
@@ -155,6 +157,7 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
         referrer: referrer ?? null,
         source_page: source_page ?? null,
         country: country ?? null,
+        quote_url: quote_url ?? null,
         // NOT NULL with a '{}' default in BartMail's schema — an explicit null
         // overrides the default and fails the insert, silently killing every
         // optin from a caller that doesn't pass custom_fields. Never send null.
@@ -183,6 +186,9 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     if (referrer && !ex.referrer) updates.referrer = referrer;
     if (source_page && !ex.source_page) updates.source_page = source_page;
     if (country && !ex.country) updates.country = country;
+    // Last-write-wins, deliberately unlike the fill-blanks-only fields above:
+    // a returning lead's newest quote link must replace the stale one.
+    if (quote_url) updates.quote_url = quote_url;
     if (custom_fields) {
       // Custom fields always merge in fresh values (e.g. a re-taken scorecard score)
       updates.custom_fields = { ...(ex.custom_fields ?? {}), ...custom_fields };
