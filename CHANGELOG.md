@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-29b] — bartmail.ts: SSRF guard on the Supabase host
+
+### Added
+- `getBartmailSupabase()` now normalises `BARTMAIL_SUPABASE_URL` (trim, strip trailing slashes, lowercase) and then requires it to match `https://<ref>.supabase.co`, throwing otherwise. A service-role key — unrestricted database access — is sent to whatever that env var resolves to, so a tampered or mistyped value must not be able to redirect it.
+- Lifted from `barttech-website`, whose hand-written REST client was the only one in the estate that had this check. It came to light when that client was folded onto this module the same day and the guard was nearly deleted as "duplicate code" — it wasn't a duplicate, it was the only copy.
+
+### Why normalise before validating
+The first attempt validated a raw string and was **backed out before shipping**. It would have thrown on any consumer whose production value merely *looked* different — a trailing slash works perfectly today and fails a strict regex — and Vercel does not disclose stored env values (`decrypt=true` returns ciphertext), so the 13 live values could not be checked first. Shipping an unverifiable hard-fail across every lead path in the estate is precisely the class of mistake that cost four days of Cloud Plus leads in July. Normalising first removes the entire realistic false-positive class, leaving only genuinely foreign hosts to throw. Rollout is staged for the same reason: `compare-it-support` first (lowest-traffic lead site, and its optin is load-bearing so a failure is loud and immediate), verified with a real submission, then the rest.
+
+### Note
+`barttech-website/lib/bartmail.ts` keeps its own local guard until this has propagated everywhere; it becomes a genuine duplicate at that point and can be dropped.
+
 ## [2026-07-29] — bartmail.ts: `bartmailEvent` — contact timeline events for every repo
 
 ### Added

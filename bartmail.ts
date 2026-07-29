@@ -29,9 +29,29 @@ const BARTMAIL_URL_RAW = process.env.BARTMAIL_URL ?? "https://bartmail.vercel.ap
 const ALLOWED_BARTMAIL = /^https:\/\/bartmail\.(vercel\.app|barttech\.co\.uk)(\/|$)/i;
 const BARTMAIL_URL = ALLOWED_BARTMAIL.test(BARTMAIL_URL_RAW) ? BARTMAIL_URL_RAW : "https://bartmail.vercel.app";
 
-const BARTMAIL_SUPABASE_URL = process.env.BARTMAIL_SUPABASE_URL ?? "";
 const BARTMAIL_SUPABASE_SERVICE_ROLE_KEY =
   process.env.BARTMAIL_SUPABASE_SERVICE_ROLE_KEY ?? "";
+
+// SSRF guard on the Supabase host — NORMALISE FIRST, THEN VALIDATE.
+//
+// A service-role key (unrestricted database access) is sent to whatever
+// BARTMAIL_SUPABASE_URL resolves to, so a tampered or mistyped value must not be
+// able to redirect it. Adopted estate-wide 2026-07-29 from barttech-website,
+// whose hand-written REST client was the only one in the estate that had it.
+//
+// The normalise step is the whole reason this is safe to roll out without first
+// reading 13 production env values that Vercel will not disclose. The realistic
+// mismatch was never a hostile host — it was a harmless trailing slash, which
+// works fine today and would fail a strict regex, taking a live lead form down.
+// Trailing slashes and casing are corrected rather than rejected; only a
+// genuinely foreign host throws.
+function normaliseSupabaseUrl(raw: string): string {
+  return raw.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+const SUPABASE_HOST_ALLOWED = /^https:\/\/[a-z0-9-]+\.supabase\.co$/;
+
+const BARTMAIL_SUPABASE_URL = normaliseSupabaseUrl(process.env.BARTMAIL_SUPABASE_URL ?? "");
 
 /**
  * The single BartMail Supabase client factory (service-role, no session
@@ -43,6 +63,16 @@ const BARTMAIL_SUPABASE_SERVICE_ROLE_KEY =
 export function getBartmailSupabase() {
   if (!BARTMAIL_SUPABASE_URL || !BARTMAIL_SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("BartMail Supabase credentials not configured");
+  }
+  // See normaliseSupabaseUrl above. The message deliberately names the env var
+  // and shows the normalised value: this can only fire on a genuine
+  // misconfiguration, and whoever hits it needs to know which value is wrong.
+  // It is not user input, so there is nothing sensitive to leak — the KEY is
+  // never included.
+  if (!SUPABASE_HOST_ALLOWED.test(BARTMAIL_SUPABASE_URL)) {
+    throw new Error(
+      `BARTMAIL_SUPABASE_URL is not a Supabase host: ${BARTMAIL_SUPABASE_URL}`
+    );
   }
   return createClient(BARTMAIL_SUPABASE_URL, BARTMAIL_SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
