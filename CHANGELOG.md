@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-07-31] — Dependency updates (Dependabot #1, #2)
+
+### Changed
+- `actions/checkout` v5 → v7 and `actions/setup-node` v5 → v7 in `.github/workflows/ci.yml` (#1).
+- `@types/node` 22.20.1 → 26.1.1 and `globals` 16.5.0 → 17.7.0 (#2) — both **devDependencies only**. This package ships TypeScript source with no runtime dependencies, so neither reaches a consumer: the 15 repos that mount this as a submodule vendor the `.ts` files and resolve their own `node_modules`. Consumers picking up this pointer get no functional change from this bump.
+- Recorded retrospectively during the 2026-07-31 wrap; both were merged on 2026-07-30 without an entry, because a squash-merged Dependabot PR touches only manifest and workflow files and nothing forces a changelog the way an ordinary commit does.
+
 ## [2026-07-30] — emailit.ts: shared transactional SEND transport
 
 ### Added
