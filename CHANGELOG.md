@@ -4,6 +4,16 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-07-30] — emailit.ts: shared transactional SEND transport
+
+### Added
+- `emailit.ts` — `sendEmailitEmail(apiKey, msg, opts?)`: the one implementation of "POST an email to Emailit and survive its rate limit". Retries 429/5xx/thrown fetches; treats Emailit's `retry_after` (always 1s) as a **floor under exponential backoff with jitter**, so concurrent callers stop waking simultaneously and re-colliding — the thundering herd that exhausted BartMail's retry budget at only 500 sends/day on 2026-07-30. Never throws; returns `{ok, attempts, status?, body?, transportError?}` so consumers layer their own reporting (OF adds Sentry). Framework-free, fetch-only — no Node imports, so it works in edge/Deno runtimes too.
+
+### Why
+- Five call sites (checkout-engine, ownerfoundry-website, competition-engine, cloud-plus-v2 ×2) had independently hand-written the same 429 retry after the 2026-07-29 lost-quote-email incident, and none had jitter — the exact defect just diagnosed in BartMail. One module means the next fix lands everywhere.
+- **This is NOT a revival of the reverted audience-subscribe module (`4bf03e2`).** That was removed because BartMail owns contacts and Emailit is delivery only. This module is delivery only and must never grow an audience/contact operation.
+- **Claim-then-send flows must NOT use it** (header comment explains): retrying a thrown fetch is unsafe when the caller marked something "sent" before dispatch — cloud-plus-v2's quote route keeps its local confirmed-429-only retry deliberately.
+
 ## [2026-07-29g] — validation.ts: isOptinHealthSentinel()
 
 ### Added
