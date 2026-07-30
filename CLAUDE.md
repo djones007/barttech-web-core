@@ -23,11 +23,13 @@ and enable via `gh api -X PATCH` if either reads `disabled`. Do not disable them
 
 ## Consumers (keep this list current — it drives the propagate script)
 
-Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts, **up** = uploads.ts, **aud** = audit.ts, **con** = consent.ts, **ads** = adPlatforms.ts.
+Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts, **up** = uploads.ts, **aud** = audit.ts, **con** = consent.ts, **ads** = adPlatforms.ts, **em** = emailit.ts (transactional send transport, added 2026-07-30 — send-only, NOT the reverted audience-subscribe module), **gr** = graph.ts.
 
 | Site | Mount path | Branch | Uses | Notes |
 |------|-----------|--------|------|-------|
-| ownerfoundry-website | `src/web-core` | main | sec, bm | LMS private-submodule plumbing (predates public) |
+| ownerfoundry-website | `src/web-core` | main | sec, bm, em, gr | LMS private-submodule plumbing (predates public). `emailit.ts` shim keeps the Sentry escalation local (web-core carries no Sentry dep) |
+| competition-engine | `src/web-core` | main | sec, val, bm, con, ads, em | Was missing from this table AND `web-core-propagate.sh` until 2026-07-30 — a real consumer silently skipped by every propagate run. `lib/email.ts` wraps `em` with a BartMail brand lookup; sends via the v1 endpoint (passed explicitly, web-core defaults to v2) |
+| support-engine | `src/web-core` | main | (audit modules) | Also missing from the propagate list until 2026-07-30 |
 | be-more-boundless | `web-core` | main | sec, bm | + local `signUpsellToken`/`verifyUpsellToken`; bartmail.ts is a verbatim copy of this repo's former canonical |
 | chillingscreams-website | `web-core` | main | sec, bm | canary for public-submodule rollout |
 | cloud-plus-v2 | `src/web-core` | main | sec, val, bm | canonical security-reference repo; bartmail canary |
@@ -37,13 +39,18 @@ Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts, *
 | nuttyorange-games-website | `web-core` | main | sec, val, bm | `registration-token.ts` (Edge) stays local, NOT via web-core |
 | compare-it-support | `web-core` | main | bm | mounted for bartmail |
 | berekindled | `web-core` | main | bm | mounted for bartmail |
-| checkout-engine | `src/web-core` | main | sec, val, bm | the ORIGIN web-core's security.ts was copied from — now consumes it (closed the two-canonical-copies gap). `isTestModeToken` lives in web-core for this repo. |
+| checkout-engine | `src/web-core` | main | sec, val, bm, em | the ORIGIN web-core's security.ts was copied from — now consumes it (closed the two-canonical-copies gap). `isTestModeToken` lives in web-core for this repo. `lib/email.ts` wraps `em` (brand config resolution local, transport shared). |
 | dominic-jones-website | `web-core` | main | bm | shim keeps `import "server-only"`; uses `getBartmailClient` (web-core exports it as an alias); source of the `applyOptinTags`/`custom_fields` logic now in the canonical |
 | barttech-next-template | `src/web-core` | main | sec, val, bm | THE SCAFFOLD — every new site inherits web-core from day one. No Vercel project (propagate script skips the deploy wait). New sites must `git submodule update --init` on clone — see the template's README/CLAUDE.md. |
 | barttech-website | `web-core` | main | bm, con, ads | `lib/bartmail.ts` folded 2026-07-29 (was the last bespoke variant); its shim adds a local SSRF guard + `bartmailHealthPing`. `web-core/audit.ts` stays excluded in `tsconfig.json`. |
 | barton-lms-engine | **none — host alias** | main | val, bm | **Consumer without a submodule.** It is itself a submodule (of OF + BMB), so mounting web-core inside it would mean NESTED submodules. Instead its route handlers import `@/web-core/*`, resolved by whichever **host** compiles it — the same mechanism it already uses for its own `@/lms/*` files. Consequence: **any host mounting the LMS engine must also mount web-core.** Nothing to bump here; it always gets whatever the host has, so it can never drift. Adopted 2026-07-25, replacing a duplicate `bartmail.ts` + `validation.ts`. |
 
 **bartmail.ts NOT folded — one left:** command-center's read-only client factory (14-line, different purpose). Every other repo's bartmail.ts is a shim over this module.
+
+**emailit.ts — two call sites deliberately NOT folded (2026-07-30):**
+- **cloud-plus-v2's quote-send route** (`api/admin/quotes/[id]/send`): its claim-then-send idempotency depends on retrying ONLY confirmed 429s and never a thrown fetch (which may have reached Emailit → a retry can double-send). The shared module retries transport failures, so folding it would break that guarantee. The route's own comment says the same.
+- **cloud-plus-v2's `supabase/functions/send-email` Deno edge function**: separate deploy pipeline (`supabase functions deploy`, not Vercel), and Supabase's bundler following a relative import out of `supabase/functions/` is unverified. The module itself is Deno-compatible (fetch-only), so folding is possible if someone wants to verify a deploy — until then the local copy stands, minus jitter.
+- **bartmail** keeps its own `dispatchWithRetry()` deliberately: its send path is inseparable from `claimSendSlot()` pacing, `email_events` reservation rows and queue deferral. Fixes to backoff *policy* should be considered in both places.
 
 barttech-website was the other one until **2026-07-29**, kept bespoke (REST-only, no `@supabase` dep) so a minimal corporate site stayed dependency-light. Folded because the cost of the copy finally showed: it silently dropped every UTM/referrer/`source_page` value its own form captured, and had neither the `quote_url` nor the `custom_fields` NOT NULL fix landed here that same day. A copy fails quietly — it keeps working while missing every later fix. The Supabase client is server-only, so the dependency costs the browser bundle nothing. **Its shim keeps two local exports:** an SSRF guard wrapping `bartmailOptin` (checks `BARTMAIL_SUPABASE_URL` really is a `*.supabase.co` host before a service-role key is sent to it — this module has no such check) and `bartmailHealthPing`. Lifting that guard into this module is the obvious next step but would throw on any consumer whose production env value doesn't match, so it needs all 13 live values audited first.
 
