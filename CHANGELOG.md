@@ -2,21 +2,6 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
-## [2026-07-31zb] — security-review: stop flagging first-party submodule pointer bumps
-
-### Changed
-- **Submodule paths are now excluded from the diff the weekly security review reads.** A pointer
-  bump shows up in `git diff` as a one-line gitlink change, which the reviewer consistently read as
-  an "unreviewed third-party dependency change" and opened a critical issue for. Every one of those
-  was a false positive: the submodules are first-party private repos in the same account
-  (`barttech-web-core`, `barttech-app-ui`, `barton-lms-engine`), and their code is reviewed in its
-  own repo, not here — the gitlink carries no reviewable code at all.
-- This was the single largest source of noise in the backlog: **all five** open security issues on
-  `ownerfoundry-website` were this one false positive firing on `src/lms` bumps, and several flagged
-  commits actually *tightened* access control. Real findings were getting buried under it.
-
-Found in the 2026-07-31 estate security sweep.
-
 ## [2026-07-31z] — Dependency security: brace-expansion DoS patched
 
 ### Fixed
