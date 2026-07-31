@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-31c] — `supportKb.ts`: public knowledge-base reader for brand sites
+
+### Added
+- **`listPublishedArticles`, `getPublishedArticle`, `searchPublishedArticles`** — the read side of
+  the Support Engine knowledge base, for brand sites to render public help pages. Written once here
+  rather than per brand site, which is the whole point of this module.
+- **Only `published` rows are ever returned.** A draft is grounding material for AI-drafted replies
+  as much as it is public content, so an unpublished article must be unreachable by both.
+- **Global articles (`brand_id IS NULL`) are included alongside the brand's own**, so genuinely
+  shared answers — shipping, returns, privacy — are written once instead of copied per brand. When
+  a brand-specific article and a global one share a slug, the brand's own wins.
+- **`searchPublishedArticles` logs every search**, and that is the point rather than a side effect:
+  rows with `results_count = 0` are the KB writing backlog — exactly what customers asked for and
+  could not find — surfaced in the Support Engine admin and in Command Centre. A search box that
+  does not log its misses throws away the single most useful signal a knowledge base produces. The
+  insert is awaited (an un-awaited one dies with the response and the row vanishes) and is written
+  even when the search itself errored, since a failed search is still an unanswered question.
+- Uses `websearch_to_tsquery`, which tolerates the quotes and operators people type and never throws
+  on malformed input — unlike `to_tsquery`. A search box that 500s on an apostrophe is not a search
+  box.
+
+### Security note
+These use BartMail's **service-role** key via `getBartmailSupabase()` and therefore bypass RLS.
+Server Components and route handlers only — never client code, and never behind a public API route
+that passes arbitrary caller-supplied filters through.
 ## [2026-07-31b] — `htmlToText`: table cells and more entities
 
 ### Fixed
