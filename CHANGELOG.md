@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-31z] — Dependency security: brace-expansion DoS patched
+
+### Fixed
+- **`brace-expansion` bumped to the patched 1.1.18 / 5.0.9 lines** (GHSA-mh99-v99m-4gvg,
+  GHSA-3jxr-9vmj-r5cp — DoS via unbounded/exponential expansion). Reached transitively through the
+  ESLint and build toolchain, so not reachable from a web request, but it was the estate's single
+  largest source of `npm audit` highs.
+- **Lockfile-only change — `package.json` is untouched.** The declared ranges (`^1.1.7`, `^5.0.5`)
+  already permitted the patched versions, so no override, no dependency bump, and no ESLint major
+  was needed. Both patches were published 2026-07-30; Socket and the npm advisory DB still reported
+  "no patch available" because their data predates them.
+- Rejected during triage: `npm audit fix` (would have pulled unrelated majors — Stripe 18→22 in
+  checkout-engine) and an ESLint v10 / eslint-config-next v12 upgrade (the latter a four-major
+  *downgrade* against Next 16, and ESLint majors are on deliberate estate-wide hold).
+
+Found in the 2026-07-31 estate security sweep. This repo now reports 0 critical and 0 high.
+
 ## [2026-07-31d] — Docs: `lead-engine` added to the consumer table
 
 ### Fixed
