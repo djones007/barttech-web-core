@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-31] — Every Emailit send is now multipart/alternative
+
+### Fixed
+- **`sendEmailitEmail` now always sends a plain-text part.** `text` stays optional on
+  `EmailitSendMessage` for callers' convenience, but omitting it no longer produces an HTML-only
+  email — the module derives one from the HTML. HTML-only mail scores worse with every major
+  filter, is unreadable in plain-text clients, and is worse for screen readers.
+- Derived **here** rather than left to each caller because "optional and usually forgotten" is
+  exactly how it went wrong: an audit on 2026-07-31 found the estate had been sending HTML-only
+  mail for its entire life. BartMail's own sender had no `text` field in its payload at all (every
+  broadcast, every sequence, every brand), and of the three web-core callers that plumb `text`
+  through, all three leave it undefined in practice. A default that has to be remembered is not a
+  default.
+
+### Added
+- **`htmlToText(html)`**, exported. Deliberately not a parser and dependency-free — anything pulled
+  in here is carried by all twelve consumers. Strips `script`/`style`, unwraps links as
+  `text (url)` so a text-only reader still gets the destination, turns block tags into breaks, and
+  decodes the named and numeric entities our templates emit. `&amp;` is decoded **last**, so
+  `&amp;lt;` cannot double-decode into a tag.
+
+### Note for consumers
+- Purely additive — no call site changes. Consumers pick this up on their next submodule pointer
+  bump. Nothing is broken until then; sends are simply still HTML-only.
 
 
 ## [2026-07-31] — Dependency updates (Dependabot #1, #2)

@@ -81,6 +81,52 @@ function backoffMs(attempt: number, retryAfterSec: number | undefined): number {
  * Send one transactional email via Emailit. Never throws — inspect the result.
  * Callers wanting a boolean can use `(await sendEmailitEmail(...)).ok`.
  */
+
+/**
+ * Minimal HTML → plain text for the multipart alternative.
+ *
+ * Deliberately not a parser and deliberately dependency-free: this only has to
+ * produce a readable fallback of our own templates, and anything pulled in here
+ * is carried by every consumer of this module. Strips script/style outright
+ * (their contents are never readable text), unwraps links as "text (url)" so a
+ * text-only reader still gets the destination, turns block tags into breaks,
+ * and decodes the entities our templates actually emit. `&amp;` is decoded LAST
+ * so `&amp;lt;` cannot double-decode into a tag.
+ */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, "")
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href, label) => {
+      const text = String(label).replace(/<[^>]+>/g, "").trim();
+      if (!text) return String(href);
+      return text === href ? text : `${text} (${href})`;
+    })
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr|table|blockquote)>/gi, "\n\n")
+    .replace(/<li\b[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&mdash;/gi, "\u2014")
+    .replace(/&ndash;/gi, "\u2013")
+    .replace(/&hellip;/gi, "\u2026")
+    .replace(/&lsquo;/gi, "\u2018")
+    .replace(/&rsquo;/gi, "\u2019")
+    .replace(/&ldquo;/gi, "\u201c")
+    .replace(/&rdquo;/gi, "\u201d")
+    .replace(/&pound;/gi, "\u00a3")
+    .replace(/&euro;/gi, "\u20ac")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_m, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_m, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&amp;/gi, "&")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 export async function sendEmailitEmail(
   apiKey: string,
   msg: EmailitSendMessage,
@@ -90,6 +136,16 @@ export async function sendEmailitEmail(
   const endpoint = opts?.endpoint ?? DEFAULT_ENDPOINT;
   const label = opts?.label ?? "emailit";
 
+  // EVERY send is multipart/alternative. `text` is optional on the message type
+  // for callers' convenience, but omitting it must NOT produce an HTML-only
+  // email: that scores worse with every major filter, is unreadable in
+  // plain-text clients, and is worse for screen readers. Derived here rather
+  // than left to each caller because "optional and usually forgotten" is
+  // exactly how the estate ended up sending HTML-only mail for its entire life
+  // (found 2026-07-31 — every BartMail send, every brand).
+  const payload: EmailitSendMessage =
+    msg.text && msg.text.trim() ? msg : { ...msg, text: htmlToText(msg.html) };
+
   let last: EmailitSendResult = { ok: false, attempts: 0 };
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -98,7 +154,7 @@ export async function sendEmailitEmail(
       res = await fetch(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(msg),
+        body: JSON.stringify(payload),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
