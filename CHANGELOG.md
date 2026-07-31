@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-31b] — `htmlToText`: table cells and more entities
+
+### Fixed
+- **Table cells no longer run together.** `</td>`/`</th>` become `" | "`, so a data table (quote
+  line items, order summaries) reads as `Managed IT support | 2 | £299.00` instead of
+  `Managed IT support2£299.00`. Reported from `cloud-plus-v2`'s quote emails, but it affects every
+  table-based template in the estate — which is most of them.
+- **Layout tables do not gain pipe noise from that change**, which is the part that needed care.
+  HTML email uses tables for layout as much as for data, and a single-cell wrapper row would
+  otherwise render as `| Your order |`. A cleanup pass after tag-stripping collapses repeated
+  separators and removes any left at a line edge — exactly what a layout row produces — then trims
+  the leading indentation that removing a separator leaves behind. Verified against both shapes.
+- **More entities decoded**: `&rarr;` `&larr;` `&middot;` `&bull;` `&copy;` `&reg;` `&trade;`
+  `&times;`. `holduntil`'s templates use `&rarr;` and `&middot;`, which previously survived into the
+  text part as literal `&rarr;`. `&amp;` is still decoded last, so `&amp;lt;` cannot double-decode
+  into a tag.
+
+### Note for consumers
+- Purely additive, no call-site changes. Consumers pick it up on their next pointer bump. Both
+  fixes were raised during the 2026-07-31 estate-wide propagation of `c55730e` and deliberately
+  made here rather than forked locally — a local copy is the drift this module exists to prevent.
 ## [2026-07-31] — Every Emailit send is now multipart/alternative
 
 ### Fixed

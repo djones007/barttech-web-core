@@ -102,10 +102,24 @@ export function htmlToText(html: string): string {
       return text === href ? text : `${text} (${href})`;
     })
     .replace(/<br\s*\/?>/gi, "\n")
+    // Cells become " | " so a DATA table (quote line items, order summaries)
+    // reads as "Managed IT support | 2 | £299.00" instead of one run-on string.
+    // HTML email also uses tables for LAYOUT, though, where that separator is
+    // pure noise — the cleanup pass below strips it wherever it ends up at a
+    // line edge, which is exactly what a single-cell layout row produces.
+    .replace(/<\/(td|th)>/gi, " | ")
     .replace(/<\/(p|div|h[1-6]|li|tr|table|blockquote)>/gi, "\n\n")
     .replace(/<li\b[^>]*>/gi, "- ")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/gi, " ")
+    .replace(/&rarr;/gi, "\u2192")
+    .replace(/&larr;/gi, "\u2190")
+    .replace(/&middot;/gi, "\u00b7")
+    .replace(/&bull;/gi, "\u2022")
+    .replace(/&copy;/gi, "\u00a9")
+    .replace(/&reg;/gi, "\u00ae")
+    .replace(/&trade;/gi, "\u2122")
+    .replace(/&times;/gi, "\u00d7")
     .replace(/&mdash;/gi, "\u2014")
     .replace(/&ndash;/gi, "\u2013")
     .replace(/&hellip;/gi, "\u2026")
@@ -124,6 +138,16 @@ export function htmlToText(html: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
+    // Table-cell cleanup, after tags are gone and whitespace is normalised.
+    // A layout table (one cell per row) leaves a dangling " | " at a line edge;
+    // an empty spacer cell leaves " | | ". Neither is meaningful text.
+    .replace(/\|(\s*\|)+/g, "|")
+    .replace(/^[ \t]*\|[ \t]*/gm, "")
+    .replace(/[ \t]*\|[ \t]*$/gm, "")
+    // Leading indentation is an artefact of the source markup, never meaningful
+    // in the text part — and stripping a removed cell separator leaves one.
+    .replace(/^[ \t]+/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
