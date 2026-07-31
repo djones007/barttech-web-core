@@ -23,20 +23,21 @@ and enable via `gh api -X PATCH` if either reads `disabled`. Do not disable them
 
 ## Consumers (keep this list current — it drives the propagate script)
 
-Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts, **up** = uploads.ts, **aud** = audit.ts, **con** = consent.ts, **ads** = adPlatforms.ts, **em** = emailit.ts (transactional send transport, added 2026-07-30 — send-only, NOT the reverted audience-subscribe module), **gr** = graph.ts.
+Modules: **sec** = security.ts, **val** = validation.ts, **bm** = bartmail.ts, **up** = uploads.ts, **aud** = audit.ts, **con** = consent.ts, **ads** = adPlatforms.ts, **em** = emailit.ts (transactional send transport, added 2026-07-30 — send-only, NOT the reverted audience-subscribe module), **gr** = graph.ts, **reo** = reoon.ts (email verification).
 
 | Site | Mount path | Branch | Uses | Notes |
 |------|-----------|--------|------|-------|
 | ownerfoundry-website | `src/web-core` | main | sec, bm, em, gr | LMS private-submodule plumbing (predates public). `emailit.ts` shim keeps the Sentry escalation local (web-core carries no Sentry dep) |
-| competition-engine | `src/web-core` | main | sec, val, bm, con, ads, em | Was missing from this table AND `web-core-propagate.sh` until 2026-07-30 — a real consumer silently skipped by every propagate run. `lib/email.ts` wraps `em` with a BartMail brand lookup; sends via the v1 endpoint (passed explicitly, web-core defaults to v2) |
+| competition-engine | `src/web-core` | main | sec, val, bm, con, ads, em, reo | Was missing from this table AND `web-core-propagate.sh` until 2026-07-30 — a real consumer silently skipped by every propagate run. `lib/email.ts` wraps `em` with a BartMail brand lookup; sends via the v1 endpoint (passed explicitly, web-core defaults to v2) |
 | support-engine | `src/web-core` | main | (audit modules) | Also missing from the propagate list until 2026-07-30 |
+| lead-engine | `src/web-core` | main | sec, val, bm, up, aud, con, ads, reo | Added to `web-core-propagate.sh` on 2026-07-30 the evening it was scaffolded, but **missing from this table until 2026-07-31** — the inverse of the competition-engine case above and the same drift either way: the script and this list have to be updated in the same commit or one of them lies. The widest consumer surface of any repo — eight modules, all thin shims under `src/lib/`. `suppression.ts` and `pipeline.ts` are lead-engine's own logic and only *mention* web-core in comments; they are not shims |
 | be-more-boundless | `web-core` | main | sec, bm | + local `signUpsellToken`/`verifyUpsellToken`; bartmail.ts is a verbatim copy of this repo's former canonical |
-| chillingscreams-website | `web-core` | main | sec, bm | canary for public-submodule rollout |
+| chillingscreams-website | `web-core` | main | sec, bm, reo | canary for public-submodule rollout |
 | cloud-plus-v2 | `src/web-core` | main | sec, val, bm | canonical security-reference repo; bartmail canary |
 | command-center | `src/web-core` | **master** | sec | read-only `supabase/bartmail.ts` factory NOT folded (different purpose) |
 | bartmail | `src/web-core` | main | sec | alias `timingSafeEqualStr`; local `verifyEmailitSignature` |
 | chillingscreams-games | `web-core` | main | sec | alias `timingSafeStringEqual` |
-| nuttyorange-games-website | `web-core` | main | sec, val, bm | `registration-token.ts` (Edge) stays local, NOT via web-core |
+| nuttyorange-games-website | `web-core` | main | sec, val, bm, reo | `registration-token.ts` (Edge) stays local, NOT via web-core |
 | compare-it-support | `web-core` | main | bm | mounted for bartmail |
 | berekindled | `web-core` | main | bm | mounted for bartmail |
 | checkout-engine | `src/web-core` | main | sec, val, bm, em | the ORIGIN web-core's security.ts was copied from — now consumes it (closed the two-canonical-copies gap). `isTestModeToken` lives in web-core for this repo. `lib/email.ts` wraps `em` (brand config resolution local, transport shared). |

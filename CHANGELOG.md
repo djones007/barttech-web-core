@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-31d] — Docs: `lead-engine` added to the consumer table
+
+### Fixed
+- **`lead-engine` was missing from the consumer table in `CLAUDE.md`.** It has been in
+  `tools/web-core-propagate.sh` since 2026-07-30 (the evening it was scaffolded) and mounts
+  web-core at `src/web-core`, so propagate runs have been bumping a consumer this file does not
+  list. That is the inverse of the `competition-engine` case the table already documents, and the
+  same drift in either direction — the script and the table have to move in one commit or one of
+  them lies about what a change here reaches. It is the widest consumer in the estate: eight
+  modules (`sec, val, bm, up, aud, con, ads, reo`), all thin shims under `src/lib/`.
+- **`reo` (`reoon.ts`) added to the module legend, and to the three other rows that already
+  consumed it** — `competition-engine`, `chillingscreams-website` and `nuttyorange-games-website`.
+  Verified by grepping each repo for `web-core/reoon`, not assumed.
+
+Docs only — no module source changed, so no propagate run is needed.
+
 ## [2026-07-31c] — `supportKb.ts`: public knowledge-base reader for brand sites
 
 ### Added
