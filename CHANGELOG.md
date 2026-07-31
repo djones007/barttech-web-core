@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-07-31] — Document why `server-only` must NOT be added here
+
+### Changed
+- **Golden rule 5 added: never add `import "server-only"` to this repo.** The 2026-07-31 estate
+  security sweep flagged its absence in `bartmail.ts` as a missing guard and recommended adding it
+  here. That would have broken 14 builds: this module is consumed by non-Next code, and `server-only`
+  appears in no consumer's `package.json` or lockfile — it resolves in a Next app only because Next
+  aliases it internally. `graph.ts` already carried this reasoning inline; it is now a stated rule so
+  the next review does not re-propose it.
+- The guard belongs one level up, as the first line of each consumer's `lib/bartmail.ts` shim. That
+  was rolled out estate-wide on 2026-07-31 (`dominic-jones-website` had it first).
+
+No code change — `escHtml`, `isSafePathSegment`, `timingSafeTokenEqual` and `isUuid` all already
+existed and were what the sweep's downstream fixes consumed.
+
 ## [2026-07-31z] — Dependency security: brace-expansion DoS patched
 
 ### Fixed

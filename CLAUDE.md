@@ -19,7 +19,15 @@ and enable via `gh api -X PATCH` if either reads `disabled`. Do not disable them
 2. **`security.ts` is Node-runtime only** (imports Node `crypto`). Never import it from an Edge middleware/proxy — those keep a local WebCrypto helper.
 3. **Fix once → propagate.** After committing + pushing a change here, run `tools/web-core-propagate.sh` from the Barttech OS root to bump every consumer's submodule pointer and redeploy. Never `vercel --prod` a consumer to pick up a bump (a CLI snapshot has no `.git`, so `fetch-submodules.sh` fails) — the git push is the only correct path.
 4. **Keep the export surface backwards-compatible.** Consumers re-export this whole module; renaming/removing an export breaks every site at once. Add, don't break; deprecate before removing.
-5. **No React, ever.** This repo is framework-agnostic source. `consent.ts`/`adPlatforms.ts` own consent state, Consent Mode v2 signals, CSP host constants and tag loading — the cookie-banner **component** stays per-repo because brand styling differs. Related: **no tag IDs here** (public repo) — a `AW-…`/pixel id is always passed in by the consuming app from its own env var, and adding an ad platform is **one entry in `AD_PLATFORMS`**, never an estate-wide sweep. Never `declare global` for `gtag`/`fbq`: several consumers already declare those, and a second augmentation with a different signature is a hard TS error that breaks them on mount — use a local structural type + one cast (both modules do).
+5. **Never add `import "server-only"` here — consumers add it in their own shim.** This module is
+   consumed by non-Next code too, and `server-only` is in no consumer's `package.json` or lockfile;
+   it resolves in a Next app **only because Next aliases it internally**. Adding it here would break
+   every non-Next consumer, and a security review WILL periodically flag its absence in
+   `bartmail.ts`/`audit.ts`/`reoon.ts` as a missing guard — it is not. The guard belongs one level
+   up, as the first line of each repo's `lib/bartmail.ts` shim (rolled out estate-wide 2026-07-31;
+   `dominic-jones-website` had it first, `graph.ts` documents the same reasoning inline). If you are
+   about to "fix" this, you are about to break 14 builds.
+6. **No React, ever.** This repo is framework-agnostic source. `consent.ts`/`adPlatforms.ts` own consent state, Consent Mode v2 signals, CSP host constants and tag loading — the cookie-banner **component** stays per-repo because brand styling differs. Related: **no tag IDs here** (public repo) — a `AW-…`/pixel id is always passed in by the consuming app from its own env var, and adding an ad platform is **one entry in `AD_PLATFORMS`**, never an estate-wide sweep. Never `declare global` for `gtag`/`fbq`: several consumers already declare those, and a second augmentation with a different signature is a hard TS error that breaks them on mount — use a local structural type + one cast (both modules do).
 
 ## Consumers (keep this list current — it drives the propagate script)
 
