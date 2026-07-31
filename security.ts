@@ -69,6 +69,33 @@ export function verifyHmacSignature(
  * Guards against path traversal when a URL param/slug is turned into a file
  * path. Returns true if the slug is safe to use as-is.
  */
+/**
+ * Is `host` a plain public hostname safe to build an OUTBOUND URL from?
+ *
+ * Use this before `fetch(\`https://${host}/...\`)` or before putting a host into a
+ * link you email a customer, whenever the host comes from configuration (a DB
+ * column, an env var) rather than a literal. Config is not user input, so this is
+ * defence in depth — but a bad value in a host that your own server then fetches
+ * is an SSRF primitive, and a bad value in a customer email sends them somewhere
+ * unintended.
+ *
+ * Rejects: empty; anything smuggling a scheme, credentials, port, path or query;
+ * bare IP literals; localhost/.local/.internal; and anything without a real
+ * dotted public name. Notably rejects `169.254.169.254` and
+ * `metadata.google.internal`, the cloud metadata endpoints an SSRF usually aims at.
+ *
+ * Added 2026-08-01 after `checkout-engine`'s uptime cron was found fetching
+ * `https://{brands.host}/{slug}` from inside the app with no validation.
+ */
+export function isSafePublicHost(host: string | null | undefined): boolean {
+  const h = (host ?? "").trim().toLowerCase();
+  if (!h) return false;
+  if (/[/@\\?#\s:]/.test(h)) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.includes("[")) return false;
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return false;
+  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(h) && /\.[a-z]{2,}$/.test(h);
+}
+
 export function isSafePathSegment(slug: string): boolean {
   return !slug.includes("..") && !slug.includes("/") && !slug.includes("\\");
 }

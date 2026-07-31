@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-01] — Add `isSafePublicHost()`
+
+### Added
+- **`isSafePublicHost(host)` in `security.ts`** — validates a hostname before it is used to build an
+  OUTBOUND URL (a `fetch` your own server makes, or a link emailed to a customer) when the host comes
+  from configuration rather than a literal.
+- Rejects empty values, anything smuggling a scheme/credentials/port/path/query, bare IP literals,
+  `localhost` / `.local` / `.internal`, and anything without a real dotted public name — including
+  `169.254.169.254` and `metadata.google.internal`, the endpoints an SSRF usually aims at.
+- **Why it belongs here rather than in one repo:** several consumers build URLs from a DB column or
+  env var. `checkout-engine`'s uptime cron was found fetching `https://{brands.host}/{slug}` from
+  inside the app with no validation, and its abandonment cron put the same unvalidated value into a
+  customer-facing recovery link. Config is not user input, so this is defence in depth — but the
+  check is a pure string predicate with no framework coupling, which is exactly what this module is for.
+- Unit-checked against 14 real and hostile values before promotion.
+
 ## [2026-07-31] — Document why `server-only` must NOT be added here
 
 ### Changed
