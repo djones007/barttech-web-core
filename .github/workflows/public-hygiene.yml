@@ -1,0 +1,45 @@
+name: Public Hygiene
+
+# This repo is public. It must contain generic mechanism only — no internal
+# project names, org-internal domains, or operational narrative. The term list
+# is deliberately NOT in this file (a committed denylist would republish the
+# strings it polices); it lives in the ESTATE_DENYLIST repo secret, one term
+# per line, matched case-insensitively as fixed strings against the whole tree.
+#
+# Runs on push to main only — never on pull_request, so the secret is never
+# exposed to a fork's workflow context. If the secret is missing the job FAILS
+# (fail closed): an unset denylist means the gate is not checking anything.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Scan tree against denylist
+        env:
+          ESTATE_DENYLIST: ${{ secrets.ESTATE_DENYLIST }}
+        run: |
+          if [ -z "$ESTATE_DENYLIST" ]; then
+            echo "::error::ESTATE_DENYLIST secret is not set — hygiene gate cannot run. Failing closed."
+            exit 1
+          fi
+          printf '%s\n' "$ESTATE_DENYLIST" | sed '/^[[:space:]]*$/d' > /tmp/denylist.txt
+          HITS=0
+          while IFS= read -r term; do
+            MATCHES=$(grep -riIl --fixed-strings --exclude-dir=.git --exclude-dir=node_modules -- "$term" . || true)
+            if [ -n "$MATCHES" ]; then
+              HITS=1
+              # Report the files but never echo the term itself into public logs.
+              echo "::error::Denylisted term #$(grep -nxF -- "$term" /tmp/denylist.txt | cut -d: -f1) found in: $(echo "$MATCHES" | tr '\n' ' ')"
+            fi
+          done < /tmp/denylist.txt
+          if [ "$HITS" -ne 0 ]; then
+            echo "::error::Tree contains denylisted content. See the private denylist for term numbers."
+            exit 1
+          fi
+          echo "Tree clean against $(wc -l < /tmp/denylist.txt | tr -d ' ') denylisted terms."

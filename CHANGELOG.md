@@ -1,6 +1,13 @@
 # Changelog
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
+## [2026-08-01 — later] — Public-hygiene CI gate
+
+### Added
+- **`.github/workflows/public-hygiene.yml`** — on every push to main, scans the whole tree
+  against a denylist of terms that must never appear in this public repo. The list itself
+  lives in a repo secret (committing it would republish the strings it polices); the job
+  fails closed if the secret is unset, and reports offending files by term number only.
 
 ## [2026-08-01d] — Add weekly Claude security review CI
 
