@@ -8,10 +8,11 @@
 //
 // Imports @supabase/supabase-js at module scope; each consumer resolves it from
 // its own node_modules (web-core is source-only, no deps). `node:crypto` is
-// deliberately NOT imported at module scope — it is lazily imported inside
-// bartmailPurchase, the only function that needs it. That keeps the optin path
-// (bartmailOptin, all most consumers use) free of node:crypto, so this module
-// stays usable from runtimes and packages that cannot take that dependency.
+// deliberately NOT imported at module scope — it is lazily imported only where
+// needed (bartmailPurchase's HMAC signing, and resolveBartmailUrl's host-hash
+// check on the non-default path). That keeps the optin path (bartmailOptin,
+// all most consumers use) free of node:crypto, so this module stays usable
+// from runtimes and packages that cannot take that dependency.
 // Do not hoist it back to a top-level import. Requires env: BARTMAIL_SUPABASE_URL,
 // BARTMAIL_SUPABASE_SERVICE_ROLE_KEY (+ BARTMAIL_URL / BARTMAIL_PURCHASES_SECRET
 // for bartmailPurchase/Verify, CONTACT_EVENTS_SECRET for bartmailEvent) — set in
@@ -20,15 +21,40 @@
 // ---------------------------------------------------------------------------
 import { createClient } from "@supabase/supabase-js";
 
-const BARTMAIL_URL_RAW = process.env.BARTMAIL_URL ?? "https://bartmail.vercel.app";
+const BARTMAIL_URL_DEFAULT = "https://bartmail.vercel.app";
+const BARTMAIL_URL_RAW = process.env.BARTMAIL_URL ?? BARTMAIL_URL_DEFAULT;
 // SSRF guard: BARTMAIL_URL is an env var, so an allowlist (not a "looks like a
-// URL" check) decides where signed request bodies may be sent. Both hosts serve
-// the same deployment; the second is the canonical custom domain (see the
-// regex below) and was added 2026-07-29 — before that, a consumer setting it
-// was silently rewritten to the default host, which worked but made the env
-// var a lie.
-const ALLOWED_BARTMAIL = /^https:\/\/bartmail\.(vercel\.app|barttech\.co\.uk)(\/|$)/i;
-const BARTMAIL_URL = ALLOWED_BARTMAIL.test(BARTMAIL_URL_RAW) ? BARTMAIL_URL_RAW : "https://bartmail.vercel.app";
+// URL" check) decides where signed request bodies may be sent. Two hosts are
+// allowed and both serve the same deployment: the default above, and the
+// canonical custom domain — matched by SHA-256 of the hostname rather than as
+// a plaintext literal, so this public source does not name the internal host.
+// Guard strength is unchanged (still an exact-match allowlist); only what a
+// reader of this file learns changes. Resolved lazily because hashing needs
+// node:crypto, which this module must not import at module scope (see the
+// header note) — and only the three HTTP-path functions below use the URL.
+const BARTMAIL_CANONICAL_HOST_SHA256 =
+  "5ed8bef53a76235f8f2fd5e465300af56bd3cfbfd96cec20e2e3b15dab3a3bad";
+let bartmailUrlResolved: string | null = null;
+async function resolveBartmailUrl(): Promise<string> {
+  if (bartmailUrlResolved !== null) return bartmailUrlResolved;
+  let ok = false;
+  try {
+    const u = new URL(BARTMAIL_URL_RAW);
+    if (u.protocol === "https:" && u.port === "" && !u.username && !u.password) {
+      const host = u.hostname.toLowerCase();
+      if (host === "bartmail.vercel.app") {
+        ok = true;
+      } else {
+        const { createHash } = await import("node:crypto");
+        ok = createHash("sha256").update(host).digest("hex") === BARTMAIL_CANONICAL_HOST_SHA256;
+      }
+    }
+  } catch {
+    ok = false;
+  }
+  bartmailUrlResolved = ok ? BARTMAIL_URL_RAW : BARTMAIL_URL_DEFAULT;
+  return bartmailUrlResolved;
+}
 
 const BARTMAIL_SUPABASE_SERVICE_ROLE_KEY =
   process.env.BARTMAIL_SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -304,7 +330,7 @@ export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<
     }
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (sig) headers["x-bartmail-signature"] = sig;
-    await fetch(`${BARTMAIL_URL}/api/purchases`, {
+    await fetch(`${await resolveBartmailUrl()}/api/purchases`, {
       method: "POST",
       headers,
       body: bodyStr,
@@ -408,7 +434,7 @@ export async function bartmailEvent(params: BartmailEventParams): Promise<boolea
     const { createHmac } = await import("node:crypto");
     const sig = `sha256=${createHmac("sha256", secret).update(bodyStr).digest("hex")}`;
 
-    const res = await fetch(`${BARTMAIL_URL}/api/contacts/event`, {
+    const res = await fetch(`${await resolveBartmailUrl()}/api/contacts/event`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-bartmail-signature": sig },
       body: bodyStr,
@@ -433,7 +459,7 @@ export async function bartmailEvent(params: BartmailEventParams): Promise<boolea
 export async function bartmailVerify(email: string, tag: string): Promise<boolean> {
   try {
     const res = await fetch(
-      `${BARTMAIL_URL}/api/contacts/verify?email=${encodeURIComponent(email)}&tag=${encodeURIComponent(tag)}`,
+      `${await resolveBartmailUrl()}/api/contacts/verify?email=${encodeURIComponent(email)}&tag=${encodeURIComponent(tag)}`,
       { cache: "no-store" }
     );
     if (!res.ok) return false;

@@ -1,6 +1,18 @@
 # Changelog
 
-All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
+All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).## [2026-08-01 — later 2] — Host allowlist no longer names the canonical domain
+
+### Changed
+- **`bartmail.ts`'s outbound-URL allowlist now matches the canonical custom host by SHA-256 of
+  the hostname instead of a plaintext literal in a regex.** The guard is unchanged in strength —
+  still an exact-match allowlist over the same two hosts, with the same fall-back-to-default
+  behaviour on any mismatch — but this public source no longer names the internal hostname (the
+  one string the post-scrub sweep found remaining, hidden from fixed-string greps by regex
+  escaping). Validation moved into a lazy resolver so `node:crypto` stays out of the module
+  scope per the header rule; the hash only computes on the non-default path. Also now rejects
+  URLs carrying credentials, and accepts an explicit `:443` (previously rejected; same host,
+  default port).
+
 ## [2026-08-01 — later] — Public-hygiene CI gate
 
 ### Added
