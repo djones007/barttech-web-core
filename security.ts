@@ -1,0 +1,157 @@
+import { timingSafeEqual, createHmac } from "crypto";
+
+// ---------------------------------------------------------------------------
+// Barttech shared security helpers — THE single source of truth for the estate.
+//
+// This file is the canonical implementation (memory/reference_website_security_
+// standard.md items 11, 12, 15, 18). It is mounted into each brand site as a git
+// submodule (`src/web-core` or `web-core`) and imported via `@/web-core/security`,
+// so a fix here reaches every consumer after `tools/web-core-propagate.sh`.
+//
+// NODE RUNTIME ONLY — imports Node `crypto`. Never import this from the Edge
+// middleware/proxy; those use WebCrypto in their own local helper.
+//
+// Rule: brand-SPECIFIC security logic (e.g. a per-product upsell token) stays in
+// that repo's own `lib/security.ts`, which re-exports this module and adds its
+// own helpers. Only genuinely-identical primitives live here.
+// ---------------------------------------------------------------------------
+
+/** HTML-escape a string before interpolating it into an HTML/email template. */
+export function escHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Constant-time comparison for tokens / shared secrets (admin credentials,
+ * health-check bearer tokens, webhook auth, Stripe client_secrets). Never use
+ * `===` for these — timing differences leak the secret one byte at a time.
+ * Length-checks first (so the buffers are the same size before timingSafeEqual),
+ * accepts a null/undefined provided value, and catches any Buffer error,
+ * returning false rather than throwing.
+ */
+export function timingSafeTokenEqual(a: string | null | undefined, b: string): boolean {
+  if (!a || a.length !== b.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verifies an inbound webhook's `sha256=<hmac>` signature over the RAW body
+ * (read the body as text BEFORE JSON.parse). Returns true if the signature
+ * matches any of the provided secrets (some providers issue per-workspace
+ * secrets — try each). Pass an empty/undefined secret list to skip
+ * verification during provisioning only — never in production.
+ */
+export function verifyHmacSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secrets: (string | undefined)[]
+): boolean {
+  if (!signatureHeader) return false;
+  const validSecrets = secrets.filter((s): s is string => Boolean(s));
+  if (validSecrets.length === 0) return false;
+
+  return validSecrets.some((secret) => {
+    const expected = `sha256=${createHmac("sha256", secret).update(rawBody).digest("hex")}`;
+    return timingSafeTokenEqual(signatureHeader, expected);
+  });
+}
+
+/**
+ * Guards against path traversal when a URL param/slug is turned into a file
+ * path. Returns true if the slug is safe to use as-is.
+ */
+/**
+ * Is `host` a plain public hostname safe to build an OUTBOUND URL from?
+ *
+ * Use this before `fetch(\`https://${host}/...\`)` or before putting a host into a
+ * link you email a customer, whenever the host comes from configuration (a DB
+ * column, an env var) rather than a literal. Config is not user input, so this is
+ * defence in depth — but a bad value in a host that your own server then fetches
+ * is an SSRF primitive, and a bad value in a customer email sends them somewhere
+ * unintended.
+ *
+ * Rejects: empty; anything smuggling a scheme, credentials, port, path or query;
+ * bare IP literals; localhost/.local/.internal; and anything without a real
+ * dotted public name. Notably rejects `169.254.169.254` and
+ * `metadata.google.internal`, the cloud metadata endpoints an SSRF usually aims at.
+ *
+ * Added 2026-08-01 after a consumer's uptime cron was found fetching a host/slug
+ * pair from a config table with no validation.
+ */
+export function isSafePublicHost(host: string | null | undefined): boolean {
+  const h = (host ?? "").trim().toLowerCase();
+  if (!h) return false;
+  if (/[/@\\?#\s:]/.test(h)) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.includes("[")) return false;
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return false;
+  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(h) && /\.[a-z]{2,}$/.test(h);
+}
+
+export function isSafePathSegment(slug: string): boolean {
+  return !slug.includes("..") && !slug.includes("/") && !slug.includes("\\");
+}
+
+/**
+ * Guards against open-redirect attacks on a `next`/`redirect`/`returnTo`
+ * query param. Returns a same-site relative path, falling back to `/`.
+ */
+/**
+ * Only allow a same-site relative redirect target — never an attacker-supplied
+ * origin. Parse-based, not prefix-based: a prior version checked
+ * `startsWith("/") && !startsWith("//")`, which blocks `//evil.com` but not
+ * `/\evil.com` — browsers normalise a leading backslash to a forward slash
+ * before navigating, so that string resolves to the third-party origin
+ * `https://evil.com` even though the string itself "starts with /". Found
+ * live 2026-08-01 on a consumer's post-payment redirect handler.
+ *
+ * Resolves `next` against a fixed, unrelated fake origin using the WHATWG URL
+ * parser — the same spec browsers implement for navigation — and only
+ * accepts the result if it resolved to THAT SAME fake origin (i.e. `next`
+ * was genuinely relative, however it was spelled). Anything that changes the
+ * origin — `//evil.com`, `https://evil.com`, `/\evil.com`, a tab/newline
+ * trick, or any future normalisation quirk this list doesn't anticipate — is
+ * rejected the same way, because the check is "did the origin change", not
+ * "does the string match a pattern of known-bad inputs".
+ */
+export function safeRedirectPath(next: string | null): string {
+  if (!next) return "/";
+  const FAKE_ORIGIN = "https://safe-redirect.invalid";
+  try {
+    const resolved = new URL(next, FAKE_ORIGIN);
+    if (resolved.origin !== FAKE_ORIGIN) return "/";
+    return resolved.pathname + resolved.search + resolved.hash;
+  } catch {
+    return "/";
+  }
+}
+
+/**
+ * Test-mode gate. A checkout runs against the brand's Stripe TEST account only
+ * when the caller presents the shared `CHECKOUT_TEST_TOKEN` (constant-time
+ * compared). Keeps fake-purchase mode ours, not the public's. (Used by one
+ * checkout consumer; harmless elsewhere — returns false when the env var is unset.)
+ */
+export function isTestModeToken(token: string | null | undefined): boolean {
+  const expected = process.env.CHECKOUT_TEST_TOKEN;
+  if (!expected) return false;
+  return timingSafeTokenEqual(token ?? null, expected);
+}
+
+/**
+ * Simple honeypot check for public forms — a hidden field real users never
+ * fill in. Bots that auto-fill every field trip it. Silent-reject (return 200)
+ * rather than 4xx so bots don't learn the field name.
+ */
+export function isHoneypotTripped(body: Record<string, unknown>, fieldName = "website"): boolean {
+  const val = body[fieldName];
+  return typeof val === "string" && val.trim().length > 0;
+}
