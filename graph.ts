@@ -36,11 +36,18 @@
  * default to, this address. Configure via a `GRAPH_MAILBOX` env var in each
  * consuming app — never hardcode an address in a public module.
  */
-export const GRAPH_MAILBOX = process.env.GRAPH_MAILBOX ?? "";
+export const GRAPH_MAILBOX = env("MAILBOX") ?? "";
 
 const MAX_ATTEMPTS = 3;
 
-function env(suffix: "TENANT_ID" | "CLIENT_ID" | "CLIENT_SECRET"): string | undefined {
+// Consuming apps in this estate variously use `GRAPH_`, `MS_GRAPH_` and `MS_`
+// prefixes, which is why every lookup goes through here. The mailbox used to
+// read `process.env.GRAPH_MAILBOX` directly and so honoured only ONE of the
+// three — an app that set `MS_GRAPH_MAILBOX` (a real pattern here) had an
+// empty mailbox and every send threw.
+function env(
+  suffix: "TENANT_ID" | "CLIENT_ID" | "CLIENT_SECRET" | "MAILBOX"
+): string | undefined {
   return (
     process.env[`GRAPH_${suffix}`] ??
     process.env[`MS_GRAPH_${suffix}`] ??
@@ -48,9 +55,21 @@ function env(suffix: "TENANT_ID" | "CLIENT_ID" | "CLIENT_SECRET"): string | unde
   );
 }
 
-/** True when this environment has Graph credentials at all. Callers that must degrade quietly (a form that still has to succeed without a notification) check this first. */
+/**
+ * True when this environment can actually send. Callers that must degrade
+ * quietly (a form that still has to succeed without a notification) check this
+ * first.
+ *
+ * The mailbox is part of "configured" on purpose. This used to check only the
+ * three credentials while `sendMail` additionally throws on an unset mailbox —
+ * so an app holding credentials but no mailbox passed the check, then threw
+ * straight into the caller's catch. Every consumer that gates on this swallows
+ * that throw by design, which turned a missing env var into permanently silent
+ * notifications. Reporting "not configured" honestly is what lets a caller log
+ * it once instead.
+ */
 export function isGraphConfigured(): boolean {
-  return Boolean(env("TENANT_ID") && env("CLIENT_ID") && env("CLIENT_SECRET"));
+  return Boolean(env("TENANT_ID") && env("CLIENT_ID") && env("CLIENT_SECRET") && env("MAILBOX"));
 }
 
 function backoffMs(attempt: number, retryAfter: string | null): number {

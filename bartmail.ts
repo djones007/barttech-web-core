@@ -314,9 +314,22 @@ export interface BartmailPurchaseParams {
   stripe_session_id?: string; // idempotency key — duplicate deliveries ignored
 }
 
-// Log a purchase against the contact record. The contact must already exist
-// (call bartmailOptin first). Idempotent on stripe_session_id.
-export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<void> {
+/**
+ * Log a purchase against the contact record. The contact must already exist
+ * (call bartmailOptin first). Idempotent on stripe_session_id.
+ *
+ * Returns whether the write was accepted. It used to return `void` and swallow
+ * everything in a bare `catch {}` WITHOUT checking the response, so a 401 from
+ * a drifted signing secret, a 404 from an unknown brand, a 429, or a 500 were
+ * all indistinguishable from success and produced no output anywhere — not even
+ * a log line. Because it could never reject, the `.catch()` some callers put
+ * around it was dead code that made the drop look handled.
+ *
+ * This is the same treatment `bartmailEvent` already had, and for the same
+ * reason recorded there: silence is what let a write failure run undetected for
+ * four days.
+ */
+export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<boolean> {
   try {
     const bodyStr = JSON.stringify(params);
     const secret = process.env.BARTMAIL_PURCHASES_SECRET;
@@ -330,13 +343,25 @@ export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<
     }
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (sig) headers["x-bartmail-signature"] = sig;
-    await fetch(`${await resolveBartmailUrl()}/api/purchases`, {
+    const res = await fetch(`${await resolveBartmailUrl()}/api/purchases`, {
       method: "POST",
       headers,
       body: bodyStr,
     });
-  } catch {
-    // fire-and-forget
+
+    if (!res.ok) {
+      // Logged, not thrown: a purchase already succeeded upstream, and a
+      // failure to RECORD it must never fail the payment flow that called us.
+      // But it must reach someone.
+      console.error(
+        `[bartmailPurchase] rejected: ${res.status} ${(await res.text()).slice(0, 200)}`
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[bartmailPurchase]", err instanceof Error ? err.message : String(err));
+    return false;
   }
 }
 
@@ -412,7 +437,18 @@ export async function bartmailEvent(params: BartmailEventParams): Promise<boolea
   // edge function — one secret, one name estate-wide. A second alias would be
   // exactly the drift this module exists to prevent.
   const secret = process.env.CONTACT_EVENTS_SECRET;
-  if (!secret || !params?.email || !params?.brand || !params?.event_type) return false;
+  if (!secret) {
+    // Degrading to "no timeline" rather than 500ing every form is deliberate
+    // (see above) — but it must not be inaudible. Without this line an app that
+    // was never given the secret records zero events forever and nothing
+    // anywhere says so, which is indistinguishable from having no events.
+    console.warn("[bartmailEvent] CONTACT_EVENTS_SECRET not set — timeline event dropped");
+    return false;
+  }
+  if (!params?.email || !params?.brand || !params?.event_type) {
+    console.warn("[bartmailEvent] missing email/brand/event_type — event dropped");
+    return false;
+  }
 
   try {
     // Strip empty values so stored metadata stays queryable rather than a

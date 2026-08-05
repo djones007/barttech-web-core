@@ -1,6 +1,33 @@
 # Changelog
 
-All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).## [2026-08-01 — later 2] — Host allowlist no longer names the canonical domain
+All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
+
+## [2026-08-05] — Notification failures can no longer be silent
+
+Found while auditing every consumer for one class of bug: a notification path that fails and
+tells nobody. Three instances lived in this module, so every consuming app inherited them.
+
+### Fixed
+- **`bartmailPurchase()` never checked the response and swallowed everything in a bare
+  `catch {}`.** A 401 from a drifted signing secret, a 404 from an unknown brand, a 429 or a 500
+  were all indistinguishable from success, and produced no output anywhere — not even a log line.
+  Because the function could never reject, a `.catch()` around it was dead code that made the drop
+  look handled. It now checks `res.ok`, logs a rejection, and **returns `boolean` instead of
+  `void`** so callers can react. Additive: existing callers that ignore the result are unaffected.
+  This is the treatment `bartmailEvent()` already had, for the reason recorded there — silence is
+  what let a write failure run undetected for four days.
+- **`bartmailEvent()` returned `false` silently when `CONTACT_EVENTS_SECRET` was absent.** The
+  degrade-rather-than-500 behaviour is deliberate and unchanged, but it now warns. Without it an
+  app never given the secret records zero timeline events forever, indistinguishable from simply
+  having none.
+- **`isGraphConfigured()` ignored the mailbox while `sendMail()` throws on it.** An app holding
+  credentials but no mailbox passed the check and then threw straight into the caller's catch —
+  and every consumer that gates on this swallows that throw by design, so a missing env var meant
+  permanently silent notifications. The mailbox is now part of "configured".
+- **`GRAPH_MAILBOX` honoured only one of the three env prefixes this estate uses.** It read
+  `process.env.GRAPH_MAILBOX` directly while credentials go through a helper accepting `GRAPH_`,
+  `MS_GRAPH_` and `MS_`. An app setting `MS_GRAPH_MAILBOX` had an empty mailbox and every send
+  threw. It now uses the same helper.## [2026-08-01 — later 2] — Host allowlist no longer names the canonical domain
 
 ### Changed
 - **`bartmail.ts`'s outbound-URL allowlist now matches the canonical custom host by SHA-256 of
