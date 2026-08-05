@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-05a] — Add vendored-library audit (the lockfile blind spot)
+
+### Added
+- **`scripts/check-vendored-libs.mjs` — audits third-party libraries COPIED into a repo rather than installed.** `npm audit`, Dependabot and Socket all read the lockfile, so a `.min.js` dropped under `public/` during a migration off an older stack is invisible to every one of them — while still shipping to every visitor on every page that loads it. A CVE can land against that exact version and nothing anywhere will say so. This reads the version from the banner comment the distribution ships with and asks OSV.dev whether it has known advisories. No API key, no auth; only a package name and version leave the machine.
+- **An unidentifiable bundle FAILS rather than being skipped.** A check that quietly ignores what it does not understand reports success while missing the thing it was written to catch. Small hand-written scripts stay quiet; a large minified blob with no banner does not.
+- **Only git-tracked files are in scope.** That is the discriminator between a vendored library (committed — which is exactly why the lockfile tools miss it) and an app's own build artifact (gitignored, rebuilt from source that IS in the lockfile, already covered by `npm audit`). Without it, an app's own bundled output is reported as an unidentifiable library on every run — a permanently red check for a non-issue, which is how a gate stops being read.
+- Detection is by CONTENT, not filename. The first version keyed off `jquery*.js` / `*.min.js` and missed an 829 KB vendored bundle named `theme.js` — what a library is called tells you nothing.
+- Verified before shipping: correctly flags jQuery 3.4.1 (2 advisories) and Bootstrap 3.3.7 (7), passes jQuery 3.7.1, fails an unidentifiable bundle, and stays silent on ordinary source. Exit 1 on any finding.
+
 ## [2026-08-05b] — Add `jsonLd()`: safe serialisation for embedded structured data
 
 ### Added
