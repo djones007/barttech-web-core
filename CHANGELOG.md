@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-05b] — Add `jsonLd()`: safe serialisation for embedded structured data
+
+### Added
+- **`jsonLd.ts` — `jsonLd(data)`, the escaping replacement for `JSON.stringify` inside a `<script type="application/ld+json">` block.** Plain `JSON.stringify` is unsafe there: a `</script>` sequence in any string value terminates the tag early and everything after it parses as markup, turning a generated title or description into script injection. Escaping `<`, `>` and `&` to `\\uXXXX` is inert inside JSON — parsers read the original characters back — so the structured data is equivalent while the breakout is impossible.
+- Framework-free and runtime-agnostic (pure string work, no Node built-ins, no React), so it is safe for every consumer including non-Next ones.
+- **Why it is here rather than per-repo:** one consumer had solved this correctly and the fix was never propagated, leaving two others on raw `JSON.stringify` — exactly the silent drift this module exists to prevent. Consumers should re-export it from their own `lib/` shim and delete their local copy.
+
 ## [2026-08-05] — Notification failures can no longer be silent
 
 Found while auditing every consumer for one class of bug: a notification path that fails and
