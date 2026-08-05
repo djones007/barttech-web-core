@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-05c] — Document the two non-obvious consequences of a tag write
+
+### Changed
+- **`bartmail.ts` now documents that a tag write can SEND EMAIL, and that the tags it writes make a contact findable but not necessarily reachable.** Comment-only; no behaviour change, no export-surface change.
+- **(1) A tag write can send.** Outbox matching is on tag NAME + tenant, **not brand** — so passing a `tags` value equal to the `trigger_tag` of any active sequence anywhere in the tenant enrols the contact and sends within minutes, even under a different brand. Bulk tools should refuse outright rather than trust the caller.
+- **(2) Association is not reach.** Everything this writes is a brand-association tag. Audiences can be resolved either by brand or by an explicit pool/segment tag list; where the real send path resolves by pool, a contact holding only these tags is filed correctly and skipped by every send — visible in the admin UI, absent from the audience.
+- **Why it is worth a comment in the shared module:** both cost real production time on 2026-08-05, and neither is discoverable from the call site. A caller reading this function sees a contact row and tags appear and reasonably concludes the optin works. One consumer's optin route was correct by that standard for weeks while reaching nobody.
+- Docs-only, so **not force-propagated** — 15+ consumer redeploys for a comment is not proportionate. It rides along on the next pointer bump.
+
 ## [2026-08-05a] — Add vendored-library audit (the lockfile blind spot)
 
 ### Added

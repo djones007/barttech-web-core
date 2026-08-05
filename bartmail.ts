@@ -303,6 +303,28 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   // without the caller doing anything. The old direct Trigger.dev call
   // (bartmail-enrol-sequence) was removed 2026-07-13 — that task no
   // longer exists post Vercel-Cron-cutover; it was silently failing.
+  //
+  // TWO CONSEQUENCES OF THAT TRIGGER, both easy to miss (added 2026-08-05
+  // after each cost real time in production):
+  //
+  // 1. A TAG WRITE CAN SEND EMAIL. Outbox matching is on tag NAME + tenant —
+  //    NOT brand. So passing a `tags` value that happens to equal the
+  //    trigger_tag of ANY active sequence anywhere in the tenant enrols the
+  //    contact and sends within minutes, even if you set a different brand.
+  //    Before applying a tag in bulk, check for an active sequence using that
+  //    name. Bulk tools should refuse outright rather than rely on the caller.
+  //
+  // 2. THESE TAGS MAKE A CONTACT FINDABLE, NOT NECESSARILY REACHABLE.
+  //    Everything written here is a BRAND-ASSOCIATION tag. Audiences can be
+  //    resolved two different ways: by brand (any tag row carrying that
+  //    brand_id) or by an explicit pool/segment tag list. If the send path a
+  //    brand actually uses resolves by pool, a contact holding only the tags
+  //    written here is filed correctly and still skipped by every send —
+  //    visible in the admin UI, absent from the audience. When adding a new
+  //    optin source, confirm the tag it produces is one the brand's real send
+  //    path targets; if not, apply the pool tag too. Do NOT assume the two
+  //    resolvers agree, and do not report an optin route "done" on the
+  //    strength of a contact row appearing.
 }
 
 export interface BartmailPurchaseParams {
