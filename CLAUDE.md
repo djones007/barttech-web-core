@@ -32,6 +32,7 @@ co-located with the propagate tooling.
 2. Convert the site's `lib/security.ts` into a shim: `export * from "@/web-core/security"` (+ `export { timingSafeTokenEqual as <localName> }` aliases if the site's call sites use a different name, so route imports don't change; keep any brand-specific/edge helpers local).
 3. **CI:** add `submodules: recursive` to the repo's `actions/checkout` step in `.github/workflows/ci.yml` (public submodule → no token). **Vercel** clones public submodules natively — no token or fetch script needed.
 4. Record the new consumer and its module usage in the private consumer map (see above) and in the propagate tooling.
+5. **Register the resources the module owns** in that repo's `.shared-resources.json` (table name, endpoint, API path → owning module + a `reason`). The CI shim gate matches on FILENAME and is blind to the same logic written inline in a normally-named file — which is how three repos each grew their own cron-heartbeat writer inside `lib/cron.ts`, two of which then drifted on a column with nothing noticing. `scripts/check-shared-module-inlining.mjs` catches that, but it is **opt-in and silent without a config**, so an unregistered resource is an unguarded one. Match the *operation*, not just the name — the first cron-heartbeat rule matched any mention of the table and flagged two legitimate readers; the module owned the write.
 
 ## Keeping This Skill Current
 

@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-06f] — Registering a resource is now part of promoting a module
+
+### Changed
+- **`CLAUDE.md`'s "Adding a new consumer" gains a step 5: register the resources the new module
+  owns in that repo's `.shared-resources.json`.** The shim gate matches on FILENAME and is blind to
+  the same logic written inline in a normally-named file. `check-shared-module-inlining.mjs` closes
+  that, but it is opt-in and **silent without a config** — so an unregistered resource is an
+  unguarded one, and the gate will happily report OK over it. Promotion without registration leaves
+  the door open that promotion was meant to shut.
+- Notes the tuning rule learned building the first one: **match the operation, not just the name.**
+  The initial cron-heartbeat rule matched any mention of the table and flagged two legitimate
+  readers; the module owned the write.
+
+Docs-only, so not force-propagated — it rides along on the next pointer bump.
+
 ## [2026-08-06e] — Shared-module inlining gate: the drift the filename gate cannot see
 
 ### Added
