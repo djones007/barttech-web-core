@@ -67,6 +67,12 @@ export async function writeCronHeartbeat(opts: HeartbeatOptions): Promise<boolea
         last_status: status,
         last_run_at: new Date().toISOString(),
         last_detail: detail ?? null,
+        // Set explicitly. A column default fires on INSERT only, and every run
+        // after the first is the UPDATE half of the upsert — so leaving this to
+        // the default would freeze it at the row's creation time while
+        // last_run_at kept advancing. Harmless for a watcher reading
+        // last_run_at, quietly wrong for anything reading updated_at.
+        updated_at: new Date().toISOString(),
       }),
     });
 

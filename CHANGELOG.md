@@ -22,6 +22,38 @@ Two deliberate properties:
 Generic by construction — a table name, a URL and a key, supplied by the caller from its own env.
 No product or business specifics, which is what makes it appropriate here.
 
+## [2026-08-06d] — `cronHeartbeat.ts`: the shared silent-death signal
+
+### Added
+- **`cronHeartbeat.ts` — `writeCronHeartbeat()`.** A scheduled job that dies quietly produces no error
+  to capture, because nothing runs; per-run error reporting is structurally blind to it. The only
+  signal is the **absence** of an expected write. Every scheduled route records a heartbeat and an
+  external watcher alerts when a row goes stale or records a failure.
+- **Uses raw `fetch` against PostgREST, not `@supabase/supabase-js`.** This repo is framework-agnostic
+  source with no runtime dependencies, and two existing local copies each take a Supabase client —
+  a shared version that demanded one would drag a dependency into every consumer. Table, URL and key
+  are all parameters; there is no product, brand or business logic in the file, which is what makes
+  it safe here (golden rule 1, and the public-repo warning at the top of `CLAUDE.md`).
+- **Never throws and never rejects.** A monitoring write that took down the thing it monitors is
+  strictly worse than no monitoring. It returns a boolean so a caller that wants to log the failure
+  can, and ignoring it is the common case. A missing url/key logs loudly rather than skipping
+  silently — an unmonitored job must never look identical to a monitored one.
+
+### Fixed
+- **`updated_at` is now written explicitly** (found while reviewing the file before its first commit).
+  It was absent, and the column's `default now()` fires on INSERT only — so every run after the first,
+  being the UPDATE half of the upsert, would have left `updated_at` frozen at row-creation time while
+  `last_run_at` advanced. Harmless for the current watcher, which reads `last_run_at`, but quietly
+  wrong for anything reading `updated_at`, and it made the shared module a slightly worse replacement
+  than the local copies it exists to replace. Both of those set it.
+
+### Notes
+- **No consumer imports this yet.** Two local implementations exist and are untouched; migrating them
+  is a separate, deliberate change, because a pointer bump redeploys every consumer. Their signatures
+  differ from this one (`writeHeartbeat(supabase, jobName, …)` and `writeHeartbeat(jobName, …)` vs
+  `writeCronHeartbeat({ url, key, jobName, … })`), so migration is a real edit per call site, not a
+  rename.
+
 ## [2026-08-06c] — lint: the scripts had no environment declared
 
 ### Fixed
