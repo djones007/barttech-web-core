@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-06b] — `customerContext.ts` promoted in
+
+### Added
+- **`customerContext.ts`** — orders, subscriptions and tracking for a customer, read from the
+  the checkout app Supabase and the Shopify Admin API. Promoted from
+  `repos/a private app/src/lib/support/customer-context.ts`, which is now a shim.
+
+It moved because a second consumer appeared. The support ticket page has always shown this panel, but
+the AI-draft step lives in `repos/bartmail` and could not see any of it — so a "where is my order"
+draft came out as `[NEEDS: a human to check the order under this email address]`, which is the exact
+work the drafting was supposed to remove. Two copies of a lookup that decides what gets quoted back
+to a customer is the drift `feedback_shared_modules_standard` exists to stop.
+
+Unchanged behaviour: every source still fails soft and independently, and the module still
+distinguishes "could not reach" from "none found" — rendering a failed lookup as an empty order list
+would tell an agent this customer has never bought anything, which is a very different and much worse
+answer.
+
+**Server-side only.** It carries the checkout service-role key and a Shopify admin token; never import
+it into a client component.
+
 ## [2026-08-06] — Ordering gate: the primary lead store must be written first
 
 ### Added
