@@ -2,22 +2,27 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
-## [2026-08-06b] — customerContext.ts promoted in, then reverted the same hour
+## [2026-08-06b] — a module was added here and reverted the same hour
 
 ### Removed
-- **`customerContext.ts` was added and immediately removed.** It reads a customer's orders from the
-  the checkout app Supabase and the Shopify Admin API, and it is written around specific brands, table
-  names and env vars. **This repo is PUBLIC.** The Public Hygiene gate caught six denylisted terms in
-  it on the very first push, which is exactly what that gate is for.
+- **A customer-order lookup module was added and immediately removed.** It read order and
+  subscription records from two internal systems, and was written around named products, table
+  names and specific env vars. **This repo is public.** The hygiene gate rejected it on the very
+  first push, which is exactly what that gate exists for.
 
-  The rule it broke is `feedback_public_repo_hygiene`: **mechanism belongs in a public repo, business
-  content does not.** A lookup hardcoding `brandSlug === "nutty-orange"` and a named storefront is
-  content. Genericising it would have meant passing every table and brand in as config, at which point
-  it stops being a shared module and starts being an awkward wrapper.
+  The rule it broke is golden rule 1 above, and the public-repo warning at the top of :
+  **only generic mechanism belongs here; product-specific logic stays in the consuming repo.** A
+  lookup that branches on a particular product and names a particular storefront is not a shared
+  primitive. Genericising it would have meant passing every table and identifier in as config, at
+  which point it stops being a shared module and becomes an awkward wrapper around one caller.
 
-  The real fix was architectural: the AI-draft step moves into `repos/a private app` (private), which
-  already holds the checkout and Shopify credentials, so the lookup never needs sharing at all and
-  `repos/bartmail` can hand its copy of those credentials back.
+  The fix was architectural rather than cosmetic: the consumer that needed it was moved to sit
+  alongside the private code that already had those credentials, so the lookup never needed to be
+  shared at all — and a second private app was able to hand back credentials it had briefly been
+  given.
+
+  Worth recording because the reasoning generalises: **"two repos need this" is not on its own a
+  reason to promote something here.** Ask first whether the two callers belong in the same place.
 
 ## [2026-08-06] — Ordering gate: the primary lead store must be written first
 
