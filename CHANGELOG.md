@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-06d] — `cronHeartbeat.ts`: prove a scheduled job is still alive
+
+### Added
+- **`writeCronHeartbeat()`** — upserts one row per scheduled job recording its last run time, status
+  and a small detail blob. An external watcher alerts when a row goes stale or records a failure.
+
+A job that dies quietly produces NO error to capture, because nothing runs. Per-run error reporting
+is structurally blind to it; the only available signal is the absence of an expected write. Seven
+scheduled routes across four consumers were found in exactly that state on 2026-08-06 — no way to
+tell a healthy job from one that had not run in weeks.
+
+Two deliberate properties:
+- **It never throws and never rejects.** A monitoring write that took down the thing it monitors
+  would be strictly worse than no monitoring. It returns a boolean for callers that want to log.
+- **A missing URL/key logs loudly rather than skipping.** Silently doing nothing would make an
+  unmonitored job look identical to a monitored one, which is the failure this file exists to remove.
+
+Generic by construction — a table name, a URL and a key, supplied by the caller from its own env.
+No product or business specifics, which is what makes it appropriate here.
+
 ## [2026-08-06c] — lint: the scripts had no environment declared
 
 ### Fixed
