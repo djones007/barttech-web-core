@@ -21,7 +21,17 @@ export interface HeartbeatOptions {
   key: string;
   /** Unique job identifier. Must match what the watcher expects, exactly. */
   jobName: string;
-  status: "ok" | "error";
+  /**
+   * `ok` / `error` are written by the job itself.
+   *
+   * `pending` is for a WATCHER seeding a baseline: it means "this job is known
+   * but has never been observed running". It exists so a newly-deployed job
+   * does not alarm before its first tick, and so an infrequent one does not
+   * alarm daily for a month — while still going stale at its real threshold if
+   * it genuinely never runs. Deliberately not `ok`: that would claim a run
+   * happened. A reader treating anything-not-`error` as healthy stays correct.
+   */
+  status: "ok" | "error" | "pending";
   /** Small JSON blob — counts processed, error message. Keep it short. */
   detail?: Record<string, unknown>;
   /** Defaults to `cron_heartbeats`. */
