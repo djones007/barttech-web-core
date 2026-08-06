@@ -28,10 +28,10 @@ All notable changes to this project are documented here. Format follows [Keep a 
   is one people would disable. It broke the estate's own tuning rule (match the operation, not the
   name) which had been written down hours earlier — worth recording precisely because the rule was
   already known.
-- The 3 real violations that survived are all genuine and now explicit exceptions with reasons:
-  `barton-lms-engine`'s local `audit.ts` (it is a submodule engine, it cannot resolve `@/web-core/*`),
-  `cloud-plus-v2`'s Deno edge function (cannot import a git submodule at all), and that repo's
-  quote-send Emailit call — a **deliberate** divergence the code already documents, because its
+- The 3 real violations that survived are all genuine and now explicit exceptions with reasons: one
+  consumer's local `audit.ts` (it is itself a submodule engine, so it cannot resolve `@/web-core/*`),
+  another's Deno edge function (cannot import a git submodule at all), and that same repo's
+  transactional-send call — a **deliberate** divergence the code already documents, because its
   claim-then-send guarantee depends on retrying only 429s.
 
 ## [2026-08-06f] — Registering a resource is now part of promoting a module

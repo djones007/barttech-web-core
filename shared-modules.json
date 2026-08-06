@@ -82,7 +82,7 @@
       "resources": [
         {
           "match": "graph\\.microsoft\\.com|login\\.microsoftonline\\.com",
-          "reason": "the shared client carries retry handling a hand-rolled token fetch does not. NOTE: cloud-plus-v2 keeps a deliberate local graph.ts (Drafts support the shared module lacks) — that repo allow-lists it rather than pretending otherwise."
+          "reason": "the shared client carries retry handling a hand-rolled token fetch does not. NOTE: one consumer keeps a deliberate local graph.ts (Drafts support the shared module lacks) — that repo allow-lists it rather than pretending otherwise."
         }
       ]
     },
