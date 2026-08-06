@@ -2,6 +2,33 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-06e] — Shared-module inlining gate: the drift the filename gate cannot see
+
+### Added
+- **`scripts/check-shared-module-inlining.mjs`** — flags direct use of a resource a shared module
+  owns, anywhere outside that module.
+
+  The existing web-core shim gate matches on **filename**: it catches a stray local `security.ts` or
+  `bartmail.ts`. It is structurally blind to how drift actually happens — the logic written *inline*,
+  in a file with a perfectly ordinary name. Three repos each grew their own `writeHeartbeat` inside
+  `lib/cron.ts`, no file was ever called `cronHeartbeat.ts`, so nothing flagged it; two of the copies
+  then diverged on `updated_at` and it went unnoticed for as long as the column was only written and
+  never read.
+
+  Content-based, opt-in per repo via `.shared-resources.json`, and **skips silently where that file
+  is absent** — so it can be rolled everywhere and a repo that later adds a config picks it up with
+  no rollout. An unparseable config fails loudly rather than degrading to "clean".
+
+### Notes
+- **The rule matches the WRITE, not the table.** The first version matched any mention of
+  `cron_heartbeats` and immediately flagged two legitimate readers — a status dashboard and the
+  staleness watcher. Reading is not the drift shape; the module owns the write. Narrowed before
+  rollout, on the same principle as the lead-store gate: a check that fires on correct code is one
+  people learn to skim past.
+- Verified by replaying the pre-consolidation commit in a detached worktree — it flags
+  `src/lib/cron.ts:83`, the exact copy the filename gate could not see — and is clean across all
+  three consumers afterwards.
+
 ## [2026-08-06d] — `cronHeartbeat.ts`: prove a scheduled job is still alive
 
 ### Added
