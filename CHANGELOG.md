@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-06c] — lint: the scripts had no environment declared
+
+### Fixed
+- **CI has been red since the CLI scripts landed.** The eslint config declares globals for
+  `files: ["*.ts"]`, and in flat config that matches top-level `.ts` files only — not
+  `scripts/*.mjs`. So those files were linted with NO environment, and every `process`, `console`,
+  `Buffer` and `fetch` in them was a `no-undef` error. Added a config block for `scripts/**` with
+  the Node globals.
+- **Node globals only, not browser.** These scripts run standalone in consumer CI where there is no
+  DOM; including the browser set would let a `window` or `document` reference pass lint and fail at
+  runtime, which is the wrong direction for a gate.
+- `no-explicit-any` is off for `scripts/**`. That rule protects the repos that import this as a
+  typed library; a CLI parsing argv and JSON is a different concern and nothing imports it.
+
 ## [2026-08-06b] — a module was added here and reverted the same hour
 
 ### Removed
