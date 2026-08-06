@@ -2,6 +2,45 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-06] — Ordering gate: the primary lead store must be written first
+
+### Added
+- **`scripts/check-lead-store-ordering.mjs`** — a dependency-free static gate that rejects a form
+  route whose primary contact write sits below an early return or an unguarded third-party await
+  in the same handler. Consumers fetch and run it in CI; it is not imported by app code.
+
+  Whichever system a route writes **first** is the only one guaranteed to run. Everything after it
+  is conditional on nothing above it ending the request, and a request ends two ways — it returns
+  or it throws. So above the primary write the gate rejects a success-shaped return (2xx/3xx,
+  `ok: true`, `success: true`, redirect) and an `await` of a secondary system that is not inside a
+  nested try/catch closing before the write. Validation guards returning 4xx/5xx are not flagged:
+  the request was refused outright, so no lead exists to lose.
+
+  Two live incidents, six days apart, both this shape:
+  1. The primary write sat below an ESP's graceful-degrade `return json({...}, { status: 200 })`.
+     The ESP was misconfigured and failed on **every** request, so for roughly six weeks every
+     signup hit that early return — recorded in no system at all, no notification email, and a
+     success screen shown to the visitor. Because the response was a 200, nothing reported it.
+  2. The primary write sat below an awaited, individually-unguarded mailbox send. A provider
+     outage throws past it to the handler's outer catch, so the request 500s having stored nothing
+     that was already fully received and validated.
+
+  In both, the write was present, correctly awaited and correctly try/caught. Only its position
+  was wrong — which is precisely what a human reading the diff does not notice, and a machine does.
+
+### Notes
+- Deliberate exceptions are annotated inline as `// primary-store-ordering-ok: <reason>`, read from
+  the statement's own comment block. **The reason is required** — a bare suppression is "it looked
+  fine" with fewer words, which is how both incidents shipped.
+- Repos override the primary/secondary call-name patterns with `.lead-store-ordering.json`. The
+  shipped `secondary` pattern names *actions* on other systems, never nouns: a broad
+  `\w*[Ww]ebhook\w*` was tried first and matched `getWebhookSecretForBrand`, a local secret lookup.
+  A gate that cries wolf on config reads is one people learn to skim past.
+- **Not wired into this repo's own CI**, per the standing rule that a gate belongs on the repos that
+  could drift, never on the canonical source they are measured against.
+- Verified against both incidents by running it over the pre-fix commits in a detached worktree: it
+  flags both, and is clean across all 20 consumer repos afterwards.
+
 ## [2026-08-05c] — Document the two non-obvious consequences of a tag write
 
 ### Changed

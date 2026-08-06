@@ -11,6 +11,20 @@ a CI step that fetches the raw file.
   banner comment its distribution ships with and queries the public OSV.dev
   advisory API. Plain Node, no dependencies, no key, no auth.
 
+- `check-lead-store-ordering.mjs` — enforces that a form route's **primary
+  contact write comes first**, above every early return and every unguarded
+  third-party await in the same handler. Whichever system a route writes first
+  is the only one guaranteed to run; everything below it is conditional on
+  nothing above it returning or throwing. Two live incidents six days apart came
+  from exactly this, and in both the primary write was present, awaited and
+  wrapped in its own try/catch — only its POSITION was wrong, which is why
+  review never caught it. Deliberate exceptions carry an inline
+  `// primary-store-ordering-ok: <reason>` annotation; the reason is required.
+  Repos override the call-name patterns via `.lead-store-ordering.json`. Plain
+  Node, no dependencies. Consumers fetch it from raw.githubusercontent in CI
+  (see `tools/lead-store-gate-rollout.py` in the workspace root) rather than
+  embedding a copy, so tuning the rules fixes every repo at once.
+
 ## Rules
 
 - **Keep them dependency-free and runnable with a bare `node <file>.mjs`.** They
