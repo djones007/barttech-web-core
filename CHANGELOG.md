@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-06g] — `shared-modules.json`: nothing checked that you registered
+
+### Added
+- **`shared-modules.json`** — the single declaration of what every module owns. Written by whoever
+  promotes a module; read by every consumer's CI.
+- **`scripts/check-resource-registration.mjs`** — runs in a consumer, works out which web-core
+  modules that repo actually imports, and fails if a consumed module's resources are not in its
+  `.shared-resources.json`. This closes the remaining hole: the inlining gate enforces *registered*
+  resources, but is opt-in and silent without a config, so **nothing checked that you registered**.
+  A module promoted without downstream registration passed every gate in the estate.
+- **A manifest gate in this repo's own CI** — every module must have an entry, including modules
+  that own nothing, which must say so with a `why`. An empty `resources` is a decision; a missing
+  entry is an oversight, and if those look the same the manifest rots into a list of what someone
+  remembered. This is the ONE gate that belongs here; the consumer-side gates deliberately are not.
+
+### Notes — the rollout measured itself first, and that changed the design
+- Arming all 15 modules' resources across 19 repos produced **20 violations. 17 were my own
+  `adPlatforms` rule and every one was legitimate**: the cookie-banner component (deliberately
+  per-repo — and it is what actually loads the tags), the CSP host lists this module exports
+  constants for, and Playwright assertions naming hosts they expect to be absent before consent.
+- **`adPlatforms` now declares no resources, with the reasoning recorded.** Its real contract —
+  "adding a platform is ONE entry in `AD_PLATFORMS`" — is about where a registry entry goes, not
+  who may name a hostname. A gate cannot see that distinction, and a rule firing on 17 correct sites
+  is one people would disable. It broke the estate's own tuning rule (match the operation, not the
+  name) which had been written down hours earlier — worth recording precisely because the rule was
+  already known.
+- The 3 real violations that survived are all genuine and now explicit exceptions with reasons:
+  `an engine submodule`'s local `audit.ts` (it is a submodule engine, it cannot resolve `@/web-core/*`),
+  `a client app`'s Deno edge function (cannot import a git submodule at all), and that repo's
+  quote-send Emailit call — a **deliberate** divergence the code already documents, because its
+  claim-then-send guarantee depends on retrying only 429s.
+
 ## [2026-08-06f] — Registering a resource is now part of promoting a module
 
 ### Changed
