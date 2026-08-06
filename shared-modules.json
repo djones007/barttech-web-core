@@ -1,0 +1,128 @@
+{
+  "_readme": [
+    "Every module at this repo's root MUST have an entry here, and CI fails if one does not —",
+    "including modules that own nothing. An explicit empty `resources` with a `why` is a decision;",
+    "a missing entry is an oversight, and the two must not look the same.",
+    "",
+    "`resources` lists the external things this module OWNS: the table it writes, the endpoint it",
+    "calls. Consumers register these in their own .shared-resources.json, which is what makes the",
+    "inlining gate able to see a re-implementation. check-resource-registration.mjs compares the two",
+    "and fails a consumer that imports a module without registering its resources.",
+    "",
+    "Match the OPERATION, not the name. A rule that fires on a legitimate read of a table this module",
+    "writes is a rule people learn to skim past."
+  ],
+  "modules": {
+    "adPlatforms": {
+      "owner": "@/web-core/adPlatforms",
+      "resources": [],
+      "why": "NOT expressible as a resource match, and the attempt is worth recording. A rule on the platform hostnames was tried and flagged 17 sites across 11 repos, every one legitimate: the cookie-banner component (deliberately per-repo, because brand styling differs — and it is what actually loads the tags), the CSP host lists this module exports constants for, and Playwright assertions naming the hosts they expect to be absent before consent. The real contract here — 'adding a platform is ONE entry in AD_PLATFORMS' — is about where a REGISTRY ENTRY goes, not about who may name a hostname. A gate cannot see that distinction, and a rule firing on 17 correct sites is one people would disable. Enforced by review and by repo CLAUDE.md instead."
+    },
+    "admin": {
+      "owner": "@/web-core/admin",
+      "resources": [],
+      "why": "takes a caller-supplied client and answers an owner-tier question. The privilege rule itself lives once, in the DB (see the auth/admin standard) — this module owns no external resource of its own."
+    },
+    "audit": {
+      "owner": "@/web-core/audit",
+      "resources": [
+        {
+          "match": "from\\(\\s*['\"]audit_log['\"]\\s*\\)\\s*\\.\\s*(insert|upsert)",
+          "reason": "an audit row written by hand can skip the shared action slugs and the request-context parsing, producing rows that look valid and cannot be correlated. Reading audit_log is fine."
+        }
+      ]
+    },
+    "bartmail": {
+      "owner": "@/web-core/bartmail",
+      "resources": [
+        {
+          "match": "bartmail\\.vercel\\.app",
+          "reason": "the BartMail HTTP API must never be called — optins are a direct Supabase write through this module. Standing rule, predates the module."
+        },
+        {
+          "match": "from\\(\\s*['\"]contact_tags['\"]\\s*\\)\\s*\\.\\s*(insert|upsert)",
+          "reason": "a contact_tags write can SEND EMAIL: the AFTER INSERT trigger feeds tag_enrolment_outbox, matched on tag name + tenant, NOT brand. Hand-writing this is how a bulk tool fires an unrelated brand's sequence."
+        }
+      ]
+    },
+    "charts": {
+      "owner": "@/web-core/charts",
+      "resources": [],
+      "why": "pure number/currency formatting. No external system, nothing to own."
+    },
+    "consent": {
+      "owner": "@/web-core/consent",
+      "resources": [
+        {
+          "match": "localStorage\\.(get|set)Item\\(\\s*['\"][^'\"]*consent",
+          "reason": "consent must persist in a cookie scoped to the registrable domain. localStorage is keyed by ORIGIN, so a localStorage-backed banner re-prompts on every subdomain — including a checkout mid-payment."
+        }
+      ]
+    },
+    "cronHeartbeat": {
+      "owner": "@/web-core/cronHeartbeat",
+      "resources": [
+        {
+          "match": "from\\(\\s*['\"]cron_heartbeats['\"]\\s*\\)\\s*\\.\\s*(upsert|insert)|rest/v1/cron_heartbeats",
+          "reason": "three repos each grew their own writeHeartbeat inside lib/cron.ts; two drifted on updated_at and nothing noticed, because no file was named cronHeartbeat.ts for the filename gate to catch. Matches the WRITE only — the status dashboard and staleness watcher read it legitimately."
+        }
+      ]
+    },
+    "emailit": {
+      "owner": "@/web-core/emailit",
+      "resources": [
+        {
+          "match": "api\\.emailit\\.com",
+          "reason": "send pacing, the 2/sec API cap and retry handling live in this module. A direct call bypasses all three and can trip the rate limit for every other sender."
+        }
+      ]
+    },
+    "graph": {
+      "owner": "@/web-core/graph",
+      "resources": [
+        {
+          "match": "graph\\.microsoft\\.com|login\\.microsoftonline\\.com",
+          "reason": "the shared client carries retry handling a hand-rolled token fetch does not. NOTE: cloud-plus-v2 keeps a deliberate local graph.ts (Drafts support the shared module lacks) — that repo allow-lists it rather than pretending otherwise."
+        }
+      ]
+    },
+    "jsonLd": {
+      "owner": "@/web-core/jsonLd",
+      "resources": [],
+      "why": "pure escaping before embedding structured data in a script tag. No external system."
+    },
+    "reoon": {
+      "owner": "@/web-core/reoon",
+      "resources": [
+        {
+          "match": "emailverifier\\.reoon\\.com",
+          "reason": "the shared module is fail-open and applies the spamtrap rule. A direct call can accept addresses this one blocks, and burns the 4,300/day account-wide credit cap."
+        }
+      ]
+    },
+    "security": {
+      "owner": "@/web-core/security",
+      "resources": [],
+      "why": "crypto and comparison primitives operating on caller-supplied values. Its security comes from the keys it is given, never from what it talks to."
+    },
+    "supportKb": {
+      "owner": "@/web-core/supportKb",
+      "resources": [
+        {
+          "match": "from\\(\\s*['\"]support_kb_(articles|searches)['\"]\\s*\\)\\s*\\.\\s*(insert|upsert)",
+          "reason": "search logging and article writes share ranking assumptions with the reader; a second writer drifts them apart silently."
+        }
+      ]
+    },
+    "uploads": {
+      "owner": "@/web-core/uploads",
+      "resources": [],
+      "why": "MIME sniffing, filename safety and size validation on bytes the caller already holds. It talks to nothing; the storage client stays in the consuming app."
+    },
+    "validation": {
+      "owner": "@/web-core/validation",
+      "resources": [],
+      "why": "pure predicates over strings. No external system."
+    }
+  }
+}

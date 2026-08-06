@@ -33,3 +33,48 @@ jobs:
       # reported in one run rather than one masking the other.
       - if: always()
         run: npm run typecheck
+
+      # Every module MUST be declared in shared-modules.json — including modules
+      # that own nothing, which say so explicitly with a `why`. That declaration
+      # is what each consumer's resource-registration gate reads, so an
+      # undeclared module is one no consumer can be asked to register, and the
+      # copy it was meant to prevent can reappear downstream unnoticed.
+      #
+      # An empty `resources` is a decision. A missing entry is an oversight.
+      # If those two look the same, the manifest rots into a list of the things
+      # someone happened to remember.
+      #
+      # This is the ONE gate that belongs on this repo. The consumer-side gates
+      # deliberately are not here: a gate belongs on the repos that could drift,
+      # never on the canonical source they are measured against.
+      - name: Every module is declared in shared-modules.json
+        if: always()
+        run: |
+          node - <<'EOF'
+          const fs = require("fs");
+          const man = JSON.parse(fs.readFileSync("shared-modules.json", "utf8")).modules || {};
+          const onDisk = fs.readdirSync(".").filter((f) => f.endsWith(".ts")).map((f) => f.replace(/\.ts$/, ""));
+          const undeclared = onDisk.filter((m) => !(m in man));
+          const phantom = Object.keys(man).filter((m) => !onDisk.includes(m));
+          const noReason = Object.entries(man)
+            .filter(([, v]) => !(v.resources || []).length && !v.why)
+            .map(([k]) => k);
+          let failed = false;
+          if (undeclared.length) {
+            failed = true;
+            console.log("::error::Module(s) with no shared-modules.json entry. Add one naming the external resources it owns — or an empty `resources` WITH a `why` if it owns none. Consumers cannot be asked to register what is not declared.");
+            undeclared.forEach((m) => console.log("  " + m + ".ts"));
+          }
+          if (phantom.length) {
+            failed = true;
+            console.log("::error::shared-modules.json declares a module that no longer exists. Remove the entry.");
+            phantom.forEach((m) => console.log("  " + m));
+          }
+          if (noReason.length) {
+            failed = true;
+            console.log("::error::Module declares no resources and gives no `why`. 'Owns nothing' must be a stated decision, not an empty field.");
+            noReason.forEach((m) => console.log("  " + m));
+          }
+          if (failed) process.exit(1);
+          console.log(`Manifest gate OK — all ${onDisk.length} module(s) declared.`);
+          EOF
