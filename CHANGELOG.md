@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-08] — `supportTicket`: raise a helpdesk ticket from a contact form
+
+### Added
+- **`supportTicket.ts`** — `createSupportTicketFromForm()`. Every brand site had a contact form that
+  emailed a notification and wrote an optin; none created a TICKET, so form enquiries lived only in an
+  inbox while the helpdesk sat empty — and the helpdesk is where SLAs, assignment, AI drafting and the
+  audit trail live.
+
+  Shared rather than per-repo because six sites need identical behaviour and `support_tickets` has
+  seven NOT NULL columns with no defaults; six hand-written copies would drift on them and fail only at
+  runtime, on a real enquiry. Credentials come from the environment (`BARTMAIL_SUPABASE_*`, the pair
+  `bartmail.ts` already uses), so a consuming site needs no new secret and this public repo holds none.
+
+  Two deliberate details: the message is inserted AFTER the ticket, so a partial failure leaves a
+  visible ticket rather than an orphaned message; and the body is written to `body_text`, never
+  `body_html`, because a contact form is public input and writing it as HTML would make the form a
+  stored-XSS path into the agent console.
+
 ## [2026-08-07b] — `nextRedirects`: stop sites serving their own documentation
 
 ### Added
