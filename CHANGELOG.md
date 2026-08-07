@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-07b] — `nextRedirects`: stop sites serving their own documentation
+
+### Added
+- **`nextRedirects.ts`**, exporting `SHARED_REDIRECTS` — redirect rules every estate site must
+  carry, spread into each repo's `redirects()`. Currently one rule: never serve markdown from
+  `public/`.
+
+  Five live customer-facing sites were found returning their internal `CLAUDE.md` files with HTTP 200
+  and `Content-Type: text/markdown`. It is structural rather than careless — the estate convention
+  puts a `CLAUDE.md` in every folder, and `public/` is web-served, so the two rules are in direct
+  conflict and it recurs for as long as both hold. Hence one shared rule rather than five fixes.
+
+  **A redirect, not a header**: Next checks redirects before the filesystem, so this intercepts the
+  static file — a header would leave the bytes being served. `permanent: false` throughout, because a
+  308 on a path someone later wants to serve legitimately is very hard to take back.
+
+  Imported by **relative path** (`./web-core/…` or `./src/web-core/…`) like `adPlatforms`' CSP
+  constants — the Next config loader does not resolve tsconfig path aliases.
+
+### Notes
+Enforcement is deliberately NOT a resource match: the thing worth catching is a site that fails to
+spread `SHARED_REDIRECTS`, which is an absence, and the inlining gate can only see presence. Live
+verification lives in the estate's security-audit agent, which probes the real URLs — a config that
+exists is not proof of a config that works.
+
 ## [2026-08-07] — `check-id-list-filters.mjs`: the second PostgREST cap
 
 ### Added
