@@ -65,6 +65,10 @@
         {
           "match": "from\\(\\s*['\"]cron_heartbeats['\"]\\s*\\)\\s*\\.\\s*(upsert|insert)|rest/v1/cron_heartbeats",
           "reason": "three repos each grew their own writeHeartbeat inside lib/cron.ts; two drifted on updated_at and nothing noticed, because no file was named cronHeartbeat.ts for the filename gate to catch. Matches the WRITE only — the status dashboard and staleness watcher read it legitimately."
+        },
+        {
+          "match": "from\\(\\s*['\"]cron_runs['\"]\\s*\\)\\s*\\.\\s*(insert|upsert)|rest/v1/cron_runs",
+          "reason": "the per-run history row is written by the same module as the heartbeat, and for the same reason — an inline copy drifts on the duration/started_at handling and, worse, on the never-throws contract. Matches the WRITE only: a history view and a retention sweep read and delete it legitimately."
         }
       ]
     },

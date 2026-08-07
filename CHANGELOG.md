@@ -23,6 +23,31 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
   Literal and page-scoped lists are deliberately not flagged. The gate cannot see
   `.in('id', ids)` where `ids` came from a pagination loop; that still needs review.
+## [2026-08-07] — cronHeartbeat: per-run history alongside the heartbeat
+
+### Added
+- **`cron_runs` history write.** `cron_heartbeats` holds ONE row per job, overwritten every run, so it
+  answers "is this healthy now?" and nothing else. `writeCronHeartbeat` now also appends an
+  append-only row per run — status, started/finished, duration, detail — restoring the run history
+  the estate lost when its previous scheduler was retired. Controlled by `historyTable`
+  (default `cron_runs`); pass `null` to opt out in a project that has no such table yet, otherwise it
+  would log a 404 on every run.
+- **`startedAt`** option (ms or ISO). Used only to compute `duration_ms`. Omit it and duration is
+  `null`, which records "not measured" rather than claiming the run was instant.
+
+### Changed
+- The heartbeat's `last_run_at`/`updated_at` now reuse the same timestamp as the history row's
+  `finished_at`, so the two tables agree about when a run ended instead of differing by however long
+  the history write took.
+
+### Notes — why the history write goes first
+The heartbeat is what watchers alarm on, so it is the write that must land. Doing history first means
+a full or erroring history table cannot consume the request budget, or throw, before the heartbeat is
+recorded — the reverse order would let a broken history table silence the alarm. The history write has
+its own try/catch and its own return value, and that value is deliberately NOT folded into what this
+function returns: callers ask "was I monitored?", and the answer to that is the heartbeat. It logs at
+`console.warn`, not `console.error`, so a missing history table cannot drown the signal that a
+HEARTBEAT failed.
 
 ## [2026-08-06g] — `shared-modules.json`: nothing checked that you registered
 
