@@ -132,6 +132,19 @@
       "owner": "@/web-core/nextRedirects",
       "resources": [],
       "why": "Owns no external resource — it is a list of Next.js redirect rules, consumed by next.config.ts via a RELATIVE import, because the Next config loader does not resolve tsconfig path aliases. A resource match is also the wrong tool here: the thing worth enforcing is that every site SPREADS SHARED_REDIRECTS, which is an ABSENCE, and the inlining gate can only see presence. That check lives in each consumer instead — if public/ holds any .md, next.config.ts must import SHARED_REDIRECTS. Live verification is separate again, in the security-audit agent, because a config that exists is not proof of a config that works."
+    },
+    "supportTicket": {
+      "owner": "@/web-core/supportTicket",
+      "resources": [
+        {
+          "match": "from\\(\\s*['\"]support_tickets['\"]\\s*\\)\\s*\\.\\s*(insert|upsert)|rest/v1/support_tickets",
+          "why": "A brand site writing a ticket by hand drifts on the required columns — support_tickets has five NOT NULL fields with no defaults (brand_id, subject, status, priority, channel, requester_email, last_message_at), and a copy that omits one fails only at runtime, on a real customer's enquiry. Matches the WRITE: the helpdesk app itself reads and updates these rows legitimately and constantly."
+        },
+        {
+          "match": "from\\(\\s*['\"]support_messages['\"]\\s*\\)\\s*\\.\\s*(insert|upsert)|rest/v1/support_messages",
+          "why": "The same insert, and one specific trap: the body must go in body_text, never body_html. A contact form is public input, and a site that writes it as HTML turns its own contact form into a stored-XSS path into the agent's console."
+        }
+      ]
     }
   }
 }
