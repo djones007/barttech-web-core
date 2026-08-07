@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-07] — `check-id-list-filters.mjs`: the second PostgREST cap
+
+### Added
+- **`scripts/check-id-list-filters.mjs`** — flags an unbounded id array used as a PostgREST
+  query filter (the interpolated `.not('id', 'in', `(${…})`)` form).
+
+  PostgREST has **two** caps, and fixing the well-known one leads straight into the other.
+  Paginating a read to escape the 1000-row cap yields an id array; that array then goes into
+  the request URL, which breaks at ~1,000 ids (39KB → HTTP 400) and fails at the connection
+  level past ~100KB. So the standard fix relocates the failure instead of removing it. The
+  answer is to move the whole predicate into an RPC.
+
+  Two consumer repos shipped exactly that two-stage shape — one live, one dormant behind an
+  empty table. Verified non-vacuous against the pre-fix code: 4 hits, exit 1; clean tree, exit 0.
+
+  Also documents that a `returns setof <type>` RPC is **not** exempt from the 1000-row cap —
+  only a single-row `jsonb` aggregate escapes it — and that set-returning RPCs must be verified
+  through PostgREST, not the SQL editor, where the truncation is invisible.
+
+  Literal and page-scoped lists are deliberately not flagged. The gate cannot see
+  `.in('id', ids)` where `ids` came from a pagination loop; that still needs review.
+
 ## [2026-08-06g] — `shared-modules.json`: nothing checked that you registered
 
 ### Added

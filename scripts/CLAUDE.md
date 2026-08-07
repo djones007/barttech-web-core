@@ -25,6 +25,17 @@ a CI step that fetches the raw file.
   (see `tools/lead-store-gate-rollout.py` in the workspace root) rather than
   embedding a copy, so tuning the rules fixes every repo at once.
 
+- `check-id-list-filters.mjs` — flags an **unbounded id array being used as a
+  PostgREST query filter**, i.e. the interpolated `.not('id', 'in', \`(${…})\`)`
+  form. PostgREST has two caps and fixing one leads into the other: paginating a
+  read to escape the 1000-row cap produces an id array, and that array then goes
+  into the request URL, which breaks at ~1,000 ids (39KB → HTTP 400) and fails at
+  the connection level past ~100KB. So the usual "fix" relocates the failure
+  rather than removing it; the answer is to move the whole predicate into an RPC.
+  Literal and page-scoped lists are deliberately not flagged. Note the gate
+  cannot see `.in('id', ids)` where `ids` came from a pagination loop — that
+  still needs a human. Plain Node, no dependencies.
+
 ## Rules
 
 - **Keep them dependency-free and runnable with a bare `node <file>.mjs`.** They
