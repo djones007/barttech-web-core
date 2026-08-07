@@ -36,6 +36,22 @@ export interface HeartbeatOptions {
   detail?: Record<string, unknown>;
   /** Defaults to `cron_heartbeats`. */
   table?: string;
+  /**
+   * When the run began. Pass `Date.now()` (ms) or an ISO string captured at the
+   * top of the handler. Used only to compute `duration_ms` on the history row —
+   * omit it and the duration is recorded as null, which means "not measured",
+   * not "instant".
+   */
+  startedAt?: number | string;
+  /**
+   * Append-only per-run history table. Defaults to `cron_runs`.
+   *
+   * Pass `null` to skip the history write entirely — for a project that has no
+   * such table yet. The heartbeat upsert is unaffected either way: history is
+   * strictly additive, and a project without the table keeps working exactly as
+   * before (it would otherwise log a 404 on every single run).
+   */
+  historyTable?: string | null;
 }
 
 /**
@@ -50,7 +66,16 @@ export interface HeartbeatOptions {
  * can. Ignoring the return is fine and is the common case.
  */
 export async function writeCronHeartbeat(opts: HeartbeatOptions): Promise<boolean> {
-  const { url, key, jobName, status, detail, table = "cron_heartbeats" } = opts;
+  const {
+    url,
+    key,
+    jobName,
+    status,
+    detail,
+    table = "cron_heartbeats",
+    startedAt,
+    historyTable = "cron_runs",
+  } = opts;
 
   // A missing URL or key is a configuration mistake, not a runtime error. Say
   // so on the console — silently skipping would make an unmonitored job look
@@ -61,8 +86,25 @@ export async function writeCronHeartbeat(opts: HeartbeatOptions): Promise<boolea
     return false;
   }
 
+  const base = url.replace(/\/$/, "");
+  const finishedAt = new Date().toISOString();
+
+  // Append the history row FIRST, then upsert the heartbeat.
+  //
+  // Order matters on failure. The heartbeat is what watchers alarm on, so it is
+  // the write that must land; doing it last means a history failure cannot
+  // consume the request budget or throw before the heartbeat is recorded. The
+  // reverse order would let a full/erroring history table silence the alarm.
+  //
+  // Fully independent: its own try/catch, its own return value, and its result
+  // is deliberately NOT folded into the one this function returns — callers ask
+  // "was I monitored?", and the answer is the heartbeat.
+  if (historyTable) {
+    await writeRunHistory({ base, key, historyTable, jobName, status, detail, startedAt, finishedAt });
+  }
+
   try {
-    const res = await fetch(`${url.replace(/\/$/, "")}/rest/v1/${table}?on_conflict=job_name`, {
+    const res = await fetch(`${base}/rest/v1/${table}?on_conflict=job_name`, {
       method: "POST",
       headers: {
         apikey: key,
@@ -75,14 +117,17 @@ export async function writeCronHeartbeat(opts: HeartbeatOptions): Promise<boolea
       body: JSON.stringify({
         job_name: jobName,
         last_status: status,
-        last_run_at: new Date().toISOString(),
+        // Same timestamp as the history row's finished_at, so the two tables
+        // agree about when this run ended. Two separate new Date() calls would
+        // differ by however long the history write took.
+        last_run_at: finishedAt,
         last_detail: detail ?? null,
         // Set explicitly. A column default fires on INSERT only, and every run
         // after the first is the UPDATE half of the upsert — so leaving this to
         // the default would freeze it at the row's creation time while
         // last_run_at kept advancing. Harmless for a watcher reading
         // last_run_at, quietly wrong for anything reading updated_at.
-        updated_at: new Date().toISOString(),
+        updated_at: finishedAt,
       }),
     });
 
@@ -97,6 +142,76 @@ export async function writeCronHeartbeat(opts: HeartbeatOptions): Promise<boolea
     return true;
   } catch (err) {
     console.error(`[cron-heartbeat] ${jobName}: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+}
+
+/**
+ * Appends one row to the per-run history table.
+ *
+ * NEVER THROWS — same contract as the heartbeat itself, and for the same
+ * reason. History is the nice-to-have half of this module: losing a row costs
+ * you a gap in a chart, whereas throwing would cost you the job.
+ *
+ * A missing history table is not treated as an error worth shouting about on
+ * every run: projects adopt this at different times, and a repo that has the
+ * heartbeat but not yet the history table is a valid intermediate state. It
+ * logs once-per-run at debug volume rather than console.error, so it cannot
+ * drown the signal that a HEARTBEAT failed — which is the thing that matters.
+ */
+async function writeRunHistory(args: {
+  base: string;
+  key: string;
+  historyTable: string;
+  jobName: string;
+  status: "ok" | "error" | "pending";
+  detail?: Record<string, unknown>;
+  startedAt?: number | string;
+  finishedAt: string;
+}): Promise<boolean> {
+  const { base, key, historyTable, jobName, status, detail, startedAt, finishedAt } = args;
+
+  // Normalise whatever the caller passed. An unparseable value yields null
+  // rather than NaN or 1970 — a wrong duration is worse than no duration,
+  // because it silently poisons any average built on top of it.
+  let startedIso: string | null = null;
+  let durationMs: number | null = null;
+  if (startedAt !== undefined) {
+    const ms = typeof startedAt === "number" ? startedAt : Date.parse(startedAt);
+    if (Number.isFinite(ms)) {
+      startedIso = new Date(ms).toISOString();
+      const d = Date.parse(finishedAt) - ms;
+      // Guard against a clock skew or a bad input producing a negative span.
+      durationMs = d >= 0 ? d : null;
+    }
+  }
+
+  try {
+    const res = await fetch(`${base}/rest/v1/${historyTable}`, {
+      method: "POST",
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        job_name: jobName,
+        status,
+        started_at: startedIso,
+        finished_at: finishedAt,
+        duration_ms: durationMs,
+        detail: detail ?? null,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`[cron-history] ${jobName}: HTTP ${res.status} — ${body.slice(0, 160)}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn(`[cron-history] ${jobName}: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
