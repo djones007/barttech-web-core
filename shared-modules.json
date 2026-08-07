@@ -127,6 +127,11 @@
       "owner": "@/web-core/validation",
       "resources": [],
       "why": "pure predicates over strings. No external system."
+    },
+    "nextRedirects": {
+      "owner": "@/web-core/nextRedirects",
+      "resources": [],
+      "why": "Owns no external resource — it is a list of Next.js redirect rules, consumed by next.config.ts via a RELATIVE import, because the Next config loader does not resolve tsconfig path aliases. A resource match is also the wrong tool here: the thing worth enforcing is that every site SPREADS SHARED_REDIRECTS, which is an ABSENCE, and the inlining gate can only see presence. That check lives in each consumer instead — if public/ holds any .md, next.config.ts must import SHARED_REDIRECTS. Live verification is separate again, in the security-audit agent, because a config that exists is not proof of a config that works."
     }
   }
 }
