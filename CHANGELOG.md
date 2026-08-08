@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-08z] — CI gate hardening
+
+### Fixed
+- **Security Review crashed instead of reviewing, on any repo younger than a week.**
+  `git rev-parse "$OLDEST~1" 2>/dev/null` echoes the *unresolved argument* to stdout as well as
+  exiting non-zero, so the `||` fallback ran too and appended its answer — `BEFORE_SHA` came out two
+  lines long, `git diff` got one argument containing a newline, exit 128. Fixed with
+  `--verify --quiet`. The fallback was independently wrong too: "second commit from HEAD" would have
+  reviewed one commit while looking like a clean pass, so the base is now the empty tree.
+
+- **Security Review threw away its own findings.** It asked for JSON as text, and the reviewer quotes
+  code: with this workflow file in the diff, the model described the extraction regex and wrote `\{`
+  inside a JSON string. `\{` is not a legal JSON escape, so the response was malformed and every
+  finding was discarded as "Model did not return parseable JSON". Self-referential and silent — it
+  fired precisely when the security tooling changed. Findings now come back as a forced tool call
+  against a declared schema, so the API serialises and validates the JSON.
+
 ## [2026-08-08c] — `crossSiteRequestError`: refuse state changes another site initiated
 
 ### Added
