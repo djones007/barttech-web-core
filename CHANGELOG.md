@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-08b] — safeHtml: one sanitiser for `dangerouslySetInnerHTML`
+
+### Added
+- `safeHtml.ts` — `renderSafeHtml(raw, opts)`, the shared DOMPurify pass for HTML bound into
+  `dangerouslySetInnerHTML`. Standard forbid-lists (`script`/`style`/`iframe`/`object`/`embed`/`form`,
+  `onerror`/`onload`/`onclick`), extendable per call, plus the optional JSON-LD carve-out: extract every
+  `ld+json` block, require it to parse as pure JSON, sanitise the rest, then re-attach each schema
+  through `jsonLd()` so a crafted `</script>` inside a schema string is inert.
+- `isomorphic-dompurify` as a devDependency (consumers already provide it at runtime; this is so lint
+  and typecheck resolve here).
+- A `safeHtml` entry in `shared-modules.json` matching `DOMPurify.sanitize(` — two consumers had each
+  written this logic separately, one noting in its own comment that it mirrored the other, which is
+  precisely the drift the manifest exists to catch. Sanitisers with no jsdom dependency are a different
+  operation for a different runtime constraint and are deliberately **not** matched.
+
+### Changed
+- `preserveJsonLd` defaults to **false**, not true as originally drafted. Re-attaching `<script>` tags
+  is the one thing a function called "safe" should not do silently: a caller sanitising genuinely
+  untrusted input would otherwise re-emit attacker-supplied schema. Not script execution — `ld+json` is
+  data and `jsonLd()` blocks the tag breakout — but it hands over arbitrary structured data on the page,
+  which is worth an explicit opt-in.
+
+### Notes
+- **Import this module only in the file that sanitises — never from a barrel.** It pulls in jsdom, and
+  a consumer on Next 16 + Turbopack + a serverless runtime hit an ESM/CommonJS conflict in that chain
+  that threw at module-load time, 500-ing every request to the route rather than only those with HTML
+  to clean. Rendering paths are unaffected; verify with a local production build before importing it
+  into a serverless API route on that stack. This repo has no `index.ts`, so nothing is pulled in by
+  default — keep it that way.
+
 ## [2026-08-08] — Security audit fixes
 
 ### Added

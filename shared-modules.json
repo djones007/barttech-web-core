@@ -104,6 +104,15 @@
         }
       ]
     },
+    "safeHtml": {
+      "owner": "@/web-core/safeHtml",
+      "resources": [
+        {
+          "match": "DOMPurify\\s*\\.\\s*sanitize\\s*\\(",
+          "reason": "a hand-rolled sanitise call drifts from the shared forbid-lists, and silently deletes embedded ld+json schema unless the caller reimplements the extract-validate-reattach carve-out — which two consumers had each written separately, one of them noting in a comment that it mirrored the other. Sanitisers with no jsdom dependency (sanitize-html, remark-html's own sanitize) are a DIFFERENT operation for a different runtime constraint and are deliberately not matched here."
+        }
+      ]
+    },
     "security": {
       "owner": "@/web-core/security",
       "resources": [],
