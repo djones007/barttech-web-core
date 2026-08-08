@@ -7,7 +7,9 @@ import tseslint from "typescript-eslint";
 import globals from "globals";
 
 export default tseslint.config(
-  { ignores: ["node_modules/**"] },
+  // `.testbuild/**` is the CommonJS output `npm test` compiles so node --test can
+  // run against real module resolution — build artefact, gitignored, never linted.
+  { ignores: ["node_modules/**", ".testbuild/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

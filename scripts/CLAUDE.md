@@ -36,6 +36,26 @@ a CI step that fetches the raw file.
   cannot see `.in('id', ids)` where `ids` came from a pagination loop — that
   still needs a human. Plain Node, no dependencies.
 
+- `check-unsanitised-html.mjs` — requires every `dangerouslySetInnerHTML` to have
+  a **visible** reason to be safe. Passes a call site whose `__html` expression is
+  `renderSafeHtml(...)`, `jsonLd(...)`, a SCREAMING_CASE constant, or a local
+  variable assigned from one of those in the same file. Anything else — notably
+  the common case of sanitising upstream at the data layer — needs an inline
+  `// safe-html-ok: <where it is sanitised>` annotation. Written after two live
+  sites were found rendering agent-written markdown with no sanitiser at all, and
+  two more each kept a private copy of the same sanitiser; none of it was visible
+  from the call site, which is the whole problem. Three things it does that a
+  naive version got wrong, each after a false result in testing:
+  **(1)** comments are blanked before matching, because the two repos that
+  handled this correctly did so with a comment *explaining* they avoid the API —
+  flagging them is how a gate loses its audience; **(2)** an annotation naming a
+  file is **verified**, not trusted, so deleting the sanitiser upstream while
+  leaving the annotation behind fails instead of reading as checked; **(3)** that
+  verification blanks comments too, because the first version was fooled by the
+  named file's own comment mentioning `renderSafeHtml` while the call had gone —
+  the same "grep matched the word, not the behaviour" mistake the gate exists to
+  stop. `public/` is skipped (minified vendor bundles).
+
 ## Rules
 
 - **Keep them dependency-free and runnable with a bare `node <file>.mjs`.** They

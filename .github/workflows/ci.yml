@@ -33,6 +33,12 @@ jobs:
       # reported in one run rather than one masking the other.
       - if: always()
         run: npm run typecheck
+      # Added 2026-08-08 after safeHtml shipped a content regression (`target`
+      # stripped from every anchor) that lint and typecheck cannot see. This repo
+      # is vendored into ~19 consumers, so a behaviour change here is a behaviour
+      # change everywhere — it needs assertions, not just a clean compile.
+      - if: always()
+        run: npm test
       - if: always()
         run: npm audit --audit-level=high
 
@@ -55,7 +61,12 @@ jobs:
           node - <<'EOF'
           const fs = require("fs");
           const man = JSON.parse(fs.readFileSync("shared-modules.json", "utf8")).modules || {};
-          const onDisk = fs.readdirSync(".").filter((f) => f.endsWith(".ts")).map((f) => f.replace(/\.ts$/, ""));
+          // `*.test.ts` is a test for a module, not a module — it owns no
+          // resources and has nothing to declare. Without this exclusion the
+          // first test file added here fails this gate on its own name.
+          const onDisk = fs.readdirSync(".")
+            .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+            .map((f) => f.replace(/\.ts$/, ""));
           const undeclared = onDisk.filter((m) => !(m in man));
           const phantom = Object.keys(man).filter((m) => !onDisk.includes(m));
           const noReason = Object.entries(man)
