@@ -53,6 +53,18 @@ export interface SafeHtmlOptions {
 const DEFAULT_FORBID_TAGS = ["script", "style", "iframe", "object", "embed", "form"];
 const DEFAULT_FORBID_ATTR = ["onerror", "onload", "onclick"];
 
+// DOMPurify's standard HTML profile drops `target`, so `<a target="_blank">`
+// silently becomes a same-tab link. That is a content regression, not a security
+// win: it was caught only after a consumer shipped it across 20 editorial posts
+// (34 links) whose authors had deliberately opened external references in a new
+// tab, and it is invisible in any check that counts tags or compares text.
+//
+// Re-allowing it is safe. Reverse tabnabbing — the reason `target` was ever
+// treated as risky — is mitigated by every current browser applying implicit
+// `noopener` to `target="_blank"`, and `rel` survives sanitisation, so content
+// that sets `rel="noopener"` keeps it belt-and-braces.
+const DEFAULT_ADD_ATTR = ["target"];
+
 /** Sanitise an HTML string for `dangerouslySetInnerHTML`, optionally preserving valid JSON-LD. */
 export function renderSafeHtml(raw: string | null | undefined, opts: SafeHtmlOptions = {}): string {
   if (!raw) return "";
@@ -73,9 +85,11 @@ export function renderSafeHtml(raw: string | null | undefined, opts: SafeHtmlOpt
 
   const clean = DOMPurify.sanitize(withoutSchemas, {
     USE_PROFILES: { html: true },
+    ADD_ATTR: DEFAULT_ADD_ATTR,
     // Deduped: DOMPurify treats these as sets, and a caller passing a default
     // again shouldn't change behaviour.
     FORBID_TAGS: Array.from(new Set([...DEFAULT_FORBID_TAGS, ...forbidTags])),
+    // FORBID_ATTR wins over ADD_ATTR, so a caller can still forbid `target`.
     FORBID_ATTR: Array.from(new Set([...DEFAULT_FORBID_ATTR, ...forbidAttr])),
   });
 
