@@ -5,20 +5,23 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ## [2026-08-08] — `supportTicket`: raise a helpdesk ticket from a contact form
 
 ### Added
-- **`supportTicket.ts`** — `createSupportTicketFromForm()`. Every brand site had a contact form that
-  emailed a notification and wrote an optin; none created a TICKET, so form enquiries lived only in an
-  inbox while the helpdesk sat empty — and the helpdesk is where SLAs, assignment, AI drafting and the
-  audit trail live.
+- **`supportTicket.ts`** — `createSupportTicketFromForm()`. Brand contact forms emailed a notification
+  and wrote an optin; none created a TICKET, so enquiries lived in an inbox while the helpdesk sat
+  empty — and the helpdesk is where the spam gate, AI triage, SLAs and the audit trail live.
 
-  Shared rather than per-repo because six sites need identical behaviour and `support_tickets` has
-  seven NOT NULL columns with no defaults; six hand-written copies would drift on them and fail only at
-  runtime, on a real enquiry. Credentials come from the environment (`BARTMAIL_SUPABASE_*`, the pair
-  `bartmail.ts` already uses), so a consuming site needs no new secret and this public repo holds none.
+  **It calls BartMail; it does not write the tables.** The first version INSERTed into
+  `support_tickets` directly. That worked and was wrong: the spam gate — denylist, allowlist, AI
+  sender classification, daily cost cap — lives in BartMail beside the tables it protects, so a direct
+  write from six websites skipped every bit of it and would have filled the helpdesk with exactly the
+  rubbish the gate exists to stop.
 
-  Two deliberate details: the message is inserted AFTER the ticket, so a partial failure leaves a
-  visible ticket rather than an orphaned message; and the body is written to `body_text`, never
-  `body_html`, because a contact form is public input and writing it as HTML would make the form a
-  stored-XSS path into the agent console.
+  Note this points the OPPOSITE way to `bartmail.ts` next door, deliberately: an optin is a direct
+  Supabase write because there is no server-side decision to make. A support ticket has one — whether
+  it should exist at all — so it must go through the code that makes it.
+
+  Auth is a shared secret, not the service-role key: a website able to read every contact in the CDP
+  in order to file a support ticket is far more authority than the job needs.
+
 
 ## [2026-08-07b] — `nextRedirects`: stop sites serving their own documentation
 

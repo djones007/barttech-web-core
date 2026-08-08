@@ -138,11 +138,11 @@
       "resources": [
         {
           "match": "from\\(\\s*['\"]support_tickets['\"]\\s*\\)\\s*\\.\\s*(insert|upsert)|rest/v1/support_tickets",
-          "why": "A brand site writing a ticket by hand drifts on the required columns — support_tickets has five NOT NULL fields with no defaults (brand_id, subject, status, priority, channel, requester_email, last_message_at), and a copy that omits one fails only at runtime, on a real customer's enquiry. Matches the WRITE: the helpdesk app itself reads and updates these rows legitimately and constantly."
+          "why": "A site must NOT write a support ticket itself. BartMail owns the pipeline, and the spam gate (denylist, allowlist, AI sender classification, daily cost cap) runs there — a direct insert skips all of it and fills the helpdesk with the rubbish the gate exists to stop. This module POSTs to BartMail's /api/support/form-ticket instead. Matches the WRITE: the helpdesk app reads and updates these rows constantly and legitimately."
         },
         {
           "match": "from\\(\\s*['\"]support_messages['\"]\\s*\\)\\s*\\.\\s*(insert|upsert)|rest/v1/support_messages",
-          "why": "The same insert, and one specific trap: the body must go in body_text, never body_html. A contact form is public input, and a site that writes it as HTML turns its own contact form into a stored-XSS path into the agent's console."
+          "why": "Same reason, plus one specific trap the endpoint handles: the body goes in body_text, never body_html. A contact form is public input, and a site writing it as HTML turns its own form into a stored-XSS path into the agent console."
         }
       ]
     }
