@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-08e] — Tests, and a gate for unsanitised HTML
+
+### Added
+- **`safeHtml.test.ts` — this repo's first tests, and `npm test` in CI.** 27 assertions covering every attribute the module must preserve and every tag/handler it must strip. It exists because `safeHtml` shipped a content regression (`target` dropped from every anchor, 34 live links) that lint and typecheck cannot see and that a tag-and-text comparison passed. This repo is vendored into ~19 consumers: a behaviour change here is a behaviour change everywhere, so it needs assertions, not a clean compile.
+- **`scripts/check-unsanitised-html.mjs`** — requires every `dangerouslySetInnerHTML` in a consumer to have a visible reason to be safe: a `renderSafeHtml`/`jsonLd` call, a SCREAMING_CASE constant, a local variable assigned from one of those, or an inline `// safe-html-ok: <where it is sanitised>` annotation. An annotation naming a file is **verified**, not trusted.
+
+### Fixed
+- The "every module is declared" CI gate globbed `*.ts`, so the first test file added here would have failed it on its own name. `*.test.ts` is now excluded — a test is not a module and owns no resources.
+- ESLint now ignores `.testbuild/`, the CommonJS output `npm test` compiles so `node --test` runs against real module resolution.
+
+### Notes
+- Three findings from building the gate, each after it returned a false result — all the same shape as the bugs it exists to catch: comments must be blanked before matching (the two repos that handled this *correctly* did so with a comment explaining they avoid the API); a stale annotation must fail rather than read as verified; and the verification itself must blank comments, because the first version was fooled by the named file's own comment mentioning `renderSafeHtml` after the call had been deleted.
+
 ## [2026-08-08d] — Document the consumer-typecheck rule `safeHtml` exposed
 
 ### Changed
