@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-08c] — `crossSiteRequestError`: refuse state changes another site initiated
+
+### Added
+- `crossSiteRequestError(req)` in `validation.ts`. Returns a 403 error object when a browser made
+  this request on behalf of another site, else null. For handlers that MUTATE — a read-only GET does
+  not need it, and applying it there breaks ordinary links and bookmarks.
+
+  `Sec-Fetch-Site` is the primary signal: the browser sets it and page script cannot forge it, so
+  `cross-site` is refused while `same-origin`, `same-site` and `none` pass. `Origin` compared against
+  the forwarded host is the fallback for clients that omit it. An absent Origin is allowed on purpose:
+  server-to-server callers and curl send neither header and are not the threat — CSRF needs a browser
+  holding the victim's cookies, and every browser sends at least one of the two.
+
+  Chosen over a CSRF token because a token needs somewhere to live, a route to every form, and a
+  rotation story; for a cookie-authenticated JSON API this closes the same hole with none of that. It
+  is a third layer, not a replacement for auth or SameSite — and it is the layer that still holds if a
+  cookie is ever widened to SameSite=None for an embed or a payment return.
+
 ## [2026-08-08b] — Fixed: the hygiene gate was failing on this repo
 
 ### Fixed
