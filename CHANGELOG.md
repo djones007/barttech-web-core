@@ -15,7 +15,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - **Skips `out/`, `.output/`, `storybook-static/`.** A static-export directory is untracked build output; per this repo's own rule, scope by what is committed. One repo's committed-looking `out/` produced two findings inside minified chunks.
 
 ### Notes
-- All three surfaced by running the gate against **every repo with a `ci.yml`** (22) rather than the 19 web-core submodule consumers — `an engine submodule` and `a client site` have CI but no submodule, and both were outside the earlier sweep. That is the same partial-coverage mistake this gate's own tooling exists to prevent, caught this time before rollout rather than after.
+- All three surfaced by running the gate against **every repo with a `ci.yml`** (22) rather than the 19 web-core submodule consumers — two repos have CI but no submodule and were outside the earlier sweep. That is the same partial-coverage mistake this gate's own tooling exists to prevent, caught this time before rollout rather than after.
 
 ## [2026-08-08e] — Tests, and a gate for unsanitised HTML
 
