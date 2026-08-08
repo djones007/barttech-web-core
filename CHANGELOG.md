@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-08] — Security audit fixes
+
+### Added
+- `.nvmrc` (Node 22) and `engines.node` (`>=22.0.0`) in `package.json` so local dev matches the
+  Node version CI already pinned — a contributor on an older Node previously had no signal.
+- `npm audit --audit-level=high` as a CI step, `if: always()` alongside lint/typecheck, so a newly
+  disclosed high/critical advisory in a dependency fails the build instead of going unnoticed
+  between manual audit runs.
+
+### Changed
+- `.gitignore` now covers `.env`, `.env.*`, `.env.local` and `.env.*.local` (previously only
+  `node_modules/`, `.DS_Store`, `*.log`, `.vercel`) — no env file was ever committed, but the guard
+  itself was missing, so a future `.env.local` had nothing stopping it from being staged.
+
+### Fixed
+- Bumped the transitive `js-yaml` devDependency (pulled in via eslint) off the 4.0.0–4.3.0 range
+  affected by a high-severity quadratic-CPU-consumption advisory. Lint-only dependency, not part of
+  the shipped module — `npm audit fix`, lint and typecheck all verified clean afterward.
+
 ## [2026-08-08z] — CI gate hardening
 
 ### Fixed
