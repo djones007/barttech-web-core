@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-08d] — Document the consumer-typecheck rule `safeHtml` exposed
+
+### Changed
+- `CLAUDE.md` gains golden rules **1b** and **1c**, and step **3b** of "Adding a new consumer".
+
+### Notes
+- **`safeHtml.ts` is the first module here to import a package not every consumer installs.** Until now the only external import was `@supabase/supabase-js`, which every consumer happens to have — so the problem was invisible. Consumers vendor this repo as source and typecheck it with their own `tsc`, so `isomorphic-dompurify` being absent is a *build failure in a repo that never imports the module*. It broke `the site template` on the first bump, and 10 of 19 consumers would have failed the next `web-core-propagate.sh` run.
+- The fix is for consumers to exclude the mount path from `tsconfig.json`'s root file set, mirroring the ESLint exclusion that already exists for the same reason. Verified this does **not** stop a consumer's own misuse being caught — an imported file is still type-analysed, and passing a wrong option type still errors.
+- Rule 1c records that a dependency can be unusable in a *particular* consumer (jsdom vs Next 16 + Turbopack + serverless), and that a green build proves nothing for a `ƒ` route — the failure mode was at request-time module load.
+
 ## [2026-08-08c] — safeHtml: stop stripping `target` from links
 
 ### Fixed
