@@ -11,9 +11,10 @@
 // The first version of this module INSERTed into `support_tickets` directly.
 // That worked and was wrong: the spam gate — denylist, allowlist, AI sender
 // classification, daily cost cap — lives in BartMail beside the tables it
-// protects. A direct write from six websites skipped every bit of it, so the
-// forms would have filled the helpdesk with exactly the rubbish the gate exists
-// to stop. BartMail owns the support pipeline; sites ask, they do not write.
+// protects. A direct write from a consuming site skipped every bit of it, so
+// the forms would have filled the helpdesk with exactly the rubbish the gate
+// exists to stop. BartMail owns the support pipeline; sites ask, they do not
+// write.
 //
 // (Note the direction of travel here differs from `bartmail.ts` next door, and
 // deliberately: optins are a DIRECT Supabase write because there is no
@@ -34,7 +35,7 @@ const BARTMAIL_URL = (process.env.BARTMAIL_URL ?? "https://bartmail.vercel.app")
 const SUPPORT_FORM_SECRET = process.env.SUPPORT_FORM_SECRET ?? "";
 
 export interface SupportTicketInput {
-  /** BartMail brand slug, e.g. "cloud-plus". */
+  /** Brand slug as registered in the destination system. */
   brandSlug: string;
   email: string;
   name?: string | null;

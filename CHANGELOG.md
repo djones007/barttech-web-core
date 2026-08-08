@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-08b] — Fixed: the hygiene gate was failing on this repo
+
+### Fixed
+- `nextRedirects.ts` and `supportTicket.ts` carried content this repo must not publish, and the
+  Public Hygiene gate had been red on every push since they landed.
+
+  `nextRedirects.ts` explained itself with a full incident narrative — how many live sites were
+  affected, named individually, and the exact path pattern that returned 200 on each. That is a
+  ready-made probe list for every other site built the same way, and this repo is public. The
+  rewrite keeps the whole mechanism and every design note (why a redirect and not a header, why
+  `permanent: false`, why a pattern rather than a list of known files) and states the structural
+  cause generically: a web-served directory and a convention that writes docs into directories
+  are in conflict wherever both apply.
+
+  `supportTicket.ts` used a real brand slug as its example value. Replaced with a description of
+  what the field is.
+
+  The `.vercel.app` default host was left alone — `bartmail.ts` already carries it and the gate
+  has always passed on it, so it is not what was failing. Worth recording, because it was changed
+  and reverted while diagnosing this: that module hashes the *custom* domain rather than naming it,
+  which is the actual line between what may and may not appear here.
+
 ## [2026-08-08] — `supportTicket`: raise a helpdesk ticket from a contact form
 
 ### Added
