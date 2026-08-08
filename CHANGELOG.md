@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-09] — Public hygiene: strip consumer-specific names from comments
+
+### Fixed
+- `scripts/check-unsanitised-html.mjs` and `CHANGELOG.md` referred to specific internal project and template names, tripping the public-hygiene denylist gate. Replaced with generic descriptions — mechanism only, no consumer detail.
+
+## [2026-08-09] — unsanitised-html gate: three fixes found by running it estate-wide
+
+### Fixed
+- **Filename regex truncated `.tsx` to `.ts`.** `(?:ts|tsx|…)` is ordered alternation, so `ts` matched first and the gate reported "named file not found" against `LessonPlayer.tsx`, which was right there. Longest-first now.
+- **`sanitize: true` counts as a sanitiser.** `remark-html`'s own sanitiser is a legitimate implementation — the LMS engine uses it — and the verification only looked for `renderSafeHtml`/`DOMPurify`/`sanitize-html`. Matching on the **value** rather than the key is the whole point of this gate, so `sanitize:\s*true` passes and `sanitize: false` still does not.
+- **Skips `out/`, `.output/`, `storybook-static/`.** A static-export directory is untracked build output; per this repo's own rule, scope by what is committed. One repo's committed-looking `out/` produced two findings inside minified chunks.
+
+### Notes
+- All three surfaced by running the gate against **every repo with a `ci.yml`** (22) rather than the 19 web-core submodule consumers — `an engine submodule` and `a client site` have CI but no submodule, and both were outside the earlier sweep. That is the same partial-coverage mistake this gate's own tooling exists to prevent, caught this time before rollout rather than after.
+
 ## [2026-08-08e] — Tests, and a gate for unsanitised HTML
 
 ### Added
@@ -21,7 +36,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - `CLAUDE.md` gains golden rules **1b** and **1c**, and step **3b** of "Adding a new consumer".
 
 ### Notes
-- **`safeHtml.ts` is the first module here to import a package not every consumer installs.** Until now the only external import was `@supabase/supabase-js`, which every consumer happens to have — so the problem was invisible. Consumers vendor this repo as source and typecheck it with their own `tsc`, so `isomorphic-dompurify` being absent is a *build failure in a repo that never imports the module*. It broke `the site template` on the first bump, and 10 of 19 consumers would have failed the next `web-core-propagate.sh` run.
+- **`safeHtml.ts` is the first module here to import a package not every consumer installs.** Until now the only external import was `@supabase/supabase-js`, which every consumer happens to have — so the problem was invisible. Consumers vendor this repo as source and typecheck it with their own `tsc`, so `isomorphic-dompurify` being absent is a *build failure in a repo that never imports the module*. It broke one consumer's template on the first bump, and 10 of 19 consumers would have failed the next propagate run.
 - The fix is for consumers to exclude the mount path from `tsconfig.json`'s root file set, mirroring the ESLint exclusion that already exists for the same reason. Verified this does **not** stop a consumer's own misuse being caught — an imported file is still type-analysed, and passing a wrong option type still errors.
 - Rule 1c records that a dependency can be unusable in a *particular* consumer (jsdom vs Next 16 + Turbopack + serverless), and that a green build proves nothing for a `ƒ` route — the failure mode was at request-time module load.
 

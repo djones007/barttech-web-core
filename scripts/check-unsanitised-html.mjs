@@ -36,7 +36,10 @@ import { join, relative } from "node:path";
 const ROOT = process.cwd();
 const SKIP_DIRS = new Set([
   "node_modules", ".next", ".git", "dist", "build", ".vercel", ".turbo", "coverage", ".testbuild",
-  // Built/vendored bundles, not source anyone edits. the checkout app ships a
+  // Static-export output. Untracked, so per the estate rule "scope by what is
+  // committed" it is not ours to scan — and it is minified, so every match is noise.
+  "out", ".output", "storybook-static",
+  // Built/vendored bundles, not source anyone edits — a consumer may ship a
   // minified React bundle here, and matching inside it is pure noise.
   "public",
 ]);
@@ -69,10 +72,10 @@ function walk(dir, out = []) {
  * number still means what it says.
  *
  * Needed because the honest, well-written files are the ones that TALK about
- * this API: a client site's and a private app's help pages both carry a JSX block
- * comment explaining that they deliberately do NOT use dangerouslySetInnerHTML,
+ * this API: two consumer help-page components carry a JSX block comment
+ * explaining that they deliberately do NOT use dangerouslySetInnerHTML,
  * because their articles can be drafted from a customer's own words. Flagging
- * the two repos that got it right is exactly how a gate loses its audience.
+ * the repos that got it right is exactly how a gate loses its audience.
  */
 function blankComments(src) {
   let out = "";
@@ -160,7 +163,10 @@ for (const file of walk(ROOT)) {
       // sanitiser from lib/posts.ts and the render site still says "sanitised in
       // lib/posts.ts", and the gate believes it. That is a worse failure than no
       // gate, because it reads as verified.
-      const named = reason.match(/([\w./-]+\.(?:ts|tsx|js|jsx))/);
+      // Longest-first alternation: `ts` would otherwise match before `tsx` and
+      // truncate "LessonPlayer.tsx" to "LessonPlayer.ts", which then reports
+      // "named file not found" against a file that is right there.
+      const named = reason.match(/([\w./-]+\.(?:tsx|ts|jsx|js))/);
       if (named) {
         const target = join(ROOT, named[1]);
         let body = null;
@@ -174,7 +180,11 @@ for (const file of walk(ROOT)) {
         // renderSafeHtml, so a grep passes while the CALL has been deleted.
         // (Observed while testing this gate — the third instance of that same
         // mistake in one session.)
-        if (!/renderSafeHtml|DOMPurify|sanitize-?[Hh]tml/.test(blankComments(body))) {
+        // `sanitize:\s*true` counts, `sanitize: false` does not — checking the
+        // VALUE rather than the key is the whole point. remark-html's own
+        // sanitiser is a legitimate implementation (the LMS engine uses it), and
+        // grepping for the key alone is the mistake this gate was built after.
+        if (!/renderSafeHtml|DOMPurify|sanitize-?[Hh]tml|sanitize:\s*true/.test(blankComments(body))) {
           stale.push({ file: relative(ROOT, file), line: i + 1, named: named[1], why: "named file contains no sanitiser" });
           return;
         }
