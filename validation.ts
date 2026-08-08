@@ -139,6 +139,59 @@ export function checkBodySize(req: Request): { error: string; status: number } |
 }
 
 /**
+ * Reject a state-changing request that another site caused the browser to make.
+ *
+ * Returns an error object for a cross-site request, else null. Apply it to
+ * handlers that MUTATE (POST/PATCH/DELETE); a read-only GET does not need it
+ * and applying it there breaks ordinary links and bookmarks.
+ *
+ * Why this rather than a CSRF token: a token needs somewhere to live, a way to
+ * reach every form, and a rotation story. This needs none of that, and for a
+ * cookie-authenticated JSON API it closes the same hole.
+ *
+ * `Sec-Fetch-Site` is the primary signal — the browser sets it and page script
+ * cannot forge it. The values mean:
+ *   same-origin  our own page          allow
+ *   same-site    another subdomain     allow
+ *   none         typed, bookmarked     allow (no initiating site)
+ *   cross-site   another site made it  REJECT
+ *
+ * `Origin` is the fallback for clients that omit Sec-Fetch-Site. An absent
+ * Origin is allowed: server-to-server callers and curl send neither header, and
+ * they are not the threat — CSRF requires a browser holding the victim's
+ * cookies, and every browser sends at least one of the two.
+ *
+ * NOT a replacement for authentication or for SameSite cookies. It is the third
+ * layer, and it is the one that still holds if a cookie is ever widened to
+ * SameSite=None for an embed or a payment return.
+ */
+export function crossSiteRequestError(req: Request): { error: string; status: number } | null {
+  const site = req.headers.get("sec-fetch-site");
+  if (site) {
+    return site === "cross-site" ? { error: "Cross-site request refused", status: 403 } : null;
+  }
+
+  const origin = req.headers.get("origin");
+  if (!origin) return null;
+
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    // An Origin header that is not a URL is not something a browser sends.
+    return { error: "Cross-site request refused", status: 403 };
+  }
+
+  // Compare against the forwarded host first: behind a proxy, req.url carries
+  // the internal host and would never match the browser's Origin.
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const expected = host ?? (() => { try { return new URL(req.url).host; } catch { return null; } })();
+  if (!expected) return null;
+
+  return originHost === expected ? null : { error: "Cross-site request refused", status: 403 };
+}
+
+/**
  * Field-length check returning a `{ error, status }` object (the sibling of
  * `fieldLengthError`, which returns a string). First offending field wins; null
  * if all within bounds. Fields absent from `body` are skipped.
