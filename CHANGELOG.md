@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-08c] — safeHtml: stop stripping `target` from links
+
+### Fixed
+- `renderSafeHtml` silently removed `target` from every anchor, so `<a target="_blank">` became a same-tab link. DOMPurify's standard HTML profile drops the attribute; `ADD_ATTR: ["target"]` restores it.
+- **Caught only after it shipped.** A consumer deployed this across 20 editorial posts (34 links) whose authors had deliberately opened external references in a new tab. It is invisible to any check that counts tags or compares visible text — both were identical — which is why the verification that missed it looked green.
+
+### Notes
+- Re-allowing `target` is not a security regression. Reverse tabnabbing, the reason it was ever treated as risky, is mitigated by every current browser applying implicit `noopener` to `target="_blank"`; `rel` survives sanitisation, so content that sets `rel="noopener"` keeps it too.
+- `FORBID_ATTR` still wins over `ADD_ATTR`, so a caller that wants `target` gone can pass `forbidAttr: ["target"]`.
+- Verified `script`, `onclick`, `iframe`, `style`, `object`, `embed` and `form` are all still removed.
+
 ## [2026-08-08b] — safeHtml: one sanitiser for `dangerouslySetInnerHTML`
 
 ### Added
