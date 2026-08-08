@@ -33,6 +33,8 @@ jobs:
       # reported in one run rather than one masking the other.
       - if: always()
         run: npm run typecheck
+      - if: always()
+        run: npm audit --audit-level=high
 
       # Every module MUST be declared in shared-modules.json — including modules
       # that own nothing, which say so explicitly with a `why`. That declaration
