@@ -56,6 +56,25 @@ a CI step that fetches the raw file.
   the same "grep matched the word, not the behaviour" mistake the gate exists to
   stop. `public/` is skipped (minified vendor bundles).
 
+- `check-heartbeat-status.mjs` — a monitor must not report **success while it is
+  counting failures**. Flags a bare success literal passed to a run-status writer
+  when the same file tallies `errors`/`failed`/`skipped` **earlier in the file**.
+  That combination means the recorded outcome cannot disagree with the code, so a
+  run in which every unit of work failed is byte-identical, on every dashboard, to
+  a perfect one — a failure mode that points towards silence and therefore
+  survives for months, because the surfaces built to reveal it are the ones
+  showing green. **Position is the whole trick:** routes legitimately record "ok"
+  on an early return ("feature disabled", "nothing due") *before* attempting work,
+  and a healthy skip must still be recorded or a run of correct answers looks like
+  a dead job — so only writes occurring after counting begins are considered.
+  Ignoring that ordering put three waivers into one file whose author had done
+  nothing wrong, which is exactly how a gate loses its audience. Derived statuses
+  (`errors.length ? "error" : "ok"`, a variable, a call) are never flagged — that
+  is the desired form. Waivers use `// heartbeat-status-ok: <reason>`, and a bare
+  annotation with no reason is **itself** a failure, because "someone looked at
+  this" and "someone decided this" must not be indistinguishable. Repos may tune
+  call/counter names via `.heartbeat-status.json`.
+
 ## Rules
 
 - **Keep them dependency-free and runnable with a bare `node <file>.mjs`.** They

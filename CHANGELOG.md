@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-09] — Added `scripts/check-heartbeat-status.mjs`: a monitor must not report success while counting failures
+
+### Added
+- **`check-heartbeat-status.mjs`** — flags a bare success literal passed to a run-status writer when the same file tallies `errors`/`failed`/`skipped` earlier in the file. That combination means the recorded outcome cannot disagree with the code, so a run in which every unit of work failed is byte-identical, on every dashboard, to a perfect one. This failure mode points towards *silence*, which is why it survives for months: the surfaces built to reveal it are the ones showing green.
+- **Position is the discriminator.** Routes legitimately record "ok" on an early return ("feature disabled", "nothing due") *before* attempting any work, and a healthy skip must still be recorded or a run of correct answers looks like a dead job. Only writes occurring after counting begins are considered. An earlier file-scoped version put three waivers into one file whose author had done nothing wrong — a gate that fires on correct code is one people disable.
+- Derived statuses (`errors.length ? "error" : "ok"`, a variable, a call) are never flagged; that is the desired form. Waivers use `// heartbeat-status-ok: <reason>`, and a bare annotation with no reason is itself a failure. Repos may tune call and counter names via `.heartbeat-status.json`.
+- Validated against six real consumer repos before shipping: it independently reproduced every instance a separate manual audit had found, plus one the audit missed, and reported clean on a repo with no scheduled jobs.
+
 ## [2026-08-09] — Declare `alerting` in shared-modules.json (CI fix)
 
 ### Fixed
