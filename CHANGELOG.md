@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-09] — Declare `alerting` in shared-modules.json (CI fix)
+
+### Fixed
+- `alerting.ts` shipped without a `shared-modules.json` entry, so the manifest gate failed the build — correctly: the gate exists so that "owns nothing" is a stated decision rather than an oversight, and the two must not look the same. Added with empty `resources` and a `why`. No resource match: the thing worth forbidding is hand-rolled alert suppression, which has no reliable textual signature, and a regex broad enough to catch it would fire on every ordinary timestamp comparison.
+
 ## [2026-08-09] — Added `alerting.ts`: decide which failures are worth notifying about
 
 ### Added
