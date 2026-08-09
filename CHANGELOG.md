@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-09] — Added `alerting.ts`: decide which failures are worth notifying about
+
+### Added
+- **`alerting.ts`** — `selectNewAlerts()`, the shared rule for notification suppression. A monitor usually runs more often than the things it watches, so a daily check looking at a weekly job sees the same failed run seven times; notifying on every sighting means six messages carrying no new information, arriving after the problem was already fixed. An alert channel that repeats itself trains its reader to ignore it, and that degrades gradually while the monitor reports itself as working perfectly.
+- The module draws the distinction that matters: a **past occurrence** (carries an `occurrence` id — cannot change until the subject runs again, so it is notified once) versus a **live condition** (no `occurrence` — re-measured every pass, so "still failing" is a fresh fact and is never suppressed). Getting it backwards either way is harmful, so both directions are covered by tests.
+- Fails **open** by design: missing or unreadable previous state makes everything fresh. Over-notifying is recoverable; a monitor silently deciding not to notify is not.
+- Returns `suppressed` and `recovered` alongside `fresh`, so callers can say "N others still failing, unchanged" rather than hiding anything, and can note recoveries. Suppression is for the notification only — callers must keep recording suppressed failures in their health status and dashboards.
+- `alerting.test.ts` — 9 tests, including the full seven-day weekly-job cycle, live-condition non-suppression, fail-open, and recover-then-fail-again. Added to the `test` script.
+
 ## [2026-08-09] — Public hygiene: strip consumer-specific names from comments
 
 ### Fixed
