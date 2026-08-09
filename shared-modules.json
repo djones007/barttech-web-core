@@ -100,6 +100,11 @@
       "resources": [],
       "why": "pure escaping before embedding structured data in a script tag. No external system."
     },
+    "nextRedirects": {
+      "owner": "@/web-core/nextRedirects",
+      "resources": [],
+      "why": "Owns no external resource — it is a list of Next.js redirect rules, consumed by next.config.ts via a RELATIVE import, because the Next config loader does not resolve tsconfig path aliases. A resource match is also the wrong tool here: the thing worth enforcing is that every site SPREADS SHARED_REDIRECTS, which is an ABSENCE, and the inlining gate can only see presence. That check lives in each consumer instead — if public/ holds any .md, next.config.ts must import SHARED_REDIRECTS. Live verification is separate again, in the security-audit agent, because a config that exists is not proof of a config that works."
+    },
     "reoon": {
       "owner": "@/web-core/reoon",
       "resources": [
@@ -132,21 +137,6 @@
         }
       ]
     },
-    "uploads": {
-      "owner": "@/web-core/uploads",
-      "resources": [],
-      "why": "MIME sniffing, filename safety and size validation on bytes the caller already holds. It talks to nothing; the storage client stays in the consuming app."
-    },
-    "validation": {
-      "owner": "@/web-core/validation",
-      "resources": [],
-      "why": "pure predicates over strings. No external system."
-    },
-    "nextRedirects": {
-      "owner": "@/web-core/nextRedirects",
-      "resources": [],
-      "why": "Owns no external resource — it is a list of Next.js redirect rules, consumed by next.config.ts via a RELATIVE import, because the Next config loader does not resolve tsconfig path aliases. A resource match is also the wrong tool here: the thing worth enforcing is that every site SPREADS SHARED_REDIRECTS, which is an ABSENCE, and the inlining gate can only see presence. That check lives in each consumer instead — if public/ holds any .md, next.config.ts must import SHARED_REDIRECTS. Live verification is separate again, in the security-audit agent, because a config that exists is not proof of a config that works."
-    },
     "supportTicket": {
       "owner": "@/web-core/supportTicket",
       "resources": [
@@ -159,6 +149,25 @@
           "why": "Same reason, plus one specific trap the endpoint handles: the body goes in body_text, never body_html. A contact form is public input, and a site writing it as HTML turns its own form into a stored-XSS path into the agent console."
         }
       ]
+    },
+    "telegram": {
+      "owner": "@/web-core/telegram",
+      "resources": [
+        {
+          "match": "api\\.telegram\\.org",
+          "reason": "a hand-rolled Telegram post skips the delivery check — the API answers 200 with {ok:false} for some errors and 404 for a revoked token, both of which resolve the promise happily — and skips the 4096-character cap, where an over-long alert is rejected entirely rather than truncated. Both failure modes are silent, on the channel whose whole job is to be heard when the primary one is not."
+        }
+      ]
+    },
+    "uploads": {
+      "owner": "@/web-core/uploads",
+      "resources": [],
+      "why": "MIME sniffing, filename safety and size validation on bytes the caller already holds. It talks to nothing; the storage client stays in the consuming app."
+    },
+    "validation": {
+      "owner": "@/web-core/validation",
+      "resources": [],
+      "why": "pure predicates over strings. No external system."
     }
   }
 }
