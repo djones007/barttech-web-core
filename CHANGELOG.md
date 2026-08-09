@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-09] — Added `telegram.ts`: a second alert channel that reports whether it delivered
+
+### Added
+- **`telegram.ts`** — `sendTelegramAlert()`. Email is the primary alert path and its failure mode is silent (expired credential, mailbox rule, provider outage), so a second channel over completely different infrastructure means one dead path does not mean one unheard alert.
+- Every failure mode here is silent, so all of them are tested. Telegram answers **200 with `{ok:false}`** for some errors and **404** for a revoked token, and both resolve the fetch promise happily — a caller checking only for a thrown exception would treat either as delivered.
+- **Over-length messages are truncated, not dropped.** Telegram rejects anything over 4096 characters outright, so without this the longest and most detailed alerts would be exactly the ones that vanished. The truncation says so, pointing the reader at the email.
+- **No parse mode is set, deliberately.** Alert bodies carry error text, stack fragments and URLs; Markdown/HTML parsing rejects the whole message on one unbalanced character. An alert failing to send because the error it reported contained an underscore is the wrong trade — delivery beats formatting.
+- Never throws and always returns a boolean, because it runs on a job's failure path and the caller must be able to tell "sent" from "silently did nothing".
+
 ## [2026-08-09] — Added `scripts/check-heartbeat-status.mjs`: a monitor must not report success while counting failures
 
 ### Added
