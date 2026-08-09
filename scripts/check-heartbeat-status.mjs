@@ -59,7 +59,14 @@ const DEFAULTS = {
   // Functions whose job is to record a run's outcome.
   calls: ["writeHeartbeat", "writeCronHeartbeat", "heartbeat", "recordRun", "reportRun"],
   // Identifiers that mean "something did not happen".
-  counters: ["errors", "errored", "failed", "failures", "failedCount", "errorCount", "skipped", "skippedCount", "notified", "failedTotal"],
+  //
+  // Only ever add a name whose INCREASE is bad. `notified` was here briefly and
+  // was wrong: it counts successful notifications (`else notified++`), so it made
+  // the gate fire on a route doing the right thing. A counter list that includes
+  // success counters produces exactly the false positives that get a gate
+  // switched off. When unsure, leave it out — a missed case is recoverable, a
+  // gate nobody trusts is not.
+  counters: ["errors", "errored", "failed", "failures", "failedCount", "errorCount", "skipped", "skippedCount", "failedTotal"],
   ignore: [],
 };
 
