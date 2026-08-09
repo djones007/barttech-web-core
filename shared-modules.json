@@ -23,6 +23,11 @@
       "resources": [],
       "why": "takes a caller-supplied client and answers an owner-tier question. The privilege rule itself lives once, in the DB (see the auth/admin standard) — this module owns no external resource of its own."
     },
+    "alerting": {
+      "owner": "@/web-core/alerting",
+      "resources": [],
+      "why": "a pure decision function: it is handed the current failures plus the previous state and returns which are new. It reads and writes nothing — the caller chooses where to persist the returned state (a heartbeat row, a JSON file), because that store is the caller's, not this module's. No resource match was added: the thing worth forbidding is hand-rolled alert suppression, and that has no reliable textual signature — any regex broad enough to catch it would fire on every ordinary comparison against a timestamp. Enforced by review and by the estate alert-quality standard instead. Note this module has a deliberate Node/CommonJS twin outside this repo for the scheduled agents, which cannot import TypeScript; the two must change together and this file is the canonical spec."
+    },
     "audit": {
       "owner": "@/web-core/audit",
       "resources": [
