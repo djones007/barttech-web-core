@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-10] — Fix security-review CI: validate array types, not just key presence
+
+### Fixed
+- **`security-review.yml`** validation check used `has("critical") and has("warnings")`, which passes when the model returns string-encoded arrays instead of actual arrays. The "Open issue" step then failed on `.critical[]` with "Cannot iterate over string". Validation now checks `(.critical | type) == "array" and (.warnings | type) == "array"` — if either is a string, the review step exits 1 with a clear diagnostic rather than letting the issue step fail cryptically.
+
 ## [2026-08-09] — Added `telegram.ts`: a second alert channel that reports whether it delivered
 
 ### Added

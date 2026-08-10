@@ -104,8 +104,8 @@ jobs:
           # tool_choice forces exactly one tool_use block, so this is a direct
           # read — no fenced-code stripping, no greedy brace matching.
           jq -e '[.content[] | select(.type == "tool_use")][0].input' response.json > review.json 2>/dev/null || true
-          if [ ! -s review.json ] || ! jq -e 'has("critical") and has("warnings")' review.json > /dev/null 2>&1; then
-            echo "No usable tool_use block in the response:"
+          if [ ! -s review.json ] || ! jq -e '(.critical | type) == "array" and (.warnings | type) == "array"' review.json > /dev/null 2>&1; then
+            echo "No usable tool_use block in the response (or wrong shape — expected arrays for critical/warnings):"
             cat response.json
             exit 1
           fi
