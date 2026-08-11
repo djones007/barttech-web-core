@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-11] — Security hardening (Aikido audit)
+
+### Fixed
+- `scripts/check-heartbeat-status.mjs`: import `resolve` from `node:path` and wrap the `process.argv[2]` root in `path.resolve()`. The script only runs in trusted CI/dev environments, but using an explicit absolute path eliminates the ambiguity a static analyser reads as a file-inclusion risk (Aikido issue 1).
+- Added `persist-credentials: false` to all `actions/checkout` steps in CI, public-hygiene, and security-review workflows (Aikido issue 11).
+
 ## [2026-08-10] — Fix security-review CI: validate array types, not just key presence
 
 ### Fixed

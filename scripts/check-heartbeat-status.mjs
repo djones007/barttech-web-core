@@ -51,9 +51,13 @@
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
-import { join, relative, extname } from "node:path";
+import { join, relative, extname, resolve } from "node:path";
 
-const ROOT = process.argv[2] ?? process.cwd();
+// resolve() converts any relative or absolute path to an absolute path, which
+// prevents a directory traversal if an unexpected value is passed via argv.
+// This script runs only in trusted CI/dev environments (never as a web handler),
+// but resolving to an absolute path is cheap defence-in-depth.
+const ROOT = resolve(process.argv[2] ?? process.cwd());
 
 const DEFAULTS = {
   // Functions whose job is to record a run's outcome.

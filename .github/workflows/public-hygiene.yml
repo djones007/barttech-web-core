@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Scan tree against denylist
         env:
           ESTATE_DENYLIST: ${{ secrets.ESTATE_DENYLIST }}
