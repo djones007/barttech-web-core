@@ -75,6 +75,27 @@ a CI step that fetches the raw file.
   this" and "someone decided this" must not be indistinguishable. Repos may tune
   call/counter names via `.heartbeat-status.json`.
 
+- `check-sentry-instrumentation.mjs` — a repo that installs `@sentry/nextjs` must
+  actually be **wired to report server-side errors**. `Sentry.init()` arms the
+  SDK; it does not subscribe to the framework's server error channel. That is a
+  separate module-level `export const onRequestError = Sentry.captureRequestError`
+  from the instrumentation file, and without it every page render, route handler
+  and server action failure is dropped while client errors keep arriving — so the
+  dashboard stays green and looks correct. An audit found that **no** repo here
+  had ever exported it, proven by a 3.5-day outage in which every article on a
+  site returned 500 and not one alert fired. The SDK does warn about it on every
+  build; nobody read the warning, which is the argument for a gate. Also flags
+  **orphaned** legacy `sentry.{server,edge,client}.config.*` files, which the
+  current SDK does not load — the server/edge names are absent from the v10 build
+  plugin entirely, and the client one is injected only on the webpack path, so
+  under the default bundler it is inert. Orphaned is the operative word: a
+  server/edge config the instrumentation file imports inside `register()` is a
+  supported layout and is deliberately left alone (getting that wrong was the
+  gate's one false positive in testing). Waivers use
+  `// sentry-instrumentation-ok: <reason>` in the instrumentation file, or a path
+  plus a `#` reason in `.sentry-instrumentation-ok`; a waiver with no reason is
+  itself a failure.
+
 ## Rules
 
 - **Keep them dependency-free and runnable with a bare `node <file>.mjs`.** They

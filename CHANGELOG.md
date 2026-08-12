@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-12] — Add check-sentry-instrumentation gate
+
+### Added
+- `scripts/check-sentry-instrumentation.mjs` — a repo that installs `@sentry/nextjs` must actually be wired to report server-side errors. Requires the instrumentation file to export `onRequestError = Sentry.captureRequestError`, and flags orphaned legacy `sentry.{server,edge,client}.config.*` files the current SDK no longer loads. `Sentry.init()` only arms the SDK; without the export every server-side error is dropped while client errors keep arriving, so nothing looks wrong. An audit found no repo had ever exported it — a 3.5-day 500 outage on one site raised no alert at all. A server/edge config imported from inside `register()` is a supported layout and is deliberately not flagged.
+
 ## [2026-08-11] — Security hardening (Aikido audit)
 
 ### Fixed
