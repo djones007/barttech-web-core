@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-12b] — `safeHtmlNoDom`: sanitising without jsdom
+
+### Added
+- **`safeHtmlNoDom.ts`** exporting `renderSafeHtmlNoDom()` — the same contract as `renderSafeHtml`, backed by `sanitize-html` instead of DOMPurify, so nothing in its chain touches jsdom. Use it in any serverless or edge runtime.
+- **`safeHtmlNoDom.test.ts`** — the same cases as `safeHtml.test.ts`, plus URL-scheme tests the allowlist model has to earn (`javascript:`, `data:`, case and whitespace variants), plus an equivalence test asserting the two implementations agree **byte-for-byte** on ten representative inputs. That last one is the real claim: a consumer can move between them without its rendered output changing.
+
+### Why both exist
+jsdom 30 requires `html-encoding-sniffer` 6, which does a CommonJS `require()` of `@exodus/bytes` — ESM-only in every published version, so no dependency pin can fix it. On Next 16 + Turbopack + Vercel serverless that throws at **module load**, 500-ing every request to the route.
+
+Golden rule 1c already described this and `safeHtml.ts` claimed "rendering paths (pages, views) are unaffected". That was wrong: a consumer's help page 500'd on every signed-in request from 2026-08-08 to 2026-08-12. The verification recorded at the time — load the page and check for the auth redirect rather than a 500 — could not have caught it, because the redirect happens in the layout **before** the page body runs, so it never reached the import. Rule 1c's advice is now sharper: an auth-gated route must be checked **signed in**.
+
+`renderSafeHtml` is kept and unchanged because several consumers render published blog content through it. The two agree on the tested contract, but a subtle difference on real-world markup would silently rewrite live posts — which is the exact failure (`target` dropped from 34 links across 20 posts) those tests were written for. Migrating the rest is a deliberate, verified step, not a side effect of fixing a 500.
+
+### ⚠️ This adds a NEW EXTERNAL IMPORT — cross-repo change, read before bumping
+Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one has `sanitize-html` installed.** Thirteen exclude this mount from their `tsconfig.json` and are therefore unaffected. **Six do not exclude it and do not have the package** — they will fail `tsc` on the next bump unless they either add the exclusion rule 1b already requires, or install `sanitize-html`. The exclusion is the correct fix and is being applied to those six.
+
+### Changed
+- `scripts/check-unsanitised-html.mjs` recognises `renderSafeHtmlNoDom(...)` as a sanitising call. Without this every consumer using the new function would fail the gate.
+- `shared-modules.json` registers the new module (CI fails on an unregistered one). Deliberately no resource match on `sanitizeHtml(`: a direct call is not a re-implementation of this module — it is the same primitive it wraps, and at least one consumer route calls it directly for exactly this runtime reason.
+
+
 ## [2026-08-12] — Add check-scaffold-metadata gate
 
 ### Added

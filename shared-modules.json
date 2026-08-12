@@ -123,6 +123,11 @@
         }
       ]
     },
+    "safeHtmlNoDom": {
+      "owner": "@/web-core/safeHtmlNoDom",
+      "resources": [],
+      "why": "the jsdom-free twin of safeHtml, for serverless and edge runtimes where the DOMPurify/jsdom chain throws at module load. Deliberately NO resource match on `sanitizeHtml(`: a direct sanitize-html call is not a re-implementation of this module, it is the same primitive this module wraps, and at least one consumer route calls it directly for exactly the runtime reason this module exists — a gate firing on that would flag the correct code. What must not be re-implemented is the extract-validate-reattach ld+json carve-out, which has no reliable textual signature; the safeHtml entry's DOMPurify match already covers the version of that mistake a gate can see."
+    },
     "security": {
       "owner": "@/web-core/security",
       "resources": [],
