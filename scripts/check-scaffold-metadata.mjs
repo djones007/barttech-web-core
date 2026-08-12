@@ -50,7 +50,39 @@ import { readFileSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 
+
 const ROOT = process.cwd();
+
+// ---------------------------------------------------------------------------
+// A scaffold template legitimately OWNS these placeholders, so the gate must
+// not fire there. It self-detects rather than being excluded at rollout, and
+// that distinction matters: an excluded repo never gets the CI step spliced in,
+// so every repo CLONED from the template would inherit a ci.yml with no gate —
+// exactly the repos this exists to protect. Self-skipping lets the step live in
+// the template and be inherited, firing on day one of a new repo.
+//
+// Keyed on the package name ending in `-template`, which every clone renames as
+// its first act. The skip is announced loudly: a silent skip is the failure
+// mode this whole family of gates exists to stamp out.
+// ---------------------------------------------------------------------------
+let pkgName = "";
+try {
+  pkgName = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).name ?? "";
+} catch {
+  /* no package.json — not a Node repo; the checks below simply find nothing */
+}
+
+if (/-template$/.test(pkgName)) {
+  console.log(
+    `Scaffold-metadata gate SKIPPED — package name "${pkgName}" ends in "-template", so this repo` +
+      " is treated as the scaffold that owns these placeholders."
+  );
+  console.log(
+    "::warning::If this is NOT a scaffold template, rename it in package.json — the gate is" +
+      " skipping this repo entirely and will not catch placeholders in it."
+  );
+  process.exit(0);
+}
 
 // ---------------------------------------------------------------------------
 // Comment blanking. Replaces comment bodies with spaces so line/column numbers
