@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-12] — Add check-scaffold-metadata gate
+
+### Added
+- `scripts/check-scaffold-metadata.mjs` — scaffold placeholders must not reach production. Fails when a root layout's `title`/`description` still carries a `TODO` or a generic "<framework> Template" stand-in, or when a `REPLACE_WITH_*` token survives in live code. Comments are blanked before matching, because the repos that fixed this bug documented it with a comment quoting the old placeholder — matching raw text would flag the fix. Placeholder body copy on legal pages is deliberately out of scope for now: same family, but it needs real content rather than a rename. Waivers are `// scaffold-metadata-ok: <reason>`, and a bare annotation with no reason is itself a failure.
+
 ## [2026-08-12] — Add check-sentry-instrumentation gate
 
 ### Added

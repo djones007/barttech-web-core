@@ -96,6 +96,30 @@ a CI step that fetches the raw file.
   plus a `#` reason in `.sentry-instrumentation-ok`; a waiver with no reason is
   itself a failure.
 
+- `check-scaffold-metadata.mjs` — **scaffold placeholders must not reach
+  production**. New apps are cloned from a shared template that ships deliberate
+  stand-ins (a placeholder page title, a `TODO:` meta description,
+  `REPLACE_WITH_<THING>` tokens) on the assumption someone replaces them.
+  Repeatedly nobody did, and nothing complained — build green, page renders,
+  tests pass, and the only symptom is a customer reading the wrong words. It
+  happened three times before this gate: a checkout app served the placeholder
+  title to a paying customer in their browser tab on the post-payment page
+  (found months later by an e2e health check, not review); an internal tool
+  served the placeholder title *and* the literal `TODO: replace with...` string
+  as its live, indexable meta description; and one repo's README still listed
+  both as outstanding after they were fixed. Checks two things: the root
+  layout's `title`/`description` carry no `TODO` and no generic
+  "<framework> Template" stand-in, and no `REPLACE_WITH_*` token survives in
+  live code. **Comments are blanked before matching** — the repos that FIXED
+  this bug documented it with a comment quoting the old placeholder, so raw
+  matching flags the fix itself, the same lesson `check-unsanitised-html.mjs`
+  learned. Placeholder body copy on legal pages is deliberately **not** checked:
+  same family, but it needs real content rather than a rename, and a gate that
+  arrives red on unscheduled work gets removed rather than obeyed. Waivers are
+  `// scaffold-metadata-ok: <reason>`; a bare annotation is itself a failure.
+  The template repo is excluded at rollout — it is the source of the
+  placeholders, not a consumer of them.
+
 ## Rules
 
 - **Keep them dependency-free and runnable with a bare `node <file>.mjs`.** They
