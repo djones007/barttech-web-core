@@ -10,15 +10,17 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsc --outDir .testbuild --module commonjs --target es2022 --skipLibCheck --moduleResolution node --esModuleInterop --types node safeHtml.ts jsonLd.ts alerting.ts telegram.ts safeHtml.test.ts alerting.test.ts telegram.test.ts && node --test \".testbuild/*.test.js\""
+    "test": "tsc --outDir .testbuild --module commonjs --target es2022 --skipLibCheck --moduleResolution node --esModuleInterop --types node safeHtml.ts safeHtmlNoDom.ts jsonLd.ts alerting.ts telegram.ts safeHtml.test.ts safeHtmlNoDom.test.ts alerting.test.ts telegram.test.ts && node --test \".testbuild/*.test.js\""
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@supabase/supabase-js": "^2.110.8",
     "@types/node": "^26.1.1",
+    "@types/sanitize-html": "^2.16.1",
     "eslint": "^9.39.5",
     "globals": "^17.7.0",
     "isomorphic-dompurify": "^3.22.0",
+    "sanitize-html": "^2.17.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.65.0"
   }

@@ -17,7 +17,7 @@
  * Finds every `dangerouslySetInnerHTML={{ __html: EXPR }}` and passes it only if
  * EXPR is self-evidently safe at the call site:
  *
- *   - `renderSafeHtml(...)`  — the shared pass
+ *   - `renderSafeHtml(...)` / `renderSafeHtmlNoDom(...)`  — the shared passes
  *   - `jsonLd(...)`          — the escaping serialiser
  *   - `A_SCREAMING_CONSTANT` — a compile-time literal, not foreign content
  *
@@ -48,7 +48,7 @@ const SKIP_PATH = /(^|\/)(web-core|app-ui|lms)(\/|$)/;
 const EXT = /\.(tsx|ts|jsx|js)$/;
 
 const SAFE_EXPR = [
-  /renderSafeHtml\s*\(/,
+  /renderSafeHtml(?:NoDom)?\s*\(/,
   /jsonLd\s*\(/,
   /^[A-Z][A-Z0-9_]*$/,          // SCREAMING_CASE constant, e.g. CONSENT_MODE_HEAD_SNIPPET
 ];
@@ -151,7 +151,7 @@ for (const file of walk(ROOT)) {
     // is precisely the case nobody could see from the call site.
     if (/^[A-Za-z_$][\w$]*$/.test(expr)) {
       const assign = new RegExp(
-        `(?:const|let|var)\\s+${expr}\\s*(?::[^=]+)?=[^;]*?(?:renderSafeHtml|jsonLd)\\s*\\(`
+        `(?:const|let|var)\\s+${expr}\\s*(?::[^=]+)?=[^;]*?(?:renderSafeHtml(?:NoDom)?|jsonLd)\\s*\\(`
       );
       if (assign.test(src)) return;
     }
@@ -209,7 +209,8 @@ if (stale.length) {
 if (findings.length || stale.length) {
   if (findings.length) console.log(
     "::error::dangerouslySetInnerHTML with no visible sanitiser. Route the value through" +
-      " renderSafeHtml from @/web-core/safeHtml, or — if it is already sanitised upstream —" +
+      " renderSafeHtml from @/web-core/safeHtml (or renderSafeHtmlNoDom from" +
+      " @/web-core/safeHtmlNoDom in a serverless/edge runtime), or — if it is already sanitised upstream —" +
       ' annotate the line "// safe-html-ok: <where it is sanitised>". Naming the place is the' +
       " point: two sites rendered unsanitised markdown for months because nobody could tell" +
       " from the call site. Note that grepping for \"sanitize\" is NOT evidence — it matches" +
