@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-15] — One sanitiser engine: `renderSafeHtml` is now `renderSafeHtmlNoDom`
+
+### Changed
+- **`safeHtml.ts` no longer carries its own DOMPurify implementation** — `renderSafeHtml` is an alias of `renderSafeHtmlNoDom`, so both exported names resolve to the single `sanitize-html` implementation and jsdom is gone from this repo's dependency chain entirely. The 2026-08-12 entry below explains why jsdom is unusable in serverless runtimes; consolidating retires that hazard for every consumer instead of only the ones that had already migrated.
+- **Consolidation was corpus-verified, and the verification caught a real bug**: rendering every consumer's full published content through both engines and DOM-diffing (tags, every attribute, text, JSON-LD data) showed the allowlist silently stripping `data-*` attributes and `<img decoding>` from 13 of 64 posts in one consumer. Fixed before shipping: `data-*`/`aria-*` wildcards, `decoding`, and `video`/`audio`/`track` (+ their attributes) added for DOMPurify parity, each pinned in `safeHtmlNoDom.test.ts`.
+- **`parseStyleAttributes: false`** — inline `style` passes through verbatim as DOMPurify did, instead of being re-serialised by postcss (which was rewriting bytes on 5 real posts and turning corpus diffs into noise).
+- `safeHtmlNoDom.test.ts`'s byte-for-byte equivalence test now asserts the single-implementation invariant (`renderSafeHtml === renderSafeHtmlNoDom`) — a reintroduced second engine fails a test rather than passing vacuously.
+
+### Removed
+- `isomorphic-dompurify` devDependency. **Cross-repo note (golden rule 1b):** consumers importing `safeHtml` must have `sanitize-html` (+ `@types/sanitize-html`) installed and can drop `isomorphic-dompurify` — do both in the same commit as the pointer bump.
+
 ## [2026-08-12b] — `safeHtmlNoDom`: sanitising without jsdom
 
 ### Added

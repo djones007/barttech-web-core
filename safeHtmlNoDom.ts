@@ -56,13 +56,13 @@ const DEFAULT_FORBID_ATTR = ["onerror", "onload", "onclick"];
  * embedding elements, which are in DEFAULT_FORBID_TAGS anyway.
  */
 const ALLOWED_TAGS = [
-  "a", "abbr", "address", "article", "aside", "b", "bdi", "bdo", "blockquote", "br",
+  "a", "abbr", "address", "article", "aside", "audio", "b", "bdi", "bdo", "blockquote", "br",
   "caption", "cite", "code", "col", "colgroup", "data", "dd", "del", "details", "dfn",
   "div", "dl", "dt", "em", "figcaption", "figure", "footer", "h1", "h2", "h3", "h4",
   "h5", "h6", "header", "hgroup", "hr", "i", "img", "ins", "kbd", "li", "main", "mark",
   "nav", "ol", "p", "picture", "pre", "q", "rp", "rt", "ruby", "s", "samp", "section",
   "small", "source", "span", "strong", "sub", "summary", "sup", "table", "tbody", "td",
-  "tfoot", "th", "thead", "time", "tr", "u", "ul", "var", "wbr",
+  "tfoot", "th", "thead", "time", "tr", "track", "u", "ul", "var", "video", "wbr",
 ];
 
 /**
@@ -71,14 +71,25 @@ const ALLOWED_TAGS = [
  * same-tab ones, and reverse tabnabbing is mitigated by browsers applying
  * implicit `noopener` to `target="_blank"`.
  *
+ * `data-*` and `aria-*` are wildcarded, and `decoding` is present, because the
+ * 2026-08-15 corpus diff (every consumer's full published content through both
+ * engines, DOM-compared) caught the narrower list silently stripping them from
+ * 13 of 64 real posts — page-builder metadata (`data-bold`, `data-id`,
+ * `data-css`, `data-rows`, `data-cols`, `data-th`) and `<img decoding>`.
+ * DOMPurify's html profile passed all of these; parity is the contract. Same
+ * failure class as the dropped-`target` regression, caught the same way.
+ *
  * Event handlers are absent and are additionally stripped by prefix below, so
- * a future addition here cannot accidentally readmit one.
+ * a future addition here cannot accidentally readmit one. A `data-*` wildcard
+ * cannot readmit one either — no event handler attribute starts with `data-`.
  */
 const ALLOWED_ATTR = [
   "href", "src", "srcset", "sizes", "alt", "title", "width", "height", "loading",
-  "target", "rel", "class", "id", "style", "colspan", "rowspan", "scope", "headers",
-  "start", "reversed", "value", "datetime", "cite", "dir", "lang", "role", "type",
-  "abbr", "align", "name",
+  "decoding", "target", "rel", "class", "id", "style", "colspan", "rowspan", "scope",
+  "headers", "start", "reversed", "value", "datetime", "cite", "dir", "lang", "role",
+  "type", "abbr", "align", "name", "open", "controls", "poster", "muted", "loop",
+  "autoplay", "playsinline", "preload", "kind", "srclang", "label", "default",
+  "data-*", "aria-*",
 ];
 
 /** Sanitise an HTML string for `dangerouslySetInnerHTML` without loading jsdom. */
@@ -121,6 +132,13 @@ export function renderSafeHtmlNoDom(
     // Drop the CONTENTS of these, not just the tags — otherwise stripping
     // `<script>alert(1)</script>` would leave `alert(1)` as visible text.
     nonTextTags: ["script", "style", "textarea", "option", "noscript"],
+    // Pass `style="…"` through VERBATIM, as DOMPurify did. The default (true)
+    // routes it through postcss, which re-serialises — `text-decoration:
+    // underline;` became `text-decoration:underline` on 5 real posts in the
+    // 2026-08-15 corpus diff. Semantically identical, but a sanitiser that
+    // rewrites bytes it was not asked to touch turns every future corpus diff
+    // into noise, and byte-stability is what makes those diffs readable.
+    parseStyleAttributes: false,
     // sanitize-html's default rewrites `rel` on target="_blank" links; the
     // input's own `rel` must survive untouched instead.
     transformTags: {},

@@ -172,13 +172,52 @@ test("empty input", () => {
   }
 });
 
+// --- Corpus-found preservation contract (2026-08-15) ------------------------
+// The consolidation corpus diff caught the allowlist silently stripping these
+// from 13 of 64 real published posts. Same class as the dropped-`target`
+// regression: invisible to tag-count and text checks, real content loss.
+
+test("preserves data-* attributes — page-builder metadata on real posts", () => {
+  const html = '<ul data-bold="inherit"><li data-id="4123">x</li></ul>';
+  assert.equal(renderSafeHtmlNoDom(html), html);
+});
+
+test("preserves img decoding alongside loading", () => {
+  const html = '<img src="https://cdn.example.com/a.jpg" alt="a" loading="lazy" decoding="async">';
+  assert.equal(renderSafeHtmlNoDom(html), html);
+});
+
+test("preserves aria-* attributes", () => {
+  const html = '<div aria-label="Note" role="note">x</div>';
+  assert.equal(renderSafeHtmlNoDom(html), html);
+});
+
+test("data-* wildcard cannot readmit an event handler", () => {
+  const out = renderSafeHtmlNoDom('<img src="https://x/a.jpg" data-x="1" onerror="alert(1)">');
+  assert.doesNotMatch(out, /onerror/i);
+  assert.match(out, /data-x="1"/);
+});
+
+test("passes inline style through verbatim — no CSS re-serialisation", () => {
+  const html = '<span style="text-decoration: underline;">u</span>';
+  assert.equal(renderSafeHtmlNoDom(html), html);
+});
+
 // --- The actual claim -------------------------------------------------------
 
-test("agrees byte-for-byte with the DOMPurify implementation on every case above", () => {
-  // If this ever fails, a consumer cannot be migrated between the two without
-  // its rendered output changing — which for a published blog post is a silent
-  // content edit. The failure message names the input so the difference is
-  // diagnosable rather than just "not equal".
+test("renderSafeHtml IS renderSafeHtmlNoDom — one engine, two names", () => {
+  // Until 2026-08-15 this test compared two live implementations byte-for-byte
+  // (DOMPurify vs sanitize-html) to prove a consumer could migrate between them
+  // without a silent content edit. The consolidation shipped that day: every
+  // consumer's full published corpus was rendered through both engines and
+  // DOM-diffed (tags, every attribute, text, JSON-LD data) before
+  // `renderSafeHtml` became an alias of `renderSafeHtmlNoDom`. A byte-for-byte
+  // loop against an alias would pass vacuously and imply a comparison that is
+  // no longer happening — so the assertion now states the real invariant:
+  // there is exactly ONE sanitiser implementation, and both exported names
+  // resolve to it. If someone reintroduces a second engine, this fails and the
+  // corpus-diff obligation in golden rule 1d applies again.
+  assert.equal(renderSafeHtml, renderSafeHtmlNoDom);
   for (const input of EQUIVALENT_CASES) {
     assert.equal(
       renderSafeHtmlNoDom(input),
