@@ -2,7 +2,36 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
-## [2026-08-15] — `supportTicket.ts` targets the standalone support app
+## [2026-08-16] — `cronHeartbeat.ts` accepts `degraded`
+
+A scheduled job had only two states it could report about its own run: `ok` and `error`. That made
+one field do two jobs, so a run that DID its work but took a documented fallback — an optional
+source down, one item of a batch skipped — had to claim outright failure to report the fact at all.
+The consequence is that honest reporting becomes the thing that raises false alarms, and an alarm
+that is always on is one nobody reads.
+
+`degraded` is the third state: recorded, visible, raises nothing. `error` now means only "the run
+did not do its job", and it alone should drive an exit code or a page.
+
+### Added
+- **`HeartbeatStatus`** — exported type alias (`"ok" | "degraded" | "error" | "pending"`), so a
+  caller can type its own variable without restating the union and a future state is one edit here
+  rather than a sweep across consumers.
+
+### Changed
+- **`HeartbeatOptions.status` and the internal history writer now accept `"degraded"`.** Purely
+  additive and backwards-compatible: every existing call passing `"ok"`/`"error"`/`"pending"`
+  typechecks and behaves exactly as before. Both fields reference the new alias rather than an
+  inline union.
+- Doc comment now describes all four states and states the `error`-means-failure rule explicitly.
+  The existing "a reader treating anything-not-`error` as healthy stays correct" guarantee is
+  unchanged and now called out as covering `degraded` too.
+
+**No storage change is needed, and this was verified rather than assumed** before the type moved:
+in BOTH projects that hold these tables, `cron_heartbeats.last_status` is unconstrained `text` and
+`cron_runs.status`'s CHECK already lists `degraded`. So the database has accepted this value all
+along and the type was the only thing preventing an in-app cron from reporting it — which is why
+this is a type-only change with no migration attached.
 
 `POST /api/support/form-ticket` moved from the CDP app to a standalone support app, which now
 owns the support domain end to end.

@@ -14,6 +14,14 @@
 // SERVER-SIDE ONLY. It writes with a service-role key.
 // ---------------------------------------------------------------------------
 
+/**
+ * The four states a scheduled job can report.
+ *
+ * Exported so a caller can type its own variable without restating the union
+ * (and so adding a fifth state later is one edit, not a sweep).
+ */
+export type HeartbeatStatus = "ok" | "degraded" | "error" | "pending";
+
 export interface HeartbeatOptions {
   /** REST endpoint of the project holding the table, e.g. https://<ref>.supabase.co */
   url: string;
@@ -22,16 +30,26 @@ export interface HeartbeatOptions {
   /** Unique job identifier. Must match what the watcher expects, exactly. */
   jobName: string;
   /**
-   * `ok` / `error` are written by the job itself.
+   * `ok` / `degraded` / `error` are written by the job itself.
+   *
+   * `degraded` means the run DID its job but worked around something — an
+   * optional source was down, a fallback was taken, one item of a batch was
+   * skipped. It is recorded and visible, and it raises no alarm. It exists
+   * because a single status field was doing two jobs: without it, a job that
+   * honestly reported a survivable snag was indistinguishable from one that
+   * failed, so honest reporting was the thing raising false alarms — and an
+   * alarm that is always on is one nobody reads. Reserve `error` for "the run
+   * did not do its job"; that alone should drive an exit code or a page.
    *
    * `pending` is for a WATCHER seeding a baseline: it means "this job is known
    * but has never been observed running". It exists so a newly-deployed job
    * does not alarm before its first tick, and so an infrequent one does not
    * alarm daily for a month — while still going stale at its real threshold if
    * it genuinely never runs. Deliberately not `ok`: that would claim a run
-   * happened. A reader treating anything-not-`error` as healthy stays correct.
+   * happened. A reader treating anything-not-`error` as healthy stays correct,
+   * including for `degraded`.
    */
-  status: "ok" | "error" | "pending";
+  status: HeartbeatStatus;
   /** Small JSON blob — counts processed, error message. Keep it short. */
   detail?: Record<string, unknown>;
   /** Defaults to `cron_heartbeats`. */
@@ -164,7 +182,7 @@ async function writeRunHistory(args: {
   key: string;
   historyTable: string;
   jobName: string;
-  status: "ok" | "error" | "pending";
+  status: HeartbeatStatus;
   detail?: Record<string, unknown>;
   startedAt?: number | string;
   finishedAt: string;
