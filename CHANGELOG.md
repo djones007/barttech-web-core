@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-15] — `supportTicket.ts` targets the standalone support app
+
+`POST /api/support/form-ticket` moved from the CDP app to a standalone support app, which now
+owns the support domain end to end.
+
+### Changed
+- `createSupportTicketFromForm()` now POSTs to `${SUPPORT_ENGINE_URL}/api/support/form-ticket`
+  instead of `${BARTMAIL_URL}/api/support/form-ticket`. **`SUPPORT_ENGINE_URL` has no hardcoded
+  default** — the old default URL is gone, deliberately: a consuming app's production URL is
+  estate-architecture detail this public repo should not carry (golden rule at the top of this
+  file's CLAUDE.md). Every consumer must set `SUPPORT_ENGINE_URL` in its own env before bumping
+  to this commit, or the call fails closed with `"SUPPORT_ENGINE_URL not configured"` (same
+  fail-closed shape as a missing `SUPPORT_FORM_SECRET`). `SUPPORT_FORM_SECRET` itself is
+  unchanged — same shared secret, new destination.
+
+**Cross-repo note:** every consumer that calls this module must add `SUPPORT_ENGINE_URL` to its
+deployment env in the same change as bumping this pointer.
+
 ## [2026-08-15] — One sanitiser engine: `renderSafeHtml` is now `renderSafeHtmlNoDom`
 
 ### Changed

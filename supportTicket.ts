@@ -23,15 +23,24 @@
 //
 // Auth is a shared secret, NOT the service-role key: a website able to read
 // every contact in the CDP in order to file a support ticket is far more
-// authority than the job needs. Requires SUPPORT_FORM_SECRET, and BARTMAIL_URL
-// if the default host is wrong for an environment.
+// authority than the job needs. Requires SUPPORT_FORM_SECRET and
+// SUPPORT_ENGINE_URL (no default — see below).
 //
 // NEVER THROWS. A contact form must return 200 to the visitor whether or not
 // the helpdesk accepted the enquiry — the notification email and the optin are
 // separate paths and still carry it.
+//
+// MOVED 2026-08-15: this used to POST to the CDP app's own
+// `/api/support/form-ticket`. That route — and the spam gate/ticket pipeline
+// behind it — moved to a standalone support app, which now owns the support
+// domain end to end; the CDP is delivery transport only. `SUPPORT_ENGINE_URL`
+// has deliberately NO hardcoded default (unlike the `BARTMAIL_URL` default it
+// replaced) — this repo is public, and a consuming app's production URL is
+// exactly the kind of estate-architecture detail that does not belong here
+// (see this repo's own CLAUDE.md). Every consumer must set it.
 // ---------------------------------------------------------------------------
 
-const BARTMAIL_URL = (process.env.BARTMAIL_URL ?? "https://bartmail.vercel.app").replace(/\/+$/, "");
+const SUPPORT_ENGINE_URL = (process.env.SUPPORT_ENGINE_URL ?? "").replace(/\/+$/, "");
 const SUPPORT_FORM_SECRET = process.env.SUPPORT_FORM_SECRET ?? "";
 
 export interface SupportTicketInput {
@@ -64,13 +73,14 @@ export async function createSupportTicketFromForm(
   input: SupportTicketInput
 ): Promise<SupportTicketResult> {
   if (!SUPPORT_FORM_SECRET) return { ok: false, error: "SUPPORT_FORM_SECRET not configured" };
+  if (!SUPPORT_ENGINE_URL) return { ok: false, error: "SUPPORT_ENGINE_URL not configured" };
 
   const email = (input.email ?? "").trim().toLowerCase().slice(0, 254);
   const message = (input.message ?? "").trim().slice(0, 20_000);
   if (!email || !message) return { ok: false, error: "email and message are required" };
 
   try {
-    const res = await fetch(`${BARTMAIL_URL}/api/support/form-ticket`, {
+    const res = await fetch(`${SUPPORT_ENGINE_URL}/api/support/form-ticket`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
