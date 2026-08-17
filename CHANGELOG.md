@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-17] — Security review findings survive a failed issue create
+
+### Fixed
+
+The weekly security review filed its critical findings through a single
+`gh issue create --label security`. If that one call failed, the step aborted and no issue was
+created at all. On 2026-08-17 `barttech-web-core` had no `security` label, so a review that found 5
+critical issues produced nothing but a red badge on a scheduled run — and nothing alerts on those,
+so it went unnoticed. Findings now fall back to an unlabelled issue so they always reach the
+tracker, and the job still exits non-zero so the missing label gets fixed rather than tolerated.
+
 ## [2026-08-16] — `cronHeartbeat.ts` accepts `degraded`
 
 A scheduled job had only two states it could report about its own run: `ok` and `error`. That made
