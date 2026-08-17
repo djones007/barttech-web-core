@@ -132,8 +132,21 @@ jobs:
             (if (.warnings | length) > 0 then "\n---\nWarnings (informational):\n\n" + ([.warnings[] | "- [\(.file)] \(.issue)"] | join("\n")) else "" end)
           ' review.json)
           SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
-          gh issue create \
-            --title "Weekly security review: $CRIT critical finding(s) as of $SHORT_SHA" \
-            --body "$BODY" \
-            --label security
-          echo "Issue created for $CRIT critical finding(s)."
+          TITLE="Weekly security review: $CRIT critical finding(s) as of $SHORT_SHA"
+          # Filing the issue must not depend on repo metadata that may not exist.
+          # On 2026-08-17 barttech-web-core had no 'security' label, so this step
+          # exited 1 and NO issue was filed for 5 critical findings. They survived
+          # only in this run's job summary, which nothing points anyone at, and
+          # the sole remaining signal was a red badge on a scheduled run.
+          #
+          # So: fall back to an unlabelled issue, because the findings reaching
+          # the tracker matters more than their tidiness. Then still fail the job,
+          # so the missing label is fixed rather than quietly tolerated forever.
+          if gh issue create --title "$TITLE" --body "$BODY" --label security; then
+            echo "Issue created for $CRIT critical finding(s)."
+          else
+            echo "::warning::labelled issue create failed - retrying without --label"
+            gh issue create --title "$TITLE" --body "$BODY"
+            echo "::error::Issue was filed WITHOUT the 'security' label - create that label in this repo"
+            exit 1
+          fi
