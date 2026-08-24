@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-24] — CI gate scripts: containment check on every path built from an enumerated file list
+
+### Fixed
+
+A SAST scan flagged a "potential file inclusion" pattern (Medium) across several of this repo's
+own CI gate scripts (`scripts/*.mjs`): a file path built by joining a scan root with a value that
+came from a loop — over `git ls-files` output or a local directory walk — then passed straight to
+a file read. In every case the loop variable is enumerated from a trusted local source inside the
+same run, never external or network input, so the practical risk was low. Static analysis cannot
+see that provenance, though, and the containment check is cheap, so every flagged read site (and
+one raw-descriptor open in the same family) now resolves the joined path and refuses to proceed if
+it falls outside the scan root, before the read happens. No script's actual checking logic changed;
+each modified script was run against a real repository before and after and produced byte-identical
+output. These scripts are fetched as single standalone files by consumer CI, so the fix is inlined
+into each one rather than factored into a shared module that consumers can't see.
+
 ## [2026-08-24] — Storage path-traversal: single sanitiser reused, new CI gate
 
 ### Fixed

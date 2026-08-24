@@ -48,10 +48,25 @@
  */
 import { readFileSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 
 const ROOT = process.cwd();
+
+/**
+ * Defense-in-depth: every `rel` reaching this function is already enumerated
+ * from a trusted local source (`git ls-files`, or a fixed candidate list) —
+ * never external input — but static analysis cannot see that, and the check
+ * is cheap. Refuses to read outside ROOT regardless of how `rel` was built.
+ */
+function readWithinRoot(root, rel) {
+  const base = resolve(root) + sep;
+  const target = resolve(root, rel);
+  if (!target.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${rel}`);
+  }
+  return readFileSync(target, "utf8");
+}
 
 // ---------------------------------------------------------------------------
 // A scaffold template legitimately OWNS these placeholders, so the gate must
@@ -168,7 +183,7 @@ const PLACEHOLDER_TITLE = /\b(?:Next\.?js|React|Vite|Astro|Remix)\s+Template\b/i
 const TODO_TOKEN = /\bTODO\b/;
 
 if (layoutPath) {
-  const raw = readFileSync(join(ROOT, layoutPath), "utf8");
+  const raw = readWithinRoot(ROOT, layoutPath);
   const rawLines = raw.split("\n");
   const code = blankComments(raw).split("\n");
 
@@ -203,7 +218,7 @@ const REPLACE_TOKEN = /REPLACE_WITH_[A-Z0-9_]+/;
 
 for (const file of tracked) {
   let raw;
-  try { raw = readFileSync(join(ROOT, file), "utf8"); } catch { continue; }
+  try { raw = readWithinRoot(ROOT, file); } catch { continue; }
   if (!REPLACE_TOKEN.test(raw)) continue;
 
   const rawLines = raw.split("\n");
@@ -232,7 +247,7 @@ for (const file of tracked) {
 // ---------------------------------------------------------------------------
 for (const file of tracked) {
   let raw;
-  try { raw = readFileSync(join(ROOT, file), "utf8"); } catch { continue; }
+  try { raw = readWithinRoot(ROOT, file); } catch { continue; }
   if (BARE_ANNOTATION.test(raw)) {
     findings.push({
       file,

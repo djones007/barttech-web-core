@@ -44,6 +44,20 @@ const ROOT = args.find((a, i) => !a.startsWith("--") && i !== mIdx + 1) || proce
 const MANIFEST_URL =
   "https://raw.githubusercontent.com/djones007/barttech-web-core/main/shared-modules.json";
 
+/**
+ * Defense-in-depth: `rel` is always enumerated from `git ls-files`, never
+ * external input, but static analysis cannot see that, and the check is
+ * cheap. Refuses to read outside ROOT regardless of how `rel` was built.
+ */
+function readWithinRoot(root, rel) {
+  const base = path.resolve(root) + path.sep;
+  const target = path.resolve(root, rel);
+  if (!target.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${rel}`);
+  }
+  return fs.readFileSync(target, "utf8");
+}
+
 async function loadManifest() {
   if (manifestPath) return JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   const res = await fetch(MANIFEST_URL);
@@ -98,7 +112,7 @@ const consumed = new Set();
 for (const rel of files) {
   let src;
   try {
-    src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    src = readWithinRoot(ROOT, rel);
   } catch {
     continue;
   }

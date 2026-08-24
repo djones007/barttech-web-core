@@ -70,6 +70,20 @@ import { execFileSync } from "node:child_process";
 
 const ROOT = process.argv[2] || process.cwd();
 
+/**
+ * Defense-in-depth: `rel` is always enumerated from `git ls-files`, never
+ * external input, but static analysis cannot see that, and the check is
+ * cheap. Refuses to read outside ROOT regardless of how `rel` was built.
+ */
+function readWithinRoot(root, rel) {
+  const base = path.resolve(root) + path.sep;
+  const target = path.resolve(root, rel);
+  if (!target.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${rel}`);
+  }
+  return fs.readFileSync(target, "utf8");
+}
+
 const DEFAULTS = {
   primary: "bartmailOptin",
   // Generic shapes for "a system that is not the primary store". Deliberately
@@ -184,7 +198,7 @@ let suppressions = 0;
 for (const rel of trackedSourceFiles()) {
   let src;
   try {
-    src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    src = readWithinRoot(ROOT, rel);
   } catch {
     continue;
   }

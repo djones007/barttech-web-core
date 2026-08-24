@@ -51,13 +51,28 @@
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
-import { join, relative, extname, resolve } from "node:path";
+import { join, relative, extname, resolve, sep } from "node:path";
 
 // resolve() converts any relative or absolute path to an absolute path, which
 // prevents a directory traversal if an unexpected value is passed via argv.
 // This script runs only in trusted CI/dev environments (never as a web handler),
 // but resolving to an absolute path is cheap defence-in-depth.
 const ROOT = resolve(process.argv[2] ?? process.cwd());
+
+/**
+ * Defense-in-depth: `file` is always produced by this script's own
+ * `readdirSync`-based walk of ROOT, never external input, but static
+ * analysis cannot see that, and the check is cheap. Refuses to read outside
+ * ROOT regardless of how the path was built.
+ */
+function readWithinRoot(root, target) {
+  const base = resolve(root) + sep;
+  const resolved = resolve(root, target);
+  if (!resolved.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${target}`);
+  }
+  return readFileSync(resolved, "utf8");
+}
 
 const DEFAULTS = {
   // Functions whose job is to record a run's outcome.
@@ -178,7 +193,7 @@ for (const file of walk(ROOT)) {
   if (rel.includes("check-heartbeat-status")) continue;
 
   let src;
-  try { src = readFileSync(file, "utf8"); } catch { continue; }
+  try { src = readWithinRoot(ROOT, file); } catch { continue; }
 
   // Only meaningful if this file counts failures — and only for status writes
   // that happen AFTER the counting starts.

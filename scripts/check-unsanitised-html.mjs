@@ -31,9 +31,26 @@
  * it leaves a grep-able trail for the next audit.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 const ROOT = process.cwd();
+
+/**
+ * Defense-in-depth: every path reaching this function is either produced by
+ * this script's own `readdirSync`-based walk of ROOT, or a filename regex-
+ * matched out of a `safe-html-ok:` comment written by a repo's own
+ * contributors — never external input — but static analysis cannot see
+ * that, and the check is cheap. Refuses to read outside ROOT regardless of
+ * how the path was built.
+ */
+function readWithinRoot(root, target) {
+  const base = resolve(root) + sep;
+  const resolved = resolve(root, target);
+  if (!resolved.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${target}`);
+  }
+  return readFileSync(resolved, "utf8");
+}
 const SKIP_DIRS = new Set([
   "node_modules", ".next", ".git", "dist", "build", ".vercel", ".turbo", "coverage", ".testbuild",
   // Static-export output. Untracked, so per the estate rule "scope by what is
@@ -123,7 +140,7 @@ let annotated = 0;
 
 for (const file of walk(ROOT)) {
   let src;
-  try { src = readFileSync(file, "utf8"); } catch { continue; }
+  try { src = readWithinRoot(ROOT, file); } catch { continue; }
   if (!src.includes("dangerouslySetInnerHTML")) continue;
   // Annotations live in comments, so keep the raw text for that lookup and use
   // the comment-blanked copy for detection.
@@ -168,9 +185,8 @@ for (const file of walk(ROOT)) {
       // "named file not found" against a file that is right there.
       const named = reason.match(/([\w./-]+\.(?:tsx|ts|jsx|js))/);
       if (named) {
-        const target = join(ROOT, named[1]);
         let body = null;
-        try { body = readFileSync(target, "utf8"); } catch { /* unreadable */ }
+        try { body = readWithinRoot(ROOT, named[1]); } catch { /* unreadable, or outside ROOT */ }
         if (body === null) {
           stale.push({ file: relative(ROOT, file), line: i + 1, named: named[1], why: "named file not found" });
           return;

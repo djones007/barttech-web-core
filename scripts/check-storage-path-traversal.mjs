@@ -33,9 +33,24 @@
  * Exit codes: 0 = clean. 1 = a finding, or the check could not run.
  */
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 const ROOT = process.cwd();
+
+/**
+ * Defense-in-depth: `file` is always produced by this script's own
+ * `readdirSync`-based walk of ROOT, never external input, but static
+ * analysis cannot see that, and the check is cheap. Refuses to read outside
+ * ROOT regardless of how the path was built.
+ */
+function readWithinRoot(root, target) {
+  const base = resolve(root) + sep;
+  const resolved = resolve(root, target);
+  if (!resolved.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${target}`);
+  }
+  return readFileSync(resolved, "utf8");
+}
 const SKIP_DIRS = new Set([
   "node_modules", ".next", ".git", "dist", "build", ".vercel", ".turbo", "coverage", ".testbuild",
   "out", ".output", "storybook-static",
@@ -122,7 +137,7 @@ let checked = 0;
 for (const file of walk(ROOT)) {
   let src;
   try {
-    src = readFileSync(file, "utf8");
+    src = readWithinRoot(ROOT, file);
   } catch {
     continue;
   }

@@ -34,6 +34,21 @@ const ROOT = process.argv[2] || process.cwd();
 const OSV = "https://api.osv.dev/v1/query";
 
 /**
+ * Defense-in-depth: `file` is always produced by this script's own
+ * `readdirSync`-based walk of ROOT (see `walk()` below), never external
+ * input, but static analysis cannot see that, and the check is cheap.
+ * Refuses to open a file outside ROOT regardless of how the path was built.
+ */
+function assertWithinRoot(root, target) {
+  const base = path.resolve(root) + path.sep;
+  const resolved = path.resolve(root, target);
+  if (!resolved.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${target}`);
+  }
+  return resolved;
+}
+
+/**
  * Only files COMMITTED to the repo are in scope.
  *
  * This is the discriminator between the two kinds of minified JavaScript that
@@ -138,7 +153,7 @@ function walk(dir, out = []) {
 
 /** Read only the head of a file — these bundles can be hundreds of KB. */
 function readHead(file, bytes = 4096) {
-  const fd = fs.openSync(file, "r");
+  const fd = fs.openSync(assertWithinRoot(ROOT, file), "r");
   const buf = Buffer.alloc(bytes);
   const n = fs.readSync(fd, buf, 0, bytes, 0);
   fs.closeSync(fd);
