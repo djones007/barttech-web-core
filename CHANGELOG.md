@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-24] — Storage path-traversal: single sanitiser reused, new CI gate
+
+### Fixed
+
+Aikido SAST flagged grouped issue 37987812 (High, "path traversal in Supabase Storage"), 7
+subissues across `an internal app` and `a client app`: user- or DB-controlled strings reaching a
+storage key without going through the estate's existing guard. One site hand-rolled a duplicate of
+`safeUploadFilename` with a subtly different truncation rule (`.slice(-100)` — last 100 chars,
+instead of first-`100-ext.length`-chars-plus-extension); the other built a key from a narrower,
+worse regex that didn't strip directory components. Both are now `safeUploadFilename` call sites.
+
+### Added
+
+- `sanitizeStorageSegment` — a documented alias of `safeUploadFilename` in `uploads.ts`, for call
+  sites sanitising something that isn't an uploaded file's original name (a DB id, a constructed
+  filename segment) where "upload" reads oddly. Same implementation, same guarantees — not a second
+  sanitiser.
+- `scripts/check-storage-path-traversal.mjs` — new CI gate. Flags a file that calls
+  `.storage.from(...)` chained with `.upload(`/`.remove(`/`.createSignedUrl(s)`/`.download(`/`.move(`/`.copy(`
+  and does not also import `safeUploadFilename` (or the new alias) from `@/web-core/uploads` or
+  `@/lib/uploads`. Same file-level-heuristic tradeoff as this repo's other regex gates — a
+  `.storage-path-baseline` file (mirrors `.web-core-baseline`) is the ratchet for a genuine
+  compile-time-constant false positive. Rolled out via
+  `tools/storage-path-traversal-gate-rollout.py` in the private root repo.
+
 ## [2026-08-17] — Security review findings survive a failed issue create
 
 ### Fixed

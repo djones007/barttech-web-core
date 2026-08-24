@@ -139,6 +139,15 @@ export function safeUploadFilename(name: string): string {
   return cleaned.replace(/^\.+/, "") || "file";
 }
 
+/**
+ * Alias of `safeUploadFilename` for call sites sanitising something that isn't
+ * an uploaded file's original name — a DB id, a constructed filename segment
+ * — where "upload" reads oddly. Same function, same guarantees; this exists
+ * purely for readability, not as a second implementation. Always import and
+ * fix `safeUploadFilename` itself; this alias picks up any change for free.
+ */
+export const sanitizeStorageSegment = safeUploadFilename;
+
 /** Lowercase extension without the dot (`""` when the name has none). */
 function extensionOf(filename: string): string {
   const dot = filename.lastIndexOf(".");

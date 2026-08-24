@@ -96,6 +96,24 @@ a CI step that fetches the raw file.
   plus a `#` reason in `.sentry-instrumentation-ok`; a waiver with no reason is
   itself a failure.
 
+- `check-storage-path-traversal.mjs` — a file calling Supabase Storage with a
+  write/read-by-key operation (`.upload(` `.remove(` `.createSignedUrl(`
+  `.createSignedUrls(` `.download(` `.move(` `.copy(`, chained off
+  `.storage.from(...)`) must import `safeUploadFilename` (or its alias
+  `sanitizeStorageSegment`) from `@/web-core/uploads` or `@/lib/uploads`. Added
+  after Aikido flagged grouped issue 37987812 (High, "path traversal in
+  Supabase Storage") on 2026-08-24 — 7 subissues across two live repos, every
+  one a user- or DB-controlled string reaching a storage key with either no
+  guard at all or a hand-rolled duplicate of the guard this repo already
+  exports. File-level heuristic, same tradeoff as the other gates here: it
+  cannot see whether the sanitiser is applied to the SPECIFIC key built in the
+  file, only that the file imports it at all — a data-flow check is out of
+  scope for a dependency-free script, and "imported but unused for the actual
+  key" is a far smaller, more reviewable gap than "never imported." A file
+  whose storage key is built entirely from compile-time constants (no
+  interpolation) is a legitimate, rare false positive — add it to
+  `.storage-path-baseline` (mirrors `.web-core-baseline`) with a `#` reason.
+
 - `check-scaffold-metadata.mjs` — **scaffold placeholders must not reach
   production**. New apps are cloned from a shared template that ships deliberate
   stand-ins (a placeholder page title, a `TODO:` meta description,
