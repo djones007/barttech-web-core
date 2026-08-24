@@ -6,9 +6,9 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Fixed
 
-Aikido SAST flagged grouped issue 37987812 (High, "path traversal in Supabase Storage"), 7
-subissues across `an internal app` and `a client app`: user- or DB-controlled strings reaching a
-storage key without going through the estate's existing guard. One site hand-rolled a duplicate of
+A SAST scan flagged a grouped path-traversal finding (High, "path traversal in Supabase Storage"),
+7 subissues across two consumer apps: user- or DB-controlled strings reaching a storage key
+without going through the estate's existing guard. One site hand-rolled a duplicate of
 `safeUploadFilename` with a subtly different truncation rule (`.slice(-100)` — last 100 chars,
 instead of first-`100-ext.length`-chars-plus-extension); the other built a key from a narrower,
 worse regex that didn't strip directory components. Both are now `safeUploadFilename` call sites.
