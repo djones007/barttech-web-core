@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-28]
+
+### Added
+
+- `EmailitSendMessage.tracking` — optional per-message override of the sending
+  domain's Emailit tracking defaults (`boolean` or `{ loads, clicks }`).
+  Emailit rewrites links through the domain's tracking host when `track_clicks`
+  is on; the certificate is valid, but the redirect is what makes
+  Outlook/SafeLinks warn the reader. On a transactional email — a quote, an
+  agreement, a receipt — that costs a conversion for nothing, because the
+  destination is our own primary domain. Marketing keeps click tracking;
+  transactional passes `{ loads: true, clicks: false }`. Absent by default, so
+  every existing caller keeps the domain default it has always used.
+
 ## [2026-08-24] — CI gate scripts: containment check on every path built from an enumerated file list
 
 ### Fixed
