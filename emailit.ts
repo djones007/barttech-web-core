@@ -47,18 +47,22 @@ export interface EmailitSendMessage {
   text?: string;
   reply_to?: string;
   /**
-   * Per-message override of the SENDING DOMAIN's tracking defaults.
+   * Per-message override of the sending domain's tracking defaults.
    *
-   * Emailit rewrites every link in an email through the domain's tracking host
-   * (e.g. link.example.com -> go.emailitmail.com) when `track_clicks` is on
-   * for that domain. The certificate is valid, but the REDIRECT itself is what
-   * makes Outlook/SafeLinks interrupt the reader with a warning — which on a
-   * transactional email (a quote, an agreement, a receipt) costs a conversion
-   * for no gain, since the destination is our own primary domain.
+   * With click tracking enabled on a domain, the provider rewrites every link in
+   * the message to point at its own tracking host and redirect from there. The
+   * tracking host's certificate is valid, but some mail clients and link
+   * scanners interrupt the reader with a warning on any redirect through an
+   * unfamiliar host — which costs a click on a transactional message whose
+   * destination is already a first-party domain.
    *
-   * So: marketing keeps click tracking, transactional turns it off with
-   * `{ loads: true, clicks: false }`. Optional and absent by default, so every
-   * existing caller keeps the domain default it has always used.
+   * So: keep click tracking for marketing, disable it per-message for
+   * transactional with `{ loads: true, clicks: false }`. Open tracking is
+   * unaffected, and a first-party page load is the better open signal anyway
+   * since a redirect can be tripped by a scanner.
+   *
+   * Optional and absent by default, so every existing caller keeps the domain
+   * default it has always used.
    */
   tracking?: boolean | { loads?: boolean; clicks?: boolean };
 }

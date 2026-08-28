@@ -7,14 +7,14 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ### Added
 
 - `EmailitSendMessage.tracking` — optional per-message override of the sending
-  domain's Emailit tracking defaults (`boolean` or `{ loads, clicks }`).
-  Emailit rewrites links through the domain's tracking host when `track_clicks`
-  is on; the certificate is valid, but the redirect is what makes
-  Outlook/SafeLinks warn the reader. On a transactional email — a quote, an
-  agreement, a receipt — that costs a conversion for nothing, because the
-  destination is our own primary domain. Marketing keeps click tracking;
-  transactional passes `{ loads: true, clicks: false }`. Absent by default, so
-  every existing caller keeps the domain default it has always used.
+  domain's tracking defaults (`boolean` or `{ loads, clicks }`). With click
+  tracking on, the provider rewrites links to redirect through its own tracking
+  host; some mail clients and link scanners warn the reader on a redirect
+  through an unfamiliar host, which costs a click on a transactional message
+  whose destination is already first-party. Keep click tracking for marketing,
+  disable it per-message for transactional with `{ loads: true, clicks: false }`.
+  Absent by default, so every existing caller keeps the domain default it has
+  always used.
 
 ## [2026-08-24] — CI gate scripts: containment check on every path built from an enumerated file list
 
