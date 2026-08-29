@@ -37,6 +37,13 @@ stops at the permission layer before a row could reveal a match. Recorded in the
 module rather than silently stripped, which is what two of the five escapers this
 replaces did.
 
+`orIlikeExact` covers the narrow-then-widen lookup shape (try an exact
+case-insensitive match, fall back to contains). It exists because the exact half
+looks too simple to need a helper and had been written by hand — and because the
+gate below is line-based and correctly refuses to read escaping that happened on
+the previous line. Contorting the call site to satisfy the gate would have been
+the wrong fix; the missing shape was real.
+
 **`scripts/check-postgrest-filter-terms.mjs`** — fails any interpolation of a
 term into a like/ilike filter that does not route through the module. Reports
 `[or-filter]` (injection) separately from `[like-pattern]` (wildcards only), so

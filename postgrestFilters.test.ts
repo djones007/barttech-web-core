@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { escapeLikeTerm, orFilterLiteral, orIlikeContains, orIlikeAnyOf } from "./postgrestFilters";
+import { escapeLikeTerm, orFilterLiteral, orIlikeContains, orIlikeAnyOf, orIlikeExact } from "./postgrestFilters";
 
 // ---------------------------------------------------------------------------
 // The cases here are the ones that were live in production on 2026-08-29, not
@@ -71,4 +71,14 @@ test("orIlikeAnyOf escapes each term independently", () => {
   assert.equal(orIlikeAnyOf("source_page", ["a,b"]), 'source_page.ilike."%a,b%"');
   assert.throws(() => orIlikeAnyOf("col,x", ["a"]), /unsafe column name/);
   assert.throws(() => orIlikeAnyOf("col", []), /no terms given/);
+});
+
+test("orIlikeExact matches without wildcards but still escapes", () => {
+  assert.equal(
+    orIlikeExact(["display_name", "company_name"], "Acme Ltd"),
+    'display_name.ilike."Acme Ltd",company_name.ilike."Acme Ltd"'
+  );
+  // No surrounding %, but a % INSIDE the term is still a wildcard.
+  assert.equal(orIlikeExact(["name"], "50% Ltd"), 'name.ilike."50\\\\% Ltd"');
+  assert.equal(orIlikeExact(["name"], "a,b"), 'name.ilike."a,b"');
 });

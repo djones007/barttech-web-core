@@ -107,6 +107,26 @@ export function orIlikeContains(columns: readonly string[], term: string): strin
 }
 
 /**
+ * Build a complete `.or()` argument that matches `term` EXACTLY in any of
+ * `columns`, case-insensitively — `ilike` with no wildcards around the value.
+ *
+ * The narrow-then-widen pair (try exact, fall back to contains) is a common
+ * lookup shape, and the exact half is the one most likely to be written by hand
+ * because it looks too simple to need a helper. It needs the same escaping: the
+ * value is still a value inside a filter expression.
+ */
+export function orIlikeExact(columns: readonly string[], term: string): string {
+  if (!columns.length) throw new Error("orIlikeExact: no columns given");
+  for (const c of columns) {
+    if (!/^[a-z_][a-z0-9_]*$/i.test(c)) {
+      throw new Error(`orIlikeExact: unsafe column name ${JSON.stringify(c)}`);
+    }
+  }
+  const value = orFilterLiteral(escapeLikeTerm(term));
+  return columns.map((c) => `${c}.ilike.${value}`).join(",");
+}
+
+/**
  * Build a complete `.or()` argument that matches ONE column against any of
  * several terms — the mirror image of `orIlikeContains`.
  *
