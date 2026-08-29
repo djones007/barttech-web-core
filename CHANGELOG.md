@@ -2,6 +2,53 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-29] — postgrestFilters: one escaper for PostgREST search filters
+
+### Added
+
+**`postgrestFilters.ts`** — `escapeLikeTerm`, `orFilterLiteral`,
+`orIlikeContains` and `orIlikeAnyOf`. `.or()` and `.ilike()` look symmetrical
+and are not. supabase-js appends an `.ilike()` pattern with
+`URLSearchParams.append`, so the value is percent-encoded and arrives opaque;
+`.or()` appends one string that PostgREST **parses** as a filter expression.
+
+Verified against a live instance before writing a line of it:
+
+    or=(title.ilike.%a,b%)            -> 400 PGRST100, unexpected "%"
+    or=(title.ilike."%a,b%")          -> parses
+    or=(title.ilike.%a%),or(id.gt.0)  -> PARSES — second disjunct appended
+    or=(title.ilike."%a\"b%")         -> parses; \" is the in-quotes escape
+
+So a comma typed into a search box appends conditions to somebody else's OR.
+The fix is to double-quote the value and escape `\` and `"` inside it, which
+`orIlikeContains` does. Note the value crosses **two** unescaping layers —
+PostgREST's unquoting and then Postgres LIKE — so the backslash is doubled;
+`postgrestFilters.test.ts` pins that, because the single-escaped version looks
+right and silently is not.
+
+Separately, `%` and `_` are LIKE wildcards whether or not injection is
+possible, so `escapeLikeTerm` is needed for the `.ilike()` form too — a
+customer called "50% Ltd" typed into an unescaped search matches half the table.
+
+Documented limitation: PostgREST aliases `*` to `%` in like/ilike and there is
+no escape for it, since the substitution happens above Postgres. It could not be
+confirmed empirically — the probe role holds no SELECT grant, so every request
+stops at the permission layer before a row could reveal a match. Recorded in the
+module rather than silently stripped, which is what two of the five escapers this
+replaces did.
+
+**`scripts/check-postgrest-filter-terms.mjs`** — fails any interpolation of a
+term into a like/ilike filter that does not route through the module. Reports
+`[or-filter]` (injection) separately from `[like-pattern]` (wildcards only), so
+the message matches the severity. Carries the same path-containment guard as the
+other gates. Filters on internal values (`.eq.${id}`, `.gte.${iso}`) are
+deliberately not matched.
+
+Five hand-rolled escapers existed across the consumers when this was written —
+one stripped `%` and `,`; one escaped `%`, `_` and `\` but not `,`; one
+stripped `,()*`; two did nothing at all. Each was someone thinking about the
+problem and getting a different subset right, which is the argument for a shared
+implementation over another paragraph of prose.
 ## [2026-08-28]
 
 ### Added

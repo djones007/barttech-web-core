@@ -10,7 +10,7 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsc --outDir .testbuild --module commonjs --target es2022 --skipLibCheck --moduleResolution node --esModuleInterop --types node safeHtml.ts safeHtmlNoDom.ts jsonLd.ts alerting.ts telegram.ts safeHtml.test.ts safeHtmlNoDom.test.ts alerting.test.ts telegram.test.ts && node --test \".testbuild/*.test.js\""
+    "test": "tsc --outDir .testbuild --module commonjs --target es2022 --skipLibCheck --moduleResolution node --esModuleInterop --types node safeHtml.ts safeHtmlNoDom.ts jsonLd.ts alerting.ts telegram.ts postgrestFilters.ts safeHtml.test.ts safeHtmlNoDom.test.ts alerting.test.ts telegram.test.ts postgrestFilters.test.ts && node --test \".testbuild/*.test.js\""
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -105,6 +105,11 @@
       "resources": [],
       "why": "Owns no external resource — it is a list of Next.js redirect rules, consumed by next.config.ts via a RELATIVE import, because the Next config loader does not resolve tsconfig path aliases. A resource match is also the wrong tool here: the thing worth enforcing is that every site SPREADS SHARED_REDIRECTS, which is an ABSENCE, and the inlining gate can only see presence. That check lives in each consumer instead — if public/ holds any .md, next.config.ts must import SHARED_REDIRECTS. Live verification is separate again, in the security-audit agent, because a config that exists is not proof of a config that works."
     },
+    "postgrestFilters": {
+      "owner": "@/web-core/postgrestFilters",
+      "resources": [],
+      "why": "pure string functions over a filter grammar. Owns no external system, so there is nothing to resource-match — the re-implementation risk is covered mechanically instead, by scripts/check-postgrest-filter-terms.mjs, which fails any interpolation of a term into a like/ilike filter that does not route through this module. That gate is the resource match for this one."
+    },
     "reoon": {
       "owner": "@/web-core/reoon",
       "resources": [

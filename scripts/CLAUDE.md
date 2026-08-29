@@ -138,6 +138,27 @@ a CI step that fetches the raw file.
   The template repo is excluded at rollout — it is the source of the
   placeholders, not a consumer of them.
 
+- `check-postgrest-filter-terms.mjs` — flags a **user-typed term interpolated
+  into a PostgREST filter**. `.or()` and `.ilike()` look symmetrical and are not:
+  supabase-js appends an `.ilike()` pattern via `URLSearchParams.append`, so the
+  value is percent-encoded and opaque, whereas `.or()` appends one string that
+  PostgREST then **parses** as a filter expression. Confirmed live before the gate
+  was written: `or=(title.ilike.%a,b%)` returns 400 PGRST100, and
+  `or=(title.ilike.%a%),or(id.gt.0)` **parses** — the trailing text becomes a
+  second disjunct, so a comma in a search box appends conditions to somebody
+  else's OR. Five hand-rolled escapers existed at the time; one stripped `%` and
+  `,`, one escaped `%`, `_` and `\` but not `,`, one stripped `,()*`, and two did
+  nothing — the signature of a rule that needs an implementation rather than more
+  prose. Reports two kinds: `[or-filter]` (the injection; fix with
+  `orIlikeContains` / `orIlikeAnyOf`) and `[like-pattern]` (not injectable, but
+  `%` and `_` are still LIKE wildcards, so "50% Ltd" matches half the table; fix
+  with `escapeLikeTerm`). The condition form is matched **wherever it appears**
+  rather than near a `.or(` — conditions are routinely built in an array and
+  joined several lines later, which is where a proximity-based first draft missed
+  five of them. Filters on internal values (`.eq.${brandId}`, `.gte.${todayIso}`)
+  are deliberately not matched: they were correct, and a gate that fires on
+  correct code is one people learn to skim past. Plain Node, no dependencies.
+
 ## Rules
 
 - **Keep them dependency-free and runnable with a bare `node <file>.mjs`.** They
