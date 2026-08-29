@@ -44,6 +44,13 @@ gate below is line-based and correctly refuses to read escaping that happened on
 the previous line. Contorting the call site to satisfy the gate would have been
 the wrong fix; the missing shape was real.
 
+**`scripts/check-postgrest-filter-terms.mjs`** carries a
+`// postgrest-filter-ok: <reason>` waiver like the other gates here — a value
+matched out of a string by a narrow regex genuinely cannot carry a
+metacharacter, and a gate with no escape hatch gets deleted rather than obeyed.
+A bare annotation with no reason fails: a waiver records a decision, not a
+glance.
+
 **`scripts/check-postgrest-filter-terms.mjs`** — fails any interpolation of a
 term into a like/ilike filter that does not route through the module. Reports
 `[or-filter]` (injection) separately from `[like-pattern]` (wildcards only), so

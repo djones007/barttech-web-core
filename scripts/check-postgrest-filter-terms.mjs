@@ -37,6 +37,18 @@
 // internal values — `.eq.${brandId}`, `.gte.${todayIso}` — are NOT matched and
 // must not be: they were correct, and a gate that fires on correct code is one
 // people learn to skim past.
+//
+// WAIVER
+// A value that provably cannot contain a metacharacter — one matched out of a
+// string by a narrow regex, say — is a real false positive. Annotate it:
+//
+//     // postgrest-filter-ok: ref is /^[0-9a-f]{8}$/ from TICKET_REF_PATTERN
+//
+// on the line itself or the line above. The reason is REQUIRED and a bare
+// annotation fails, because "someone looked at this" and "someone decided this"
+// must not be indistinguishable — same rule as the other gates here. Prefer
+// escaping to waiving where escaping is a no-op: escaping hex costs nothing and
+// survives someone widening the regex later.
 // ---------------------------------------------------------------------------
 
 import { execSync } from 'node:child_process';
@@ -80,6 +92,9 @@ function trackedSourceFiles() {
     .filter((f) => !EXEMPT.test(f));
 }
 
+// `// postgrest-filter-ok: <reason>` — reason required, bare annotation fails.
+const WAIVER = /\/\/\s*postgrest-filter-ok:\s*(\S.*)?$/;
+
 const files = trackedSourceFiles();
 const violations = [];
 for (const file of files) {
@@ -89,10 +104,20 @@ for (const file of files) {
   } catch {
     continue; // deleted between ls-files and read
   }
-  src.split('\n').forEach((line, i) => {
+  const lines = src.split('\n');
+  lines.forEach((line, i) => {
     if (SAFE.test(line)) return;
     const kind = CONDITION.test(line) ? 'or-filter' : BUILDER.test(line) ? 'like-pattern' : null;
-    if (kind) violations.push(`${file}:${i + 1}: [${kind}] ${line.trim().slice(0, 110)}`);
+    if (!kind) return;
+
+    // Waiver on this line or the one above it.
+    const waiver = WAIVER.exec(line) ?? WAIVER.exec(lines[i - 1] ?? '');
+    if (waiver) {
+      if ((waiver[1] ?? '').trim()) return;
+      violations.push(`${file}:${i + 1}: [no-reason] postgrest-filter-ok with no reason given`);
+      return;
+    }
+    violations.push(`${file}:${i + 1}: [${kind}] ${line.trim().slice(0, 110)}`);
   });
 }
 
@@ -109,7 +134,11 @@ if (violations.length > 0) {
       '\nwildcards, so "50% Ltd" silently matches half the table.' +
       '\n  Fix: .ilike("name", `%${escapeLikeTerm(term)}%`)' +
       '\n' +
-      '\nBoth live in @/web-core/postgrestFilters. Do not hand-roll a sixth escaper.'
+      '\nBoth live in @/web-core/postgrestFilters. Do not hand-roll a sixth escaper.' +
+      '\n' +
+      '\n[no-reason] means the waiver annotation is there but says nothing. A' +
+      '\nwaiver records a DECISION, so it must state why the value is safe:' +
+      '\n  // postgrest-filter-ok: ref is /^[0-9a-f]{8}$/ from TICKET_REF_PATTERN'
   );
   process.exit(1);
 }

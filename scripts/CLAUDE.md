@@ -157,7 +157,12 @@ a CI step that fetches the raw file.
   joined several lines later, which is where a proximity-based first draft missed
   five of them. Filters on internal values (`.eq.${brandId}`, `.gte.${todayIso}`)
   are deliberately not matched: they were correct, and a gate that fires on
-  correct code is one people learn to skim past. Plain Node, no dependencies.
+  correct code is one people learn to skim past. Waivers are
+  `// postgrest-filter-ok: <reason>` on the line or the line above, for a value
+  that provably cannot carry a metacharacter (one matched out by a narrow regex);
+  a bare annotation with no reason is **itself** a failure. Prefer escaping to
+  waiving wherever escaping is a no-op — escaping hex costs nothing and survives
+  someone widening the regex later. Plain Node, no dependencies.
 
 ## Rules
 
