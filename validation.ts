@@ -229,7 +229,7 @@ export const DEFAULT_MAX_LENGTHS: Record<string, number> = {
 
 /**
  * True when an address is one of BartMail's optin-health monitor sentinels
- * (`dom+optin-health-<brand>@dcbjones.com`).
+ * (`<user>+optin-health-<brand>@<their-domain>`).
  *
  * The monitor deliberately POSTs through each brand's REAL optin route every 6
  * hours, so it exercises the genuine write path — that is the whole point of it.
