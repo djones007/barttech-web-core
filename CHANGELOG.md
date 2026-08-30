@@ -2,6 +2,54 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-30] — Webhook authentication gate; bartmailPurchase reports duplicates
+
+### Added
+
+**`scripts/check-webhook-verification.mjs`** — CI gate requiring every webhook
+receiver to (a) verify a signature and (b) actually reject on failure.
+
+A webhook URL is public and performs privileged writes — marking an order paid,
+granting course access. The signature check is the only thing between a real
+provider event and anyone with curl. Requiring the *rejection* matters as much
+as the call: a verifier whose result is computed and then ignored reads as
+secure and is not.
+
+It also rejects **fail-open** verification — a route that skips the check when
+no secret is configured. That is secure only while the secret stays configured;
+it turns a config gap into an auth bypass with a `console.warn` as the only
+trace. A missing secret must be an outage (503), which is loud.
+
+Three things the gate got wrong before the estate run corrected it, each kept as
+a comment in the source:
+
+- `\s*` after the annotation colon matches a **newline**, so a bare
+  `// webhook-auth-ok:` swallowed the next line as its "reason" and passed.
+- Matching the fail-open **branch structure** was too brittle to fire on the
+  real route that prompted the gate.
+- Then matching any warn containing "skip" fired on **four healthy routes** —
+  skipping an oversized attachment, a duplicate delivery, a purchase log, a
+  non-commissionable affiliate. The message must now mention both the skipping
+  and *what* is skipped (verification/signature/HMAC/secret). A false positive
+  teaches people to suppress the gate, which is worse than the hole it watches.
+
+### Changed
+
+**`bartmailPurchase` now returns `{ ok, duplicate }`** instead of `boolean`.
+
+The write was always idempotent — a UNIQUE index on
+`purchases.stripe_session_id` — but that was invisible to callers, so a webhook
+could not tell a first delivery from one of Stripe's at-least-once
+redeliveries. Any non-idempotent side effect beside it (an email) fired twice.
+Exposing the flag lets callers gate on the key the database already enforces
+rather than standing up a second dedup store that could drift from it.
+
+`duplicate` is only ever true on a definite 200-with-duplicate; a network error
+or non-2xx gives `{ ok: false, duplicate: false }` — unknown, never
+assumed-duplicate — so a caller gating on it fails toward doing the work.
+
+Callers updated: `the checkout app`, `a consuming app`, `a consuming app`.
+
 ## [2026-08-30] — check-fk-covering-indexes: a foreign key with no index is a full table scan
 
 ### Added

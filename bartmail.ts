@@ -338,7 +338,21 @@ export interface BartmailPurchaseParams {
 
 /**
  * Log a purchase against the contact record. The contact must already exist
- * (call bartmailOptin first). Idempotent on stripe_session_id.
+ * (call bartmailOptin first). Idempotent on stripe_session_id — enforced by a
+ * UNIQUE index on `purchases.stripe_session_id`, not by application logic.
+ *
+ * Returns `{ ok, duplicate }`. `duplicate` is the important half: the write is
+ * already idempotent, but until now that was INVISIBLE to the caller, so a
+ * caller could not tell a first delivery from a replay. Stripe delivers
+ * at-least-once, so a webhook that also sends an email or notification had no
+ * way to avoid sending it twice. Exposing the flag lets a caller gate its own
+ * non-idempotent side effects on the same key the database already enforces,
+ * instead of standing up a second dedup store that could disagree with this one.
+ *
+ * `duplicate` is only ever true on a definite 200-with-duplicate. A network
+ * error or non-2xx yields `{ ok: false, duplicate: false }` — unknown, never
+ * assumed-duplicate, so a caller that gates on it fails toward doing the work
+ * rather than silently skipping it.
  *
  * Returns whether the write was accepted. It used to return `void` and swallow
  * everything in a bare `catch {}` WITHOUT checking the response, so a 401 from
@@ -351,7 +365,14 @@ export interface BartmailPurchaseParams {
  * reason recorded there: silence is what let a write failure run undetected for
  * four days.
  */
-export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<boolean> {
+export interface BartmailPurchaseResult {
+  /** The purchase is recorded upstream (newly, or already). */
+  ok: boolean;
+  /** Definitely a replay of a stripe_session_id already recorded. Never a guess. */
+  duplicate: boolean;
+}
+
+export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<BartmailPurchaseResult> {
   try {
     const bodyStr = JSON.stringify(params);
     const secret = process.env.BARTMAIL_PURCHASES_SECRET;
@@ -378,12 +399,16 @@ export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<
       console.error(
         `[bartmailPurchase] rejected: ${res.status} ${(await res.text()).slice(0, 200)}`
       );
-      return false;
+      return { ok: false, duplicate: false };
     }
-    return true;
+    // `duplicate` comes from the endpoint, which derives it from a 23505 unique
+    // violation on stripe_session_id. Absent (older BartMail deployment) reads
+    // as false — unknown, not duplicate.
+    const body = (await res.json().catch(() => ({}))) as { duplicate?: boolean };
+    return { ok: true, duplicate: body.duplicate === true };
   } catch (err) {
     console.error("[bartmailPurchase]", err instanceof Error ? err.message : String(err));
-    return false;
+    return { ok: false, duplicate: false };
   }
 }
 

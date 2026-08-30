@@ -196,3 +196,19 @@ a CI step that fetches the raw file.
   a bare annotation fails. **It only sees tables whose schema is in the repo** —
   pair it with a live-database check for tables that predate the migrations
   folder. Plain Node, no dependencies.
+
+- `check-webhook-verification.mjs` — requires every webhook receiver to verify a
+  signature AND to reject on failure. A webhook URL is public and does
+  privileged writes, so the signature check is the only thing between a real
+  provider event and anyone with curl; a verifier whose result is computed and
+  never acted on reads as secure and is not. Also rejects **fail-open**
+  verification (skipping the check when no secret is configured), which converts
+  a config gap into an auth bypass — a missing secret must be a 503. Detects
+  receivers by path (`webhook`/`hook`, excluding `cron/`) or by a known
+  signature header, and skips thin re-export routes whose shared handler does
+  the verifying. Exceptions need `// webhook-auth-ok: <reason>` for senders that
+  genuinely cannot sign; a bare annotation fails. Two calibration lessons are in
+  the source: `\s*` after the annotation colon matches a newline (a bare
+  annotation silently captured the next line as its reason), and matching any
+  warn containing "skip" flagged four healthy routes, so the message must name
+  what is being skipped. Plain Node, no dependencies.
