@@ -2,6 +2,48 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-30b] — `claimEmailitSendSlot`: transactional mail must pace too
+
+### Added
+
+**`claimEmailitSendSlot()` in `emailit.ts`** — claim and wait for a send slot before calling
+`sendEmailitEmail`. Emailit's limit is **messages per second per WORKSPACE**, shared by every
+sender on it, so an app sending "only a handful of transactional emails" still competes with
+whatever else is sending right then.
+
+Added after a diagnosed loss, not as a precaution. A double-opt-in confirmation email was sent
+while a 24,000-recipient broadcast was mid-flight through the same workspace at ~100 msg/min. The
+broadcast paced itself through this slot mechanism; the transactional send did not, burned all four
+retry attempts against 429s, and was lost. The recipient never got the only email that could
+activate their entry — and nothing downstream could distinguish that from someone who simply hadn't
+clicked yet.
+
+The counter-intuitive lesson is documented at the function: **low-volume transactional mail needs
+pacing MORE than bulk does, not less.** Bulk failures are retried and counted; a lost confirmation,
+password reset or receipt is a silent, single, unrecoverable event.
+
+**Cost, measured rather than estimated.** The RPC advances `next_send_at` from
+`GREATEST(next_send_at, now())`, so an idle queue hands out the next free slot rather than a place
+behind a backlog. Across 3,500 slot claims taken *during* that 24k broadcast at full rate, the gap
+between claiming a slot and it falling due averaged **below zero** — the queue never ran ahead of
+wall clock, because senders claim one slot per message immediately before sending rather than
+reserving batches. At 5/sec with the standing 0.6 safety factor, a transactional send waits ~333ms.
+
+That holds only while nobody batch-claims ahead of time; a sender reserving thousands up front
+would push `next_send_at` hours out and queue every transactional send behind it. Noted at the
+function as the assumption to re-check.
+
+**Fails open.** If the RPC errors the send proceeds unpaced and the failure is logged and returned —
+a rate limiter that can stop mail entirely is worse than the 429 it prevents.
+
+`SendSlotStore` is declared **structurally** (an `rpc` and a `from().insert()`), so `emailit.ts`
+keeps its zero runtime imports and stays mountable in repos with no Supabase dependency. A real
+Supabase client satisfies it unchanged.
+
+`DEFAULT_SEND_RATE_SAFETY_FACTOR = 0.6` is exported and deliberately identical to the bulk sender's
+value: two senders sharing one workspace budget must derive the same interval, or the safer one
+just yields its slots to the other.
+
 ## [2026-08-30] — Webhook authentication gate; bartmailPurchase reports duplicates
 
 ### Added

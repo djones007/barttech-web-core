@@ -238,3 +238,172 @@ export async function sendEmailitEmail(
   );
   return last;
 }
+
+// ---------------------------------------------------------------------------
+// SEND PACING — claim a slot before an Emailit send.
+//
+// Emailit's rate limit is MESSAGES PER SECOND PER WORKSPACE, not per app and
+// not a concurrency limit. Every sender sharing a workspace shares that one
+// budget, so an app that sends "only a handful of transactional emails" still
+// competes with whatever else is sending at that moment.
+//
+// This exists because of a real, diagnosed loss. A double-opt-in confirmation
+// email was sent while a 24,000-recipient broadcast was mid-flight through the
+// same workspace at ~100 messages/minute. The broadcast paced itself through
+// this slot mechanism; the transactional send did not, exhausted all four
+// retry attempts against 429s, and was lost. The entrant never received the
+// only email that could activate their entry, and nothing in the product could
+// tell that apart from an entrant who simply had not clicked yet.
+//
+// The lesson is the counter-intuitive one: LOW-VOLUME TRANSACTIONAL MAIL NEEDS
+// THIS MORE THAN BULK MAIL DOES, not less. Bulk mail is retried and its
+// failures are counted; a lost confirmation, password reset or receipt is
+// usually a silent, single, unrecoverable event.
+//
+// COST OF PACING, MEASURED (not estimated): the underlying RPC advances the
+// workspace's `next_send_at` by one interval from `GREATEST(next_send_at,
+// now())`, so an idle queue hands out the very next slot rather than a place
+// behind an existing backlog. Across 3,500 slot claims taken during that same
+// 24k broadcast at full rate, the gap between claiming a slot and that slot
+// falling due averaged BELOW ZERO — the queue never ran ahead of wall clock,
+// because senders claim one slot per message immediately before sending rather
+// than reserving batches in advance. At a 5/sec workspace rate the practical
+// cost to a transactional send is ~200ms, one slot.
+//
+// That conclusion depends on nobody batch-claiming slots ahead of time. A
+// sender that reserved thousands up front would push `next_send_at` hours into
+// the future and every transactional send would queue behind it. If you add
+// such a sender, this comment stops being true — give transactional mail its
+// own path before you do.
+//
+// FAILS OPEN, ALWAYS. If the RPC errors the send proceeds unpaced rather than
+// being blocked: a rate limiter that can stop mail entirely is worse than the
+// 429 it prevents. The failure is logged loudly and reported in the return
+// value so callers can count it.
+// ---------------------------------------------------------------------------
+
+/**
+ * The subset of a Supabase client this needs. Declared structurally so this
+ * module keeps its zero runtime imports — it is mounted in repos that have no
+ * Supabase dependency at all, and a real client satisfies this shape as-is.
+ */
+export interface SendSlotStore {
+  rpc(
+    fn: string,
+    args: Record<string, unknown>
+  ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+  from(table: string): {
+    insert(row: Record<string, unknown>): PromiseLike<unknown>;
+  };
+}
+
+export interface ClaimSendSlotOptions {
+  store: SendSlotStore;
+  /** BartMail `brands.id`. The RPC resolves it to the owning workspace itself. */
+  brandId: string;
+  /**
+   * The WORKSPACE's messages/sec (`emailit_workspaces.send_rate`), not the
+   * brand's. Several brands can share one workspace; using a brand-level rate
+   * lets two brands each run a full independent cadence and jointly break the
+   * real limit.
+   */
+  sendRatePerSec: number;
+  /**
+   * Fraction of the nominal rate actually used. Defaults to
+   * DEFAULT_SEND_RATE_SAFETY_FACTOR. Pass the workspace's own
+   * `send_rate_safety_factor` when you have it.
+   */
+  safetyFactor?: number | null;
+  /** Log prefix, e.g. "email:acme-brand". */
+  label?: string;
+  /**
+   * Write a `send_rate_diagnostics` row (assigned slot vs actual fire time).
+   * Defaults true — it is the only ground truth for tuning the safety factor,
+   * and it is fire-and-forget so it cannot delay or fail a send.
+   */
+  recordDiagnostics?: boolean;
+}
+
+export interface ClaimSendSlotResult {
+  /** False when the slot could not be claimed and the send should proceed unpaced. */
+  paced: boolean;
+  waitedMs: number;
+}
+
+/**
+ * Exactly-at-cap, 0.8 and 0.5 all produced live 429s under concurrency before
+ * the diagnostics table existed to show why. 0.33 ran clean; 0.6 has been the
+ * standing value since 2026-07-09. Do not raise it without watching
+ * `send_rate_diagnostics` and error reporting afterwards.
+ *
+ * Kept identical to the value the bulk sender uses. Two senders sharing one
+ * workspace budget must derive the same interval, or the safer one simply
+ * yields its slots to the other.
+ */
+export const DEFAULT_SEND_RATE_SAFETY_FACTOR = 0.6;
+
+/**
+ * Claim and wait for this send's slot. Await it immediately before the send.
+ *
+ * Never throws.
+ */
+export async function claimEmailitSendSlot(
+  opts: ClaimSendSlotOptions
+): Promise<ClaimSendSlotResult> {
+  const label = opts.label ?? "emailit";
+  const factor =
+    typeof opts.safetyFactor === "number" && opts.safetyFactor > 0
+      ? opts.safetyFactor
+      : DEFAULT_SEND_RATE_SAFETY_FACTOR;
+  const effectiveRate = (opts.sendRatePerSec || 2) * factor;
+  const intervalMs = Math.max(1, Math.round(1000 / effectiveRate));
+
+  let slotIso: string | null = null;
+  try {
+    const { data, error } = await opts.store.rpc("claim_send_slot", {
+      p_brand_id: opts.brandId,
+      p_interval_ms: intervalMs,
+    });
+    if (error) {
+      console.error(`[${label}] claim_send_slot failed, sending unpaced:`, error.message);
+      return { paced: false, waitedMs: 0 };
+    }
+    slotIso = typeof data === "string" ? data : null;
+  } catch (err) {
+    console.error(
+      `[${label}] claim_send_slot threw, sending unpaced:`,
+      err instanceof Error ? err.message : String(err)
+    );
+    return { paced: false, waitedMs: 0 };
+  }
+
+  if (!slotIso) return { paced: false, waitedMs: 0 };
+
+  const slotMs = new Date(slotIso).getTime();
+  if (!Number.isFinite(slotMs)) return { paced: false, waitedMs: 0 };
+
+  const waitMs = slotMs - Date.now();
+  if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
+
+  if (opts.recordDiagnostics !== false) {
+    const firedAt = new Date();
+    try {
+      // Fire-and-forget: a diagnostics write must never delay or fail a send.
+      void Promise.resolve(
+        opts.store.from("send_rate_diagnostics").insert({
+          brand_id: opts.brandId,
+          assigned_slot_at: new Date(slotMs).toISOString(),
+          actual_fire_at: firedAt.toISOString(),
+          delta_ms: firedAt.getTime() - slotMs,
+        })
+      ).then(
+        () => {},
+        () => {}
+      );
+    } catch {
+      // Ignored by design.
+    }
+  }
+
+  return { paced: true, waitedMs: Math.max(0, waitMs) };
+}
