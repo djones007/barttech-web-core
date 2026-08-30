@@ -38,8 +38,9 @@
 // a shared secret in the query string is the strongest control available. That
 // is a real design decision, not an oversight, and it needs saying out loud:
 //
-//     // webhook-auth-ok: a vendor cannot set headers or sign; shared secret
-//     // in the URL compared with timingSafeTokenEqual
+//     // webhook-auth-ok: this vendor's webhook config is a single URL box with
+//     // no header field, so a shared secret in the query string compared with
+//     // timingSafeTokenEqual is the strongest control it can support
 //
 // The reason is required. A bare annotation fails — this gate exists because
 // "it looked fine" is how an unauthenticated writer ships.

@@ -20,6 +20,10 @@ no secret is configured. That is secure only while the secret stays configured;
 it turns a config gap into an auth bypass with a `console.warn` as the only
 trace. A missing secret must be an outage (503), which is loud.
 
+Senders that genuinely cannot sign (a vendor whose webhook config is a single
+URL box, with no header field) are a real exception and are annotated with a
+reason rather than silently exempted.
+
 Three things the gate got wrong before the estate run corrected it, each kept as
 a comment in the source:
 
@@ -48,7 +52,7 @@ rather than standing up a second dedup store that could drift from it.
 or non-2xx gives `{ ok: false, duplicate: false }` — unknown, never
 assumed-duplicate — so a caller gating on it fails toward doing the work.
 
-Callers updated: `the checkout app`, `a consuming app`, `a consuming app`.
+All three consuming apps updated.
 
 ## [2026-08-30] — check-fk-covering-indexes: a foreign key with no index is a full table scan
 
