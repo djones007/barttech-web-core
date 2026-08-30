@@ -9,6 +9,22 @@ name: Public Hygiene
 # Runs on push to main only — never on pull_request, so the secret is never
 # exposed to a fork's workflow context. If the secret is missing the job FAILS
 # (fail closed): an unset denylist means the gate is not checking anything.
+#
+# TWO FAILURE MODES, REPORTED SEPARATELY (added 2026-08-30 after a live case).
+# The denylist is a repo SECRET, edited outside CI and only exercised on the
+# next push — so an over-broad entry (a substring of the org name, a module
+# name, a short common word) lands silently and then fails EVERY repo running
+# this gate simultaneously. That is indistinguishable, from the outside, from
+# a real estate-wide leak, and the instinct it provokes is to edit the repos.
+#
+# It happened here: a term matching this repo's own module filename failed the
+# run, matching package.json, README.md and most modules at once. A re-run
+# passed on identical code, because the secret had been corrected in between.
+#
+# The scan now classifies a hit before reporting it, and says which thing to
+# fix. It still fails closed either way — an over-broad term means the gate
+# cannot do its job, which is not a pass — but it never again tells someone
+# their repo is leaking when the denylist is the thing that is wrong.
 
 on:
   push:
@@ -31,17 +47,57 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$ESTATE_DENYLIST" | sed '/^[[:space:]]*$/d' > /tmp/denylist.txt
-          HITS=0
+
+          # Every scannable path, listed once. Used both to size the tree and to spot a
+          # term that matches a FILE NAME — a strong over-broad signal, since this repo's
+          # own module names are public by construction.
+          find . -type f -not -path './.git/*' -not -path './node_modules/*' > /tmp/allfiles.txt
+          TOTAL=$(wc -l < /tmp/allfiles.txt | tr -d ' ')
+
+          LEAKS=0
+          BROAD=0
           while IFS= read -r term; do
+            IDX=$(grep -nxF -- "$term" /tmp/denylist.txt | head -1 | cut -d: -f1)
             MATCHES=$(grep -riIl --fixed-strings --exclude-dir=.git --exclude-dir=node_modules -- "$term" . || true)
-            if [ -n "$MATCHES" ]; then
-              HITS=1
-              # Report the files but never echo the term itself into public logs.
-              echo "::error::Denylisted term #$(grep -nxF -- "$term" /tmp/denylist.txt | cut -d: -f1) found in: $(echo "$MATCHES" | tr '\n' ' ')"
+            [ -z "$MATCHES" ] && continue
+            COUNT=$(printf '%s\n' "$MATCHES" | sed '/^$/d' | wc -l | tr -d ' ')
+
+            # --- Is this a bad TERM rather than a leak? ---------------------------------
+            # A denylist lives in a repo secret, edited outside CI, and is only exercised
+            # on the next push. So an over-broad entry — a substring of the org name, a
+            # module name, a common English word — lands silently and then fails EVERY
+            # repo running this gate at once. That reads as mass estate breakage when it
+            # is a one-character secret edit, which is the single most expensive way this
+            # gate can be wrong. Three signals, any one of which means "fix the secret,
+            # not the repo":
+            NAME_HITS=$(grep -icF -- "$term" /tmp/allfiles.txt || true)
+            STRUCTURAL=0
+            printf '%s\n' "$MATCHES" | grep -qxE '\./(package\.json|package-lock\.json|README\.md)' && STRUCTURAL=1
+            WIDE=0
+            [ "$TOTAL" -gt 0 ] && [ $((COUNT * 4)) -gt "$TOTAL" ] && WIDE=1
+            SHORT=0
+            [ "${#term}" -lt 4 ] && SHORT=1
+
+            if [ "$NAME_HITS" -gt 0 ] || [ "$STRUCTURAL" -eq 1 ] || [ "$WIDE" -eq 1 ] || [ "$SHORT" -eq 1 ]; then
+              BROAD=1
+              # Counts and flags only — never the term, and never the paths. A path can
+              # BE the term (a module filename), which is how the term would leak into a
+              # public log.
+              echo "::error::Denylist term #${IDX} looks OVER-BROAD: matched ${COUNT}/${TOTAL} files (filename-match=${NAME_HITS}, structural=${STRUCTURAL}, wide=${WIDE}, too-short=${SHORT}). This is almost certainly a DENYLIST problem, not a leak in this repo — fix the ESTATE_DENYLIST secret. Do NOT edit the repo to satisfy it."
+              continue
             fi
+
+            LEAKS=1
+            echo "::error::Denylisted term #${IDX} found in: $(echo "$MATCHES" | tr '\n' ' ')"
           done < /tmp/denylist.txt
-          if [ "$HITS" -ne 0 ]; then
+
+          if [ "$BROAD" -ne 0 ]; then
+            echo "::error::At least one denylist TERM is too broad to be meaningful. Every repo running this gate will be failing on it right now. Fix the secret; a green run here needs no repo change."
+          fi
+          if [ "$LEAKS" -ne 0 ]; then
             echo "::error::Tree contains denylisted content. See the private denylist for term numbers."
+          fi
+          if [ "$BROAD" -ne 0 ] || [ "$LEAKS" -ne 0 ]; then
             exit 1
           fi
-          echo "Tree clean against $(wc -l < /tmp/denylist.txt | tr -d ' ') denylisted terms."
+          echo "Tree clean against $(wc -l < /tmp/denylist.txt | tr -d ' ') denylisted terms (${TOTAL} files scanned)."

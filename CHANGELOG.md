@@ -2,6 +2,44 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-30c] — The hygiene gate now tells you whether the repo or the denylist is wrong
+
+### Fixed
+
+**An over-broad denylist term reported as a repo leak.** The term list is a repo SECRET, edited
+outside CI and only exercised on the next push — so a bad entry (a substring of the org name, a
+module name, a short common word) lands silently and then fails **every repo running this gate at
+once**. From the outside that is indistinguishable from a real estate-wide leak, and the instinct
+it provokes is to start editing repos to satisfy it.
+
+It happened here on 2026-08-30: a term matching this repo's own module **filename** failed the run,
+hitting `package.json`, `README.md` and most modules simultaneously. Re-running the same commit
+passed, because the secret had been corrected in between — a green run on identical code, which is
+the tell that the tree was never the problem.
+
+The scan now classifies each hit before reporting it. Four signals mark a term as over-broad rather
+than leaked:
+
+- it matches a **file name** in the tree (this repo's module names are public by construction),
+- it matches a structural file every repo has (`package.json`, `package-lock.json`, `README.md`),
+- it matches **more than a quarter** of all scanned files,
+- it is **shorter than four characters**.
+
+Over-broad terms get their own message naming the secret as the thing to fix, and saying explicitly
+not to edit the repo. Genuine leaks keep the original message and file list.
+
+**It still fails closed in both cases** — an over-broad term means the gate cannot do its job, which
+is not a pass — so this changes what you are told, never whether a leak can slip through.
+
+Over-broad reports print **counts and flags only, never paths**. A path can *be* the term when the
+term matches a filename, which is exactly how the term itself would leak into a public log; the
+existing "never echo the term" rule needed extending to cover that.
+
+Verified against five cases before shipping: clean list; a term matching a module filename
+(reproducing the live incident: 11/56 files, `filename-match=1`); an org-name-shaped term (16/56,
+structural + wide); a genuine single-file leak; and a mixed list, which reports both kinds
+separately in one run.
+
 ## [2026-08-30c] — Genericise a personal email domain in a doc comment
 
 ### Fixed
