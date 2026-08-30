@@ -2,6 +2,50 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-30] — check-fk-covering-indexes: a foreign key with no index is a full table scan
+
+### Added
+
+**`scripts/check-fk-covering-indexes.mjs`** — CI gate requiring every foreign
+key declared in `supabase/migrations` to have an index whose FIRST column is the
+referencing column.
+
+Postgres indexes a PRIMARY KEY and a UNIQUE constraint. It indexes NOTHING on
+the referencing side of a FOREIGN KEY. Without a covering index, every parent
+delete and every join on that column scans the whole child table — silently, at
+full correctness, with no error and no log line.
+
+Found after a 1.7M-row table was measured doing 1,133 sequential scans totalling
+1.25 billion rows read, turning a parent delete into a 1,269ms query. One index
+took the same lookup to an Index Only Scan at 0.162ms. A sweep found the same
+gap in three more databases: 130 unindexed foreign keys.
+
+The gate replays every migration in filename order, tracking foreign keys and
+indexes as they are added, renamed and dropped. Details that took a fix each
+during testing:
+
+- **Multi-clause `ALTER TABLE`.** `ADD COLUMN a text, ADD COLUMN b uuid
+  REFERENCES x` is one statement; a naive scan credits the REFERENCES to `a`.
+  Clauses are split on top-level commas and evaluated individually.
+- **`RENAME TO` is followed**, so an index added to a table under its later name
+  is still credited to the foreign key declared under its earlier one.
+- **Leading column only.** An index on `(a, b)` covers a lookup on `a`; `(b, a)`
+  does not.
+- **Partial indexes are rejected — with one exception.** `WHERE <col> IS NOT
+  NULL` IS accepted: the FK check is `WHERE col = $1`, `=` is strict, so the
+  predicate is implied and Postgres proves it. Confirmed on live databases,
+  which produced `Index Only Scan` for exactly that shape. Every other predicate
+  leaves rows unindexed and fails.
+
+Deliberate exceptions are annotated in the migration with a required reason
+(`-- fk-index-ok: <why>`); a bare annotation is itself a failure.
+
+**Scope limit, stated because it matters:** this reads migration files, so a
+table created outside the migration history is invisible to it. In the incident
+above the worst-affected table predated its repo's migrations folder, so this
+gate alone would not have caught it. It needs pairing with a check that queries
+the live database.
+
 ## [2026-08-29] — postgrestFilters: one escaper for PostgREST search filters
 
 ### Added

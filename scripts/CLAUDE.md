@@ -178,3 +178,21 @@ a CI step that fetches the raw file.
   ordinary-looking one.
 - Same public-repo rule as the rest of this repository: **mechanism only**, no
   organisation names, hostnames, internal repo names, or credentials.
+
+- `check-fk-covering-indexes.mjs` — requires every foreign key in
+  `supabase/migrations` to have an index whose **first** column is the
+  referencing column. Postgres indexes a PRIMARY KEY and a UNIQUE constraint and
+  indexes nothing for a FOREIGN KEY, so without one, every parent delete and
+  every join on that column scans the whole child table — correctly, silently,
+  with no error to notice. Found after a 1.7M-row table logged 1,133 sequential
+  scans totalling 1.25 billion rows read; one index took the lookup from 1,269ms
+  to 0.162ms, and a sweep found 130 unindexed foreign keys across four
+  databases. Replays migrations in filename order and follows `RENAME TO`,
+  splits multi-clause `ALTER TABLE` on top-level commas (so `ADD COLUMN a, ADD
+  COLUMN b REFERENCES x` credits the FK to `b`, not `a`), and accepts a partial
+  index only when its predicate is `<col> IS NOT NULL` — that one implies the
+  FK check's `col = $1` and Postgres proves it, which was verified against live
+  databases rather than assumed. Exceptions need `-- fk-index-ok: <reason>`;
+  a bare annotation fails. **It only sees tables whose schema is in the repo** —
+  pair it with a live-database check for tables that predate the migrations
+  folder. Plain Node, no dependencies.
