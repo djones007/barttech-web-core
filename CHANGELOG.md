@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-30c] — Genericise a personal email domain in a doc comment
+
+### Fixed
+
+- **`validation.ts`** — the optin-health sentinel doc comment named a real
+  personal email domain. This repo is public and carries mechanism only, so the
+  example is now placeholder-shaped.
+
+Found when the estate denylist was regenerated systematically from the five
+categories the hygiene rule names, rather than maintained by hand — the term had
+never been on the hand-written list, so no gate had ever looked for it.
+
 ## [2026-08-30b] — `claimEmailitSendSlot`: transactional mail must pace too
 
 ### Added
