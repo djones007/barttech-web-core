@@ -133,6 +133,15 @@
       "resources": [],
       "why": "the jsdom-free twin of safeHtml, for serverless and edge runtimes where the DOMPurify/jsdom chain throws at module load. Deliberately NO resource match on `sanitizeHtml(`: a direct sanitize-html call is not a re-implementation of this module, it is the same primitive this module wraps, and at least one consumer route calls it directly for exactly the runtime reason this module exists — a gate firing on that would flag the correct code. What must not be re-implemented is the extract-validate-reattach ld+json carve-out, which has no reliable textual signature; the safeHtml entry's DOMPurify match already covers the version of that mistake a gate can see."
     },
+    "sentryNoise": {
+      "owner": "@/web-core/sentryNoise",
+      "resources": [
+        {
+          "match": "iabjs:|Java object is gone|Object Not Found Matching Id|translate_http",
+          "reason": "these are the fingerprints of third-party scripts injected into a page the app did not write \u2014 an in-app-browser bridge, an extension's DOM walker, a translation proxy. They have no reason to appear in application code for ANY other purpose, so a file naming one is a hand-rolled copy of this module's filter. That copy is what the module exists to stop: at consolidation the estate had three filter families spread over the repos, not one repo carried all three, and the iOS and Android halves of the SAME in-app-browser bug had each been found and filtered in a different repo with neither aware of the other. Deliberately NOT matching `window.webkit.messageHandlers` (a plausible legitimate feature-detect for native bridging) or `NEXT_REDIRECT` (legitimately named in middleware and tests) \u2014 a gate that fires on correct code is one people learn to skim past."
+        }
+      ]
+    },
     "security": {
       "owner": "@/web-core/security",
       "resources": [],

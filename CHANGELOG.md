@@ -2,6 +2,56 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-08-31] — `sentryNoise`: one shared "this error is not ours" filter
+
+### Added
+
+- **`sentryNoise.ts`** — `isNoiseEvent(event, hint)`, the shared predicate for a
+  client-side Sentry `beforeSend`. Returns true when an error came from a script
+  injected into the page by something other than the application: an in-app
+  browser's native bridge, a browser extension's DOM walker, a page-translation
+  proxy, or the framework's own redirect control-flow signal. Plus
+  `sentryNoise.test.ts` (14 cases) and a `shared-modules.json` entry.
+
+**Why this is shared rather than per-repo.** A browser error handler catches
+everything that throws on the page, not just what the page shipped, so all of
+this reports against the app's own DSN and none of it is fixable from the
+application side. Every consumer discovered that separately and wrote its own
+filter, and by the time this was consolidated the copies had stopped tracking
+each other: the filters had split into three families across the estate,
+**not one consumer carried all three** (browser-extension noise in seven repos,
+the redirect signal in six, third-party script noise in three), and eight repos
+had no `beforeSend` at all.
+
+The sharpest evidence was one bug found twice. One consumer had independently
+filtered the **iOS** in-app-browser bridge error; another had independently
+filtered the **Android** one. They are the same failure wearing two operating
+systems — a host app injects a navigation-timing script that calls back into
+native code, and on unload that call outlives the native object on the other
+side of the bridge — and each site was reporting the half its neighbour had
+already fixed.
+
+**What was deliberately left out.** Two live per-repo filters were NOT promoted,
+because a match that is safe in one consumer can swallow a real error in
+another: an exact match on a generic network-error message (noise on a marketing
+page, the single most important error on a checkout), and a stack-frame match on
+the filename `script.js` (a name any consumer could legitimately ship).
+`beforeSend` composes — call the shared predicate first, then apply local rules.
+
+**Tests weight the negative cases.** The expensive failure in an error filter is
+not letting noise through, it is deleting a real error, and there is no alert for
+that. So the suite pins application errors that LOOK like the noise: a genuine
+app crash thrown inside an in-app browser (kept — it has application frames), a
+real network failure, an app file named `script.js`, and a message that merely
+mentions a filtered term. `isNoiseEvent` also never throws on a malformed or
+undefined event: a `beforeSend` that throws loses the event *and* the error it
+was reporting.
+
+**No new dependency.** The Sentry event shape is described structurally instead
+of imported — consumers are split across `@sentry/nextjs` and `@sentry/react`
+(deliberately, for bundle size), so there is no single package to import from,
+and golden rule 1b makes an import of a package some consumer lacks a build
+failure in a repo that never uses the module.
 ## [2026-08-30c] — The hygiene gate now tells you whether the repo or the denylist is wrong
 
 ### Fixed
