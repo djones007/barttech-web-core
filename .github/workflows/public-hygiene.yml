@@ -25,6 +25,16 @@ name: Public Hygiene
 # fix. It still fails closed either way — an over-broad term means the gate
 # cannot do its job, which is not a pass — but it never again tells someone
 # their repo is leaking when the denylist is the thing that is wrong.
+#
+# REGEX-ESCAPE BLIND SPOT (found 2026-09-01, closed in this run). `grep
+# --fixed-strings` only matches a denylist term byte-for-byte, so a literal
+# written as REGEX SOURCE — e.g. a domain inside a `new RegExp(...)` pattern,
+# where `example.com` is spelled `example\.com` so the dot doesn't match any
+# character — never matches a denylist term of `example.com`. That is exactly
+# how a hardcoded personal domain sat in this repo's own `validation.ts`
+# through three green runs. The scan now also greps a de-escaped MIRROR of the
+# tree (every `\` immediately before a regex metacharacter stripped), so a
+# regex-escaped literal reads the same as the bare one a denylist term expects.
 
 on:
   push:
@@ -54,11 +64,47 @@ jobs:
           find . -type f -not -path './.git/*' -not -path './node_modules/*' > /tmp/allfiles.txt
           TOTAL=$(wc -l < /tmp/allfiles.txt | tr -d ' ')
 
+          # De-escaped mirror of the tree — see the header comment. Python, not
+          # sed, so this behaves identically regardless of the runner's sed
+          # dialect; a wrong regex here would silently reopen the blind spot.
+          python3 - <<'PYEOF'
+          import pathlib, re, shutil
+
+          pattern = re.compile(r'\\([.^$*+?(){}|\[\]\\])')
+          mirror = pathlib.Path("/tmp/deescaped")
+          if mirror.exists():
+              shutil.rmtree(mirror)
+          mirror.mkdir(parents=True)
+
+          with open("/tmp/allfiles.txt") as fh:
+              rels = [line.rstrip("\n") for line in fh if line.strip()]
+
+          for rel in rels:
+              src = pathlib.Path(rel)
+              dest = mirror / rel[2:] if rel.startswith("./") else mirror / rel
+              dest.parent.mkdir(parents=True, exist_ok=True)
+              try:
+                  text = src.read_text(errors="ignore")
+              except Exception:
+                  try:
+                      shutil.copy(src, dest)
+                  except Exception:
+                      pass
+                  continue
+              dest.write_text(pattern.sub(r"\1", text))
+          PYEOF
+
           LEAKS=0
           BROAD=0
           while IFS= read -r term; do
             IDX=$(grep -nxF -- "$term" /tmp/denylist.txt | head -1 | cut -d: -f1)
-            MATCHES=$(grep -riIl --fixed-strings --exclude-dir=.git --exclude-dir=node_modules -- "$term" . || true)
+            MATCHES_RAW=$(grep -riIl --fixed-strings --exclude-dir=.git --exclude-dir=node_modules -- "$term" . || true)
+            MATCHES_DEESC_RAW=$(grep -riIl --fixed-strings -- "$term" /tmp/deescaped || true)
+            # Map mirror hits back to real repo paths so reporting/classification
+            # (filename match, structural files, path-based signals) stays about
+            # the actual tree, never the scratch mirror.
+            MATCHES_DEESC=$(printf '%s\n' "$MATCHES_DEESC_RAW" | sed 's#^/tmp/deescaped/#./#')
+            MATCHES=$(printf '%s\n%s\n' "$MATCHES_RAW" "$MATCHES_DEESC" | sed '/^$/d' | sort -u)
             [ -z "$MATCHES" ] && continue
             COUNT=$(printf '%s\n' "$MATCHES" | sed '/^$/d' | wc -l | tr -d ' ')
 

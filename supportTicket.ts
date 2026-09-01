@@ -40,8 +40,18 @@
 // (see this repo's own CLAUDE.md). Every consumer must set it.
 // ---------------------------------------------------------------------------
 
+import { isSafeOutboundUrl } from "./security";
+
 const SUPPORT_ENGINE_URL = (process.env.SUPPORT_ENGINE_URL ?? "").replace(/\/+$/, "");
 const SUPPORT_FORM_SECRET = process.env.SUPPORT_FORM_SECRET ?? "";
+
+// SSRF guard: SUPPORT_ENGINE_URL is env-sourced config, and every request to
+// it carries SUPPORT_FORM_SECRET plus the visitor's name/email/message — so a
+// poisoned or mistyped value must not be able to redirect that secret (and
+// their PII) to an attacker-controlled host. Resolved once at module load;
+// `createSupportTicketFromForm` fails closed (returns an error, never
+// throws) when the URL does not pass.
+const SAFE_SUPPORT_ENGINE_URL = isSafeOutboundUrl(SUPPORT_ENGINE_URL) ? SUPPORT_ENGINE_URL : null;
 
 export interface SupportTicketInput {
   /** Brand slug as registered in the destination system. */
@@ -74,13 +84,16 @@ export async function createSupportTicketFromForm(
 ): Promise<SupportTicketResult> {
   if (!SUPPORT_FORM_SECRET) return { ok: false, error: "SUPPORT_FORM_SECRET not configured" };
   if (!SUPPORT_ENGINE_URL) return { ok: false, error: "SUPPORT_ENGINE_URL not configured" };
+  if (!SAFE_SUPPORT_ENGINE_URL) {
+    return { ok: false, error: "SUPPORT_ENGINE_URL is not a valid public https host" };
+  }
 
   const email = (input.email ?? "").trim().toLowerCase().slice(0, 254);
   const message = (input.message ?? "").trim().slice(0, 20_000);
   if (!email || !message) return { ok: false, error: "email and message are required" };
 
   try {
-    const res = await fetch(`${SUPPORT_ENGINE_URL}/api/support/form-ticket`, {
+    const res = await fetch(`${SAFE_SUPPORT_ENGINE_URL}/api/support/form-ticket`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

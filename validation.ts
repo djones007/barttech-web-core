@@ -228,14 +228,33 @@ export const DEFAULT_MAX_LENGTHS: Record<string, number> = {
 };
 
 /**
- * True when an address is one of BartMail's optin-health monitor sentinels
- * (`<user>+optin-health-<brand>@<their-domain>`).
+ * Local-part prefix and domain of the optin-health monitor's sentinel
+ * addresses (`<user>+optin-health-<brand>@<domain>`), read from env rather
+ * than hardcoded — this repo is public, and an owner's personal email domain
+ * is exactly the estate-identifying detail that must never live in source
+ * here (see this repo's CLAUDE.md). Each consumer already sets env per-repo;
+ * unset means `isOptinHealthSentinel` matches nothing, never everything — a
+ * missing config value must fail closed (skip nothing) rather than open.
+ */
+const OPTIN_HEALTH_SENTINEL_USER = process.env.OPTIN_HEALTH_SENTINEL_USER ?? "";
+const OPTIN_HEALTH_SENTINEL_DOMAIN = process.env.OPTIN_HEALTH_SENTINEL_DOMAIN ?? "";
+
+/** Escape a literal string for safe interpolation into a `RegExp` source. */
+function escapeRegExpLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * True when an address is one of the optin-health monitor's sentinels
+ * (`<user>+optin-health-<brand>@<domain>`, where `<user>` and `<domain>` are
+ * `OPTIN_HEALTH_SENTINEL_USER` / `OPTIN_HEALTH_SENTINEL_DOMAIN`).
  *
  * The monitor deliberately POSTs through each brand's REAL optin route every 6
  * hours, so it exercises the genuine write path — that is the whole point of it.
- * The side effect is that any route which emails Dom on a new signup emailed him
- * about a fake one four times a day, and those notifications are indistinguishable
- * from a real lead at a glance. Worse than noise: it trains you to ignore them.
+ * The side effect is that any route which emails the site owner on a new signup
+ * emails them about a fake one four times a day, and those notifications are
+ * indistinguishable from a real lead at a glance. Worse than noise: it trains
+ * you to ignore them.
  *
  * Routes should skip **notification email only** for these addresses — never the
  * contact write, which is the thing being tested. Introduced 2026-07-29 after the
@@ -243,6 +262,9 @@ export const DEFAULT_MAX_LENGTHS: Record<string, number> = {
  * one consumer's site.
  */
 export function isOptinHealthSentinel(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return /^dom\+optin-health-[a-z0-9-]+@dcbjones\.com$/i.test(email.trim());
+  if (!email || !OPTIN_HEALTH_SENTINEL_USER || !OPTIN_HEALTH_SENTINEL_DOMAIN) return false;
+  const user = escapeRegExpLiteral(OPTIN_HEALTH_SENTINEL_USER);
+  const domain = escapeRegExpLiteral(OPTIN_HEALTH_SENTINEL_DOMAIN);
+  const re = new RegExp(`^${user}\\+optin-health-[a-z0-9-]+@${domain}$`, "i");
+  return re.test(email.trim());
 }

@@ -101,6 +101,38 @@ export function isSafePathSegment(slug: string): boolean {
 }
 
 /**
+ * Is `url` safe to `fetch()` when the request carries a credential (an API
+ * key, a shared secret, an HMAC signature)?
+ *
+ * `isSafePublicHost` alone checks the hostname; this also requires `https:`
+ * with no embedded userinfo, because a credential sent over plaintext http is
+ * a network-level leak even to an otherwise-legitimate host. Use this — not
+ * `isSafePublicHost` alone — for exactly the shape this repo's own modules
+ * build: a base URL read from configuration (an env var, a DB column), with a
+ * credential attached to every request sent to it. A poisoned config value
+ * must not be able to redirect that credential to an attacker-controlled host.
+ *
+ * Never throws — an unparseable `url` returns `false`, so a caller can always
+ * treat this as "fail closed, do not fetch".
+ *
+ * Added 2026-09-01 after two config-sourced fetch() targets in this same repo
+ * (`supportTicket.ts`, `cronHeartbeat.ts`) were found sending a credential
+ * with no host check at all, despite `isSafePublicHost` existing for exactly
+ * this reason since 2026-08-01.
+ */
+export function isSafeOutboundUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    if (u.username || u.password) return false;
+    return isSafePublicHost(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Guards against open-redirect attacks on a `next`/`redirect`/`returnTo`
  * query param. Returns a same-site relative path, falling back to `/`.
  */

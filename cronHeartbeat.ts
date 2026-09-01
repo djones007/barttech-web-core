@@ -14,6 +14,8 @@
 // SERVER-SIDE ONLY. It writes with a service-role key.
 // ---------------------------------------------------------------------------
 
+import { isSafeOutboundUrl } from "./security";
+
 /**
  * The four states a scheduled job can report.
  *
@@ -101,6 +103,16 @@ export async function writeCronHeartbeat(opts: HeartbeatOptions): Promise<boolea
   // to prevent.
   if (!url || !key) {
     console.error(`[cron-heartbeat] ${jobName}: url/key not configured — heartbeat NOT written, this job is unmonitored`);
+    return false;
+  }
+
+  // SSRF guard: `url` is caller-supplied config (each consumer's own Supabase
+  // project URL), and every request to it carries the service-role `key` — so
+  // a poisoned or mistyped value must not be able to redirect that key
+  // elsewhere. Same fail-closed shape as the missing-config check above: log
+  // and return false rather than fetch.
+  if (!isSafeOutboundUrl(url)) {
+    console.error(`[cron-heartbeat] ${jobName}: url failed host safety check — heartbeat NOT written, this job is unmonitored`);
     return false;
   }
 

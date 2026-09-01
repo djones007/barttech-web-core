@@ -2,6 +2,43 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-01] — SSRF guard on config-sourced fetch targets; sentinel pattern moved to env; hygiene gate closes a regex-escape blind spot
+
+### Added
+
+- **`security.ts`: `isSafeOutboundUrl(url)`** — the reusable guard for a
+  `fetch()` target read from configuration (an env var, a DB column) when the
+  request carries a credential. Requires `https:` with no embedded userinfo,
+  then defers to the existing `isSafePublicHost` for the hostname check. Never
+  throws — an unparseable URL fails closed, returning `false`.
+
+### Changed
+
+- **`supportTicket.ts` / `cronHeartbeat.ts`** now call `isSafeOutboundUrl`
+  before every fetch. Both build an outbound request from a config-sourced base
+  URL and attach a credential to it (a shared form secret; a Supabase
+  service-role key) but had no host check at all — a poisoned or mistyped URL
+  value could have sent that credential to any host. Both modules already fail
+  closed on missing config (return an error / log and return `false`); this is
+  the same shape applied to an invalid host, not a new failure mode.
+- **`validation.ts`: `isOptinHealthSentinel`** no longer hardcodes an address
+  pattern in source. The local-part prefix and domain now come from
+  `OPTIN_HEALTH_SENTINEL_USER` / `OPTIN_HEALTH_SENTINEL_DOMAIN`; either unset
+  means the function matches nothing (fails closed — skips no notification,
+  rather than skipping every address). This repo is public and must never
+  hardcode an owner's personal domain in source, regardless of how it reads in
+  a doc comment (the JSDoc alone was genericised 2026-08-30; the executable
+  pattern was not, and stayed as the regex-escaped literal a fixed-string CI
+  scan cannot see — see below).
+- **`.github/workflows/public-hygiene.yml`** now also scans a de-escaped mirror
+  of the tree (every `\` immediately before a regex metacharacter stripped)
+  against the same denylist. `grep --fixed-strings` never matched a domain
+  written as regex source (`example\.com` for a denylist term of
+  `example.com`), which is exactly the form that let the `validation.ts`
+  literal above sit through three green hygiene runs. Built with `python3` for
+  the mirror pass rather than `sed`, so behaviour does not depend on the
+  runner's `sed` dialect.
+
 ## [2026-08-31] — `sentryNoise`: one shared "this error is not ours" filter
 
 ### Added
