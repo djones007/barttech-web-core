@@ -15,8 +15,8 @@
 // from runtimes and packages that cannot take that dependency.
 // Do not hoist it back to a top-level import. Requires env: BARTMAIL_SUPABASE_URL,
 // BARTMAIL_SUPABASE_SERVICE_ROLE_KEY (+ BARTMAIL_URL / BARTMAIL_PURCHASES_SECRET
-// for bartmailPurchase/Verify, CONTACT_EVENTS_SECRET for bartmailEvent) — set in
-// each app's env, NEVER committed here.
+// for bartmailPurchase, CONTACT_EVENTS_SECRET for bartmailEvent, CONTACTS_VERIFY_SECRET
+// for bartmailVerify) — set in each app's env, NEVER committed here.
 // Exports: bartmailOptin, bartmailPurchase, bartmailEvent, bartmailVerify.
 // ---------------------------------------------------------------------------
 import { createClient } from "@supabase/supabase-js";
@@ -539,11 +539,35 @@ export async function bartmailEvent(params: BartmailEventParams): Promise<boolea
 }
 
 // Confirm a contact carries a given tag (e.g. the buyer tag) before serving a download.
+//
+// Signs the request when CONTACTS_VERIFY_SECRET is set in the CALLER's env
+// (added 2026-09-01, H-2 security-audit mandatory-auth phase) — same env var
+// name, header and payload shape bartmail's own `/api/contacts/verify` route
+// expects: `x-bartmail-signature: sha256=hmac(secret, "email\ntag")`. Absent
+// a secret, the request goes out unsigned (backward-compatible for any other
+// consumer of this module that never had a reason to set it) — but bartmail's
+// route now REJECTS unsigned requests once its own mandatory-auth branch is
+// merged, so any caller gating real content on this must configure the secret.
 export async function bartmailVerify(email: string, tag: string): Promise<boolean> {
   try {
+    // The route lowercases + trims the email server-side before building its
+    // signed payload, so normalize identically here — otherwise a
+    // differently-cased caller value signs a payload the server never
+    // recomputes, and every signed call 401s.
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const headers: Record<string, string> = {};
+    const secret = process.env.CONTACTS_VERIFY_SECRET;
+    if (secret) {
+      // Lazy import, INSIDE the function — see the module header. Importing
+      // this module must not pull node:crypto into the optin path's graph.
+      const { createHmac } = await import("node:crypto");
+      const signedPayload = `${normalizedEmail}\n${tag}`;
+      headers["x-bartmail-signature"] =
+        `sha256=${createHmac("sha256", secret).update(signedPayload).digest("hex")}`;
+    }
     const res = await fetch(
-      `${await resolveBartmailUrl()}/api/contacts/verify?email=${encodeURIComponent(email)}&tag=${encodeURIComponent(tag)}`,
-      { cache: "no-store" }
+      `${await resolveBartmailUrl()}/api/contacts/verify?email=${encodeURIComponent(normalizedEmail)}&tag=${encodeURIComponent(tag)}`,
+      { cache: "no-store", headers }
     );
     if (!res.ok) return false;
     const data = (await res.json()) as { verified?: boolean };
