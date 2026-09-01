@@ -8,16 +8,14 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 - **`bartmail.ts`: `bartmailVerify(email, tag)`** now sends
   `x-bartmail-signature: sha256=hmac(CONTACTS_VERIFY_SECRET, "email\ntag")`
-  whenever the caller's env has `CONTACTS_VERIFY_SECRET` set — matching what
-  bartmail's `/api/contacts/verify` route (H-2, 2026-09-01 security audit)
-  expects once its mandatory-auth branch merges. Email is trimmed + lowercased
-  before both the query param and the signed payload, matching the route's own
-  normalization, so a differently-cased caller value can't produce a signature
-  the server never recomputes. Absent the secret, the call goes out unsigned as
-  before — additive and backward-compatible for this module's other consumers,
-  which never had a reason to set this var. Enables the two real callers
-  (be-more-boundless's paid-download gate, ownerfoundry-website's Amazon Audit
-  buyer gate) to sign before bartmail's mandatory-auth branch is merged.
+  whenever the caller's env has `CONTACTS_VERIFY_SECRET` set, matching what the
+  verify endpoint requires once its mandatory-auth change lands. Email is
+  trimmed and lowercased before both the query param and the signed payload,
+  mirroring the endpoint's own normalization, so a differently-cased caller
+  value cannot produce a signature the server never recomputes. Absent the
+  secret, the call goes out unsigned as before — additive and backward
+  compatible, so consumers that never set this var are unaffected. This lets a
+  caller adopt signing ahead of the endpoint making it mandatory.
 
 ## [2026-09-01] — SSRF guard on config-sourced fetch targets; sentinel pattern moved to env; hygiene gate closes a regex-escape blind spot
 
