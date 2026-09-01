@@ -77,7 +77,7 @@ jobs:
           # JSON and validates it against the schema, so no escaping is left to
           # the model.
           jq -n --rawfile diff diff-capped.txt --arg sys "$SYSTEM_PROMPT" \
-            '{model: "claude-sonnet-4-6", max_tokens: 4000, system: $sys,
+            '{model: "claude-sonnet-5", max_tokens: 4000, system: $sys,
               tools: [{name: "report_findings",
                        description: "Report the results of the security review.",
                        input_schema: {type: "object",

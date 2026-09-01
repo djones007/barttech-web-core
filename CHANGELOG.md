@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-01b] — Security review runs on Claude Sonnet 5
+
+### Changed
+- **`.github/workflows/security-review.yml` now calls `claude-sonnet-5`** instead of
+  `claude-sonnet-4-6`. Sonnet 4.6 is $3/$15 per 1M tokens against Sonnet 5's $2/$10 for a newer
+  model — strictly dominated on both price and capability, and the weekly security review was the
+  largest remaining consumer of it across the estate.
+
+  Verified against the workflow's exact payload before the change: the forced `report_findings`
+  tool call returns HTTP 200 with `stop_reason: tool_use` and the schema intact. The request sets
+  no `temperature`, `top_p` or `budget_tokens`, all of which Sonnet 5 rejects with a 400 — that
+  compatibility check is the reason this is a safe one-line swap rather than a model migration.
+
+
 ## [2026-09-01] — `bartmailVerify` signs its request when `CONTACTS_VERIFY_SECRET` is set
 
 ### Changed
