@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-01c] — fk-index gate survives an expression index
+
+### Fixed
+
+- **`scripts/check-fk-covering-indexes.mjs` no longer crashes on a partial index whose
+  body is an expression rather than a bare column.** The sparse-FK exception
+  (`WHERE <col> IS NOT NULL`) builds its test by interpolating the index's first column
+  straight into a `RegExp`. For a bare column that is harmless. For an expression index
+  such as `((payload->>'status')) WHERE payload IS NOT NULL`, the extracted token is the
+  fragment `(payload->>`, whose unbalanced `(` makes `new RegExp` throw
+  `SyntaxError: Unterminated group` at module scope — killing the gate before it reported
+  on a single foreign key. The first column is now regex-escaped.
+
+  The escape is a no-op for bare column names, so the accept/reject decision is unchanged
+  everywhere it already worked; an expression index simply fails the sparse test and is not
+  credited as covering a foreign key, which is the conservative and correct outcome.
+  Confirmed against every consuming schema in the estate — 199 foreign keys across 424
+  migrations in 11 repositories, all still verified — and against a fixture where a genuinely uncovered
+  foreign key must still fail: it does, exit 1.
+
+  A crashed gate is worse than a failing one. It exits non-zero, so CI is red and nothing
+  ships, but the red says `SyntaxError` rather than naming an unindexed key — and every
+  other foreign key in the schema goes unchecked while the branch is blocked.
+
 ## [2026-09-01b] — Security review runs on Claude Sonnet 5
 
 ### Changed

@@ -115,6 +115,12 @@ function blank(sql) {
 }
 
 const norm = n => String(n || '').replace(/"/g, '').replace(/^[a-z_][a-z0-9_]*\./i, '').toLowerCase()
+// An index body can be an EXPRESSION rather than a bare column. `((payload->>'status'))`
+// normalises down to the fragment `(payload->>`, and interpolating that into a
+// RegExp throws SyntaxError and takes the whole gate down with it — a crashed gate
+// reports nothing about the FKs it never got to. Escape before building the pattern;
+// bare column names contain no metacharacters, so this is a no-op for them.
+const reEscape = n => String(n).replace(/[.*+?^${}()|[\]\\]/g, m => '\\' + m)
 const cols = s => s.split(',').map(c => norm(c.trim().split(/\s+/)[0])).filter(Boolean)
 
 // Extract the balanced-paren body starting at the '(' at or after `from`.
@@ -275,7 +281,7 @@ for (const file of files) {
     const where = tail.match(/^\s*where\s+([\s\S]*?)(?:;|$)/i)
     if (where) {
       const pred = where[1].trim().replace(/^\(+|\)+$/g, '').trim().toLowerCase()
-      const sparse = new RegExp(`^${columns[0]}\\s+is\\s+not\\s+null$`, 'i')
+      const sparse = new RegExp(`^${reEscape(columns[0])}\\s+is\\s+not\\s+null$`, 'i')
       if (!sparse.test(pred)) continue
     }
     addIndexCols(norm(m[3]), columns, m[2])
