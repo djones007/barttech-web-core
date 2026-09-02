@@ -47,6 +47,15 @@ export interface EmailitSendMessage {
   text?: string;
   reply_to?: string;
   /**
+   * Additional visible recipients.
+   *
+   * Distinct from adding them to `to`: a Cc is understood by the reader as
+   * "copied in", not "addressed", and mail clients thread and quote it
+   * accordingly. Where a message names one recipient in its body, putting a
+   * second person in `to` makes that body read as if written to both.
+   */
+  cc?: string | string[];
+  /**
    * Per-message override of the sending domain's tracking defaults.
    *
    * With click tracking enabled on a domain, the provider rewrites every link in
