@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-07] — `deposit`: the deposit due on a quotation, computed once
+
+### Added
+
+- **`deposit.ts`** — `computeDeposit()`, `depositIsFullValue()`, `depositBearingLines()` and
+  `isMonthlyInstalment()`. Pure arithmetic over line items and a caller-supplied rule.
+
+  It is shared because the figure is computed in two places that must agree: the quotation a
+  customer signs, and the invoice raised from it. Two implementations of the same arithmetic had
+  drifted, so a customer could be shown one amount on the document and billed another. Nothing
+  detects that — both numbers are internally consistent and only wrong beside each other.
+
+  **No commercial policy lives here.** Every value that decides an outcome is passed in by the
+  caller: `fullPercent`, `standardPercent`, `thresholdNet`, and `fullPaymentCategories` — the list
+  of categories payable in full. A consuming app supplies those from its own configuration, so
+  changing a rate or adding a category is a config edit there, never a change to this repo.
+
+  Two behaviours are worth knowing before calling it:
+
+  - **The monthly exemption is keyed on `billingPeriodMonths`, not on `billingType`.** A line
+    billed once a year is a single payment for the period ahead and carries a deposit like any
+    other single payment; only a line billed in monthly instalments is exempt. Keying the
+    exemption on "is it recurring" silently stops charging a deposit on annually-billed lines the
+    moment they gain a period.
+  - **`depositExempt` removes a line from the threshold as well as from the deposit.** An excluded
+    line must not be able to push the rest of the quotation over the threshold and trigger one.
+
+  13 tests in `deposit.test.ts`, registered in `package.json`'s test script and in
+  `shared-modules.json`.
+
 ## [2026-09-01c] — fk-index gate survives an expression index
 
 ### Fixed
