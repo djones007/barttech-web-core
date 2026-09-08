@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08e] — check-post-submit-notice: skip dot-directories in the walker
+
+### Fixed
+- **`scripts/check-post-submit-notice.mjs` reported the same file twice in a
+  real consumer** — once for `app/quiz-thank-you/page.tsx`, once for a stale
+  `.claude/worktrees/<name>/app/quiz-thank-you/page.tsx` checkout left inside
+  the repo. `SKIP_DIRS` named specific tooling directories individually
+  (`.git`, `.next`, `.vercel`, `.turbo`) but `.claude` was not among them, so
+  the walker descended into it like any other source directory. The walker
+  now skips **any** directory whose name starts with `.` — covering
+  `.git`/`.next`/`.vercel`/`.turbo`/`.claude`/`.playwright-mcp` and any future
+  dot-directory without needing to keep enumerating names one at a time.
+  New test in `check-post-submit-notice.test.ts` asserts a match under
+  `.claude/worktrees/x/app/page.tsx` is not reported, while a genuine
+  same-named file elsewhere in the tree still is.
+
 ## [2026-09-08d] — check-post-submit-notice: widen for "where it goes" phrasing
 
 ### Fixed

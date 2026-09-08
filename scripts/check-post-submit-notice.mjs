@@ -63,9 +63,13 @@
 //
 // SCOPE
 // Same tradeoffs as check-unsanitised-html.mjs, whose walker this reuses
-// near-verbatim: `.tsx`/`.jsx` only, skips node_modules/.next/build output/
-// public (vendored bundles), the vendored web-core mount path itself (gated
-// in its own repo), and test files/directories. Matching is per source LINE,
+// near-verbatim: `.tsx`/`.jsx` only, skips node_modules/build output/public
+// (vendored bundles), every dot-directory (`.git`, `.next`, `.vercel`,
+// `.turbo`, `.claude`, `.playwright-mcp` — tooling state, never source; a
+// stale `.claude/worktrees/<name>/…` checkout is exactly the kind of thing
+// this rule exists to stop double-reporting), the vendored web-core mount
+// path itself (gated in its own repo), and test files/directories. Matching
+// is per source LINE,
 // not across a line-wrap boundary — a phrase split by JSX text wrapping onto
 // a second line is a known, accepted gap, same trade as every regex-based
 // gate here: the alternative is a much noisier multi-line window that starts
@@ -153,7 +157,15 @@ const COMMENT_CLOSER = /\*\/\s*\}?\s*$/;
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
-    if (SKIP_DIRS.has(name)) continue;
+    // Any dot-directory is tooling state, not source — `.git`, `.next`,
+    // `.vercel`, `.turbo` are already in SKIP_DIRS by name, but that list is
+    // never exhaustive: a stale `.claude/worktrees/<name>/…` checkout inside
+    // a consumer repo reported the SAME file twice (once real, once from the
+    // worktree copy) because `.claude` was not enumerated. A general rule
+    // covers every present and future dot-directory — `.git`, `.next`,
+    // `.vercel`, `.turbo`, `.claude`, `.playwright-mcp` — without needing to
+    // keep guessing names one at a time.
+    if (name.startsWith(".") || SKIP_DIRS.has(name)) continue;
     const full = join(dir, name);
     const rel = relative(ROOT, full);
     if (SKIP_PATH.test(rel)) continue;

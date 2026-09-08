@@ -112,6 +112,26 @@ test("a bare annotation with no reason does not suppress the finding", () => {
   assert.equal(r.status, 1);
 });
 
+test("a stale .claude worktree checkout is not reported", () => {
+  const r = runAgainst({
+    "app/quiz-thank-you/page.tsx": `
+      export default function Page() {
+        return <p>Welcome — check your spam folder if you don't see the confirmation.</p>;
+      }
+    `,
+    ".claude/worktrees/x/app/page.tsx": `
+      export default function Page() {
+        return <p>Check your spam folder for the confirmation email.</p>;
+      }
+    `,
+  });
+  // The real file is still a genuine finding — only the dot-directory copy
+  // must be excluded.
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /app\/quiz-thank-you\/page\.tsx:\d+/);
+  assert.doesNotMatch(r.stdout, /\.claude/);
+});
+
 test("the web-core mount path is excluded even with unimported copy inside it", () => {
   const r = runAgainst({
     "src/web-core/mailProviderNotice.tsx": `
