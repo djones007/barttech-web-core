@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08c] — check-post-submit-notice: gate hand-written inbox/spam copy
+
+### Added
+- **`scripts/check-post-submit-notice.mjs`** — flags a `.tsx`/`.jsx` file that
+  contains hand-written inbox/spam-folder recovery copy ("check your spam
+  folder", "promotions tab", "safe senders", "add … to your contacts", "mark
+  … not spam/junk") without importing the shared deliverability-notice
+  module or a local `PostSubmitNotice` component. This copy is a
+  deliverability lever, not just UX text — it steers a reader to the exact
+  recovery action their mailbox provider rewards — and it had already
+  drifted into several different phrasings across sites before the shared
+  module existed. A generic promise ("No spam. Unsubscribe any time.")
+  deliberately does not match, since it names no folder/tab/contacts action.
+  Waivers: `// post-submit-notice-ok: <reason>` on the line or the line
+  above; a bare annotation does not suppress. Dependency-free, run with
+  plain `node`, same fetch-and-run shape as the other `scripts/check-*.mjs`
+  gates. Covered by `check-post-submit-notice.test.ts`, wired into `npm test`.
+
 ## [2026-09-08b] — mailProvider: split the notice copy into a browser-safe file
 
 ### Changed

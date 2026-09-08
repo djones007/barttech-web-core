@@ -212,3 +212,25 @@ a CI step that fetches the raw file.
   annotation silently captured the next line as its reason), and matching any
   warn containing "skip" flagged four healthy routes, so the message must name
   what is being skipped. Plain Node, no dependencies.
+
+- `check-post-submit-notice.mjs` — flags **hand-written inbox/spam-folder
+  copy** in a `.tsx`/`.jsx` file that does not import the shared
+  deliverability notice. Any page telling a visitor "if you don't see it,
+  check here" is deliverability copy, not just UX copy — steering someone to
+  the right recovery action for THEIR provider (Promotions-tab drag for
+  Gmail, Safe senders for Outlook, Not Junk for iCloud/Yahoo) is a positive
+  reputation signal a mailbox provider reads about the sending domain, and
+  this exact instruction had already drifted into five different phrasings
+  across sites before the shared module existed. Matches case-insensitive
+  phrases like "check your spam/junk", "spam/junk folder", "promotions tab",
+  "safe senders", "add … to your contacts", "mark … not spam/junk" —
+  deliberately does **not** match a generic deliverability promise ("No spam.
+  Unsubscribe any time.") since that names no folder, tab, or contacts action.
+  A file that imports the notice module directly, or imports/renders a local
+  `PostSubmitNotice`, is trusted wholesale and skipped entirely — the copy
+  living there IS the canonical copy. Comments are blanked before matching,
+  same reasoning as `check-unsanitised-html.mjs`: the files most likely to
+  TALK about this in prose are the ones that got it right. Waivers are
+  `// post-submit-notice-ok: <reason>` on the line or the line above; a bare
+  annotation with no reason does not suppress the finding. Plain Node, no
+  dependencies.
