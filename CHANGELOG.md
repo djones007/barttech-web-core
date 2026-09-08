@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08i] — metaCapi accepts explicit per-brand credentials
+
+### Added
+- **`CAPICredentials { pixelId, accessToken }`, accepted as an optional second
+  argument to `sendCAPIEvent()` and as `credentials` on `sendLandingPageView()`
+  and `isCapiConfigured()`.** When given, the `META_PIXEL_ID` /
+  `META_CAPI_TOKEN` env vars are not consulted at all.
+
+### Changed
+- Nothing else. Every existing call site is unaffected — the parameter is
+  optional and the env path is unchanged when it is omitted.
+
+**Why.** The module could only read its pixel and token from the environment,
+which is right for a single-brand site and impossible for a multi-tenant app:
+one deployment serving many brands holds each brand's pixel id and CAPI token
+in its own database and resolves them per request. Such an app had no way to
+use this module at all, so it wrote its own `fetch` to the events edge — and
+the copy lost the least visible of the things this module does: the rule that
+a CAPI failure logs the HTTP status and Meta's numeric code/type ONLY. Meta
+echoes request context back inside `error.message`, and the request body
+carries the access token and the SHA-256 hashed email, so logging the response
+body puts both into the platform log. A real consumer was doing exactly that
+on its live purchase path; it is being moved onto this module in the same
+sweep. Making the shared module cover the multi-tenant shape is what stops the
+next one being written the same way.
+
 ## [2026-09-08h] — metaCapi: declare the module in shared-modules.json (CI red since 10:39)
 
 ### Fixed

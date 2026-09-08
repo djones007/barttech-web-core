@@ -57,8 +57,32 @@ function capiToken(): string {
   return process.env.META_CAPI_TOKEN ?? "";
 }
 
-/** True when this deployment can send CAPI events. Cheap; safe to call per request. */
-export function isCapiConfigured(): boolean {
+/**
+ * An explicit pixel + token, for a caller that cannot use the env vars above.
+ *
+ * A single-brand site has one pixel and reads it from the environment. A
+ * MULTI-TENANT app does not: it serves many brands from one deployment and
+ * holds each brand's pixel id and CAPI token in its own database, resolved per
+ * request. Without this, such an app has no way to use this module and writes
+ * its own `fetch` to the events edge instead — which is precisely how the
+ * error-logging rule below gets lost, because it is the least obvious of the
+ * things this module does.
+ *
+ * Pass this and the env vars are not consulted at all.
+ */
+export interface CAPICredentials {
+  /** Meta pixel id the event belongs to. */
+  pixelId: string;
+  /** CAPI access token for that pixel. */
+  accessToken: string;
+}
+
+/**
+ * True when CAPI events can be sent — from `creds` if given, otherwise from the
+ * environment. Cheap; safe to call per request.
+ */
+export function isCapiConfigured(creds?: CAPICredentials): boolean {
+  if (creds) return Boolean(creds.pixelId && creds.accessToken);
   return Boolean(pixelId() && capiToken());
 }
 
@@ -132,10 +156,15 @@ export function capiUserDataFromRequest(
 /**
  * Send one event. Resolves whether or not Meta accepted it; the boolean says
  * which. Never throws — see the module note on why.
+ *
+ * `creds` overrides the environment entirely; omit it on a single-brand site.
  */
-export async function sendCAPIEvent(data: CAPIEventData): Promise<boolean> {
-  const id = pixelId();
-  const token = capiToken();
+export async function sendCAPIEvent(
+  data: CAPIEventData,
+  creds?: CAPICredentials
+): Promise<boolean> {
+  const id = creds ? creds.pixelId : pixelId();
+  const token = creds ? creds.accessToken : capiToken();
   if (!token || !id) return false;
 
   const userData: Record<string, string> = {};
@@ -213,13 +242,18 @@ export async function sendLandingPageView(args: {
   url: string;
   contentName: string;
   eventId?: string;
+  /** Per-brand pixel + token; omit on a single-brand site to use the env vars. */
+  credentials?: CAPICredentials;
 }): Promise<boolean> {
-  if (!isCapiConfigured()) return false;
-  return sendCAPIEvent({
-    eventName: "ViewContent",
-    eventId: args.eventId ?? newEventId(),
-    sourceUrl: args.url,
-    ...capiUserDataFromRequest(args.hdrs, args.searchParams),
-    customData: { content_name: args.contentName, content_type: "product_group" },
-  });
+  if (!isCapiConfigured(args.credentials)) return false;
+  return sendCAPIEvent(
+    {
+      eventName: "ViewContent",
+      eventId: args.eventId ?? newEventId(),
+      sourceUrl: args.url,
+      ...capiUserDataFromRequest(args.hdrs, args.searchParams),
+      customData: { content_name: args.contentName, content_type: "product_group" },
+    },
+    args.credentials
+  );
 }
