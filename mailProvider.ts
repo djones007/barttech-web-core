@@ -5,64 +5,21 @@
 //
 // node:dns is imported lazily, inside the async detection function only, so
 // THIS file stays safe to import from a client component that never calls
-// detectMailProvider. The post-submit deliverability notice copy lives in
-// `./mailProviderNotice` instead — a file with NO node imports at all — and
-// is re-exported below so the public surface is unchanged (golden rule 4).
-// A client component must import `mailProviderNotice` directly rather than
-// this file: a client bundle that pulls in this file drags the (unused, but
-// still bundled) `node:dns` import along for the ride.
+// detectMailProvider. The sync domain-map detection (MAIL_PROVIDER_DOMAINS,
+// detectMailProviderFromDomain) lives in `./mailProviderDomains` instead — a
+// file with NO imports at all, not even type-only ones — and the post-submit
+// deliverability notice copy lives in `./mailProviderNotice`. Both are
+// re-exported below so the public surface is unchanged (golden rule 4). A
+// client component that only needs sync detection or notice copy should
+// import `mailProviderDomains`/`mailProviderNotice` directly rather than this
+// file: a client bundle that pulls in this file drags the (unused, but still
+// bundled) `node:dns` import along for the ride.
 // ---------------------------------------------------------------------------
 
 import type { MailProvider } from "./mailProviderNotice";
 export * from "./mailProviderNotice";
-
-/**
- * Consumer email domains mapped to the provider whose webmail/app they use.
- * Sky and AOL mail both run on Yahoo's platform, hence the grouping.
- */
-export const MAIL_PROVIDER_DOMAINS: Readonly<Record<string, MailProvider>> = {
-  "gmail.com": "gmail",
-  "googlemail.com": "gmail",
-  "outlook.com": "outlook",
-  "outlook.co.uk": "outlook",
-  "hotmail.com": "outlook",
-  "hotmail.co.uk": "outlook",
-  "live.com": "outlook",
-  "live.co.uk": "outlook",
-  "msn.com": "outlook",
-  "icloud.com": "apple",
-  "me.com": "apple",
-  "mac.com": "apple",
-  "yahoo.com": "yahoo",
-  "yahoo.co.uk": "yahoo",
-  "ymail.com": "yahoo",
-  "rocketmail.com": "yahoo",
-  "aol.com": "yahoo",
-  "aol.co.uk": "yahoo",
-  "sky.com": "yahoo",
-};
-
-/**
- * Lowercases and trims, splits on `@`. Returns null for anything that is not
- * a plausible `local@domain.tld` shape — no network, no RFC 5322 parsing.
- */
-function extractDomain(email: string): string | null {
-  const trimmed = email.trim().toLowerCase();
-  const parts = trimmed.split("@");
-  if (parts.length !== 2) return null;
-  const [local, domain] = parts;
-  if (!local || !domain) return null;
-  if (/\s/.test(domain)) return null;
-  if (!domain.includes(".") || domain.startsWith(".") || domain.endsWith(".")) return null;
-  return domain;
-}
-
-/** Sync, no network. "unknown" for a malformed address or an unmapped domain. */
-export function detectMailProviderFromDomain(email: string): MailProvider {
-  const domain = extractDomain(email);
-  if (!domain) return "unknown";
-  return MAIL_PROVIDER_DOMAINS[domain] ?? "unknown";
-}
+import { MAIL_PROVIDER_DOMAINS, extractDomain } from "./mailProviderDomains";
+export * from "./mailProviderDomains";
 
 function hasSuffix(host: string, suffixes: readonly string[]): boolean {
   return suffixes.some((s) => host === s || host.endsWith("." + s));

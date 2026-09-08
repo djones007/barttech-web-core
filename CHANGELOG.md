@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08f] — mailProvider: split the sync domain-map into a browser-safe file
+
+### Changed
+- **`MAIL_PROVIDER_DOMAINS`, the private `extractDomain`, and
+  `detectMailProviderFromDomain` moved out of `mailProvider.ts` into a new
+  `mailProviderDomains.ts` with NO imports at all — not even type-only ones.**
+  `mailProvider.ts` lazy-imports `node:dns` for its async MX-fallback path,
+  which is safe there only because the import is inside an async function
+  body; a client component that needs purely-sync, no-MX-lookup provider
+  detection (nothing server-side to await) previously had no way to get just
+  the domain-map behaviour without also importing the file that carries that
+  lazy dns dependency. `mailProvider.ts` now imports `MAIL_PROVIDER_DOMAINS`
+  and `extractDomain` from `./mailProviderDomains` for its own MX-fallback
+  logic and re-exports the whole file (`export *`), so the public surface —
+  every existing import of `mailProvider` — is unchanged.
+- `mailProvider.test.ts` gained a source-invariant test pinning
+  `mailProviderDomains.ts` as import-free (no `import(`, `require(`, `node:`,
+  or any `from "..."` clause), same style as the existing
+  `mailProviderNotice.ts` browser-safety test.
+- `shared-modules.json`: added the `mailProviderDomains` entry (empty
+  `resources`, `why` pointing at the domain-map resource pattern already
+  declared under `mailProvider`).
+
 ## [2026-09-08e] — check-post-submit-notice: skip dot-directories in the walker
 
 ### Fixed

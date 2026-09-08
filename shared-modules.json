@@ -118,6 +118,11 @@
         }
       ]
     },
+    "mailProviderDomains": {
+      "owner": "@/web-core/mailProviderDomains",
+      "resources": [],
+      "why": "MAIL_PROVIDER_DOMAINS and the sync detectMailProviderFromDomain — split out of mailProvider.ts on 2026-09-08 so a client component can do domain-map-only provider detection (no MX fallback available) with zero risk of pulling in the lazy `node:dns` import that file carries for MX lookups. The domain-map resource-detection pattern (a hand-rolled copy of MAIL_PROVIDER_DOMAINS, or a raw dns.resolveMx call) is declared once under the `mailProvider` entry above and covers this file too — same list, same drift risk, just relocated. mailProvider.ts re-exports this whole file, so the public surface is unchanged."
+    },
     "mailProviderNotice": {
       "owner": "@/web-core/mailProviderNotice",
       "resources": [],

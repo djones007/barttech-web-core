@@ -180,3 +180,19 @@ test("mailProviderNotice.ts is browser-safe — no node imports at all", () => {
   assert.doesNotMatch(source, /\brequire\s*\(/, "no require(...)");
   assert.doesNotMatch(source, /\bnode:/, "no node: built-in specifier");
 });
+
+// ---------------------------------------------------------------------------
+// mailProviderDomains.ts is imported directly by client-side code doing sync
+// domain-map detection with no MX fallback available (e.g. a client-only
+// login page). It must have NO imports at all — not even a type-only one —
+// so nothing it does can ever depend on how mailProvider.ts is bundled. Same
+// invariant style as the mailProviderNotice.ts test above, but stricter: it
+// also bans any `from "..."` import clause, not just dynamic import/require.
+// ---------------------------------------------------------------------------
+test("mailProviderDomains.ts is browser-safe — no imports at all", () => {
+  const source = readFileSync(join(process.cwd(), "mailProviderDomains.ts"), "utf8");
+  assert.doesNotMatch(source, /\bimport\s*\(/, "no dynamic import(...)");
+  assert.doesNotMatch(source, /\brequire\s*\(/, "no require(...)");
+  assert.doesNotMatch(source, /\bnode:/, "no node: built-in specifier");
+  assert.doesNotMatch(source, /\bfrom\s*"/, 'no import ... from "..." of any kind, including type-only');
+});
