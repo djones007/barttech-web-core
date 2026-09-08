@@ -35,10 +35,21 @@
 //   safe senders?
 //   add .{0,40} to your contacts
 //   mark (it )?(as )?not (spam|junk)
+//   (land|go|went|filed|hiding|arrive[sd]?|end(s|ed)? up)... (in|under|into) (your |the )?(spam|junk|promotions)
+//   (spam|junk) (or )?(junk|spam)                      — "spam/junk" or "spam or junk" pairs
+//   (look|check) (in )?(your |the )?(promotions|spam|junk)
 //
-// A generic deliverability PROMISE ("No spam. Unsubscribe any time.") is not
-// a folder instruction and deliberately does not match any of the above —
-// it names no folder, tab, or contacts action to take.
+// The middle group ("where the email goes") was added 2026-09-08 after a real
+// consumer's "Sometimes they land in Junk, so keep an eye out." passed clean:
+// it names no folder/tab/contacts action, so none of the first seven phrases
+// matched, even though it is the identical hand-written drift this gate
+// exists to catch — just phrased as where the provider filed the message
+// rather than where to go look for it.
+//
+// A generic deliverability PROMISE ("No spam. Unsubscribe any time.", "we
+// don't spam", "No spam, ever") is not a folder instruction and deliberately
+// does not match any of the above — it names no folder, tab, or contacts
+// action to take.
 //
 // DELIBERATE EXCEPTIONS
 // Annotate the line, or the line directly above it:
@@ -120,6 +131,15 @@ const PHRASE = new RegExp(
     "safe\\s+senders?",
     "add\\s+.{0,40}\\s+to\\s+your\\s+contacts",
     "mark\\s+(it\\s+)?(as\\s+)?not\\s+(spam|junk)",
+    // "Where the email goes" family — added after a real consumer's
+    // "Sometimes they land in Junk, so keep an eye out." passed clean. That
+    // sentence names no folder/tab/contacts action, so none of the phrases
+    // above matched it, even though it is exactly the same hand-written
+    // drift this gate exists to catch: telling the reader where their
+    // provider filed the message.
+    "(land|lands|landed|end(s|ed)?\\s+up|go|goes|went|filed|file|files|hiding|hides|hidden|arrive[sd]?|ends?\\s+up)\\s+(in|under|into)\\s+(your\\s+|the\\s+)?(spam|junk|promotions)",
+    "(spam|junk)\\s+(or\\s+)?(junk|spam)",
+    "(look|check)\\s+(in\\s+)?(your\\s+|the\\s+)?(promotions|spam|junk)",
   ].join("|"),
   "i"
 );

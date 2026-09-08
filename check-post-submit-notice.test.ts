@@ -135,6 +135,83 @@ test("test files are excluded", () => {
   assert.equal(r.status, 0);
 });
 
+// ---------------------------------------------------------------------------
+// Calibration miss found by running the gate against a real consumer: "where
+// the email goes" phrasing ("land in Junk") named no folder/tab/contacts
+// action, so it passed clean even though it is the same hand-written drift
+// this gate exists to catch. These four are the exact strings that surfaced
+// the miss and were used to widen PHRASE.
+// ---------------------------------------------------------------------------
+
+test("'land in Junk' phrasing is a finding", () => {
+  const r = runAgainst({
+    "components/Confirm.tsx": `
+      export function Confirm() {
+        return <p>Sometimes they land in Junk, so keep an eye out.</p>;
+      }
+    `,
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /components\/Confirm\.tsx:\d+/);
+});
+
+test("'check your junk/spam folder' phrasing is a finding", () => {
+  const r = runAgainst({
+    "components/Confirm.tsx": `
+      export function Confirm() {
+        return <p>Don't forget to check your junk/spam folder for our confirmation email.</p>;
+      }
+    `,
+  });
+  assert.equal(r.status, 1);
+});
+
+test("'check your spam folder' after a time window is a finding", () => {
+  const r = runAgainst({
+    "components/Confirm.tsx": `
+      export function Confirm() {
+        return <p>If you don't see it in the next couple of minutes, check your spam folder.</p>;
+      }
+    `,
+  });
+  assert.equal(r.status, 1);
+});
+
+test("'Check your spam folder, or try again' is a finding", () => {
+  const r = runAgainst({
+    "components/Confirm.tsx": `
+      export function Confirm() {
+        return <p>Didn't receive it? Check your spam folder, or try again.</p>;
+      }
+    `,
+  });
+  assert.equal(r.status, 1);
+});
+
+test("'we don't spam' is a promise, not a folder instruction, and stays clean", () => {
+  const r = runAgainst({
+    "components/Footer.tsx": `
+      export function Footer() {
+        return <p>we don't spam, and you can unsubscribe any time.</p>;
+      }
+    `,
+  });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /OK/);
+});
+
+test("'No spam, ever' is a promise, not a folder instruction, and stays clean", () => {
+  const r = runAgainst({
+    "components/Footer.tsx": `
+      export function Footer() {
+        return <p>No spam, ever.</p>;
+      }
+    `,
+  });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /OK/);
+});
+
 test("a clean repo with no matching files reports zero findings", () => {
   const r = runAgainst({
     "components/Hero.tsx": `

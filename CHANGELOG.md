@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08d] — check-post-submit-notice: widen for "where it goes" phrasing
+
+### Fixed
+- **Gate calibration miss in `scripts/check-post-submit-notice.mjs`.** Running
+  the gate against a real consumer surfaced a false clean: "Sometimes they
+  land in Junk, so keep an eye out." named no folder, tab, or contacts
+  action, so none of the original phrases matched it — even though it is the
+  identical hand-written drift the gate exists to catch, just phrased as
+  where the provider filed the message rather than where to go look for it.
+  `PHRASE` now also matches a "where the email goes" family (`land`/`go`/
+  `went`/`filed`/`hiding`/`arrive`/`end(s|ed) up` + `in`/`under`/`into` +
+  `spam`/`junk`/`promotions`), a `spam`/`junk` pairing (`junk/spam folder`,
+  `spam or junk`), and `look`/`check` directly before `promotions`/`spam`/
+  `junk`. A generic deliverability promise ("No spam. Unsubscribe any
+  time.", "we don't spam", "No spam, ever") still stays clean, since none of
+  those name a folder, tab, or contacts action — covered by new negative
+  tests alongside four new positive cases in
+  `check-post-submit-notice.test.ts`.
+
 ## [2026-09-08c] — check-post-submit-notice: gate hand-written inbox/spam copy
 
 ### Added
