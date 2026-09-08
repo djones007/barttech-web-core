@@ -2,6 +2,42 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08j] — `pdfText.ts`: text that is safe to draw with the standard PDF fonts
+
+### Added
+- **`pdfText.ts`** — `pdfSafeText(input)` and `isPdfSafeText(input)`. No external
+  imports, so nothing to install in any consumer (golden rule 1b).
+- **`pdfText.test.ts`** (10 tests) joins `npm test`, now **168**.
+
+**Why.** The 14 standard PDF fonts encode WinAnsi (CP1252) and nothing else, and
+`pdf-lib` THROWS on a character outside it — from `widthOfTextAtSize` as well as
+`drawText`. Two failure modes follow, and every hand-rolled filter so far got the
+second one wrong:
+
+1. **Unguarded input is a total failure, not a cosmetic one.** One stray glyph in
+   a title, a company name or a person's typed name fails the whole render rather
+   than spoiling a line, and a sanitiser applied to body text only leaves the
+   short single-line draw sites open. Measurement throws too, so anything that
+   right-aligns or wraps must sanitise BEFORE measuring.
+2. **Dropping an unencodable character is silent data loss.** A description
+   written as a ✓-prefixed "what's included" list rendered with no marker at all,
+   because U+2713 is not in CP1252. The HTML view showed a ticked list and the PDF
+   — the copy that gets signed and filed — showed an undifferentiated block. So
+   glyphs that carry STRUCTURE are substituted with a mark of the same kind
+   (✓ ✔ ☑ → •, ✗ → x, → → `->`, ≥ → `>=`, non-U+0020 spaces → a real space) and
+   only meaningless ones are dropped.
+
+Curly quotes, en/em dashes and the ellipsis are deliberately **left as written** —
+they are already encodable, and a document that reproduces text verbatim must not
+flatten its own typography.
+
+Embedding a font covering these glyphs was the alternative and is rejected:
+standard fonts mean no font file, and a font file read at runtime is a serverless
+bundling problem that shows up only in production.
+
+Declared in `shared-modules.json` with a resource match on the code-page name, so
+a re-implementation fails the consumer inlining gate rather than quietly drifting.
+
 ## [2026-09-08i] — metaCapi accepts explicit per-brand credentials
 
 ### Added

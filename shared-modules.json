@@ -147,6 +147,15 @@
       "resources": [],
       "why": "Owns no external resource — it is a list of Next.js redirect rules, consumed by next.config.ts via a RELATIVE import, because the Next config loader does not resolve tsconfig path aliases. A resource match is also the wrong tool here: the thing worth enforcing is that every site SPREADS SHARED_REDIRECTS, which is an ABSENCE, and the inlining gate can only see presence. That check lives in each consumer instead — if public/ holds any .md, next.config.ts must import SHARED_REDIRECTS. Live verification is separate again, in the security-audit agent, because a config that exists is not proof of a config that works."
     },
+    "pdfText": {
+      "owner": "@/web-core/pdfText",
+      "resources": [
+        {
+          "match": "x20-\\\\?x7E|WINANSI|WinAnsi",
+          "reason": "a hand-rolled WinAnsi filter is the re-implementation this module exists to stop, and it fails in the direction nobody checks. Every local copy so far DROPPED what it could not encode, which silently deletes the ✓ that prefixes a list item — the document still renders, so nothing reports it. The second half is worse: a copy applied to body text only leaves the measurement and draw calls unguarded, and pdf-lib throws from both, so one stray glyph in a title or a name fails the whole render rather than one line of it. Naming the code page is the reliable signal; a sanitiser that does this has to spell out the repertoire somewhere."
+        }
+      ]
+    },
     "postgrestFilters": {
       "owner": "@/web-core/postgrestFilters",
       "resources": [],
