@@ -133,6 +133,15 @@
       "resources": [],
       "why": "the MailProvider type, the isMailProvider guard, the `?p=` query-param helpers, and the post-submit deliverability notice copy — split out of mailProvider.ts on 2026-09-08 so a client component can import it with zero risk of pulling in the lazy `node:dns` import that file carries for MX lookups. Pure copy and string formatting; owns no external system. mailProvider.ts re-exports this whole file, so the public surface is unchanged."
     },
+    "metaCapi": {
+      "owner": "@/web-core/metaCapi",
+      "resources": [
+        {
+          "match": "graph\\.facebook\\.com/[^\"'\\s]*/events\\b",
+          "reason": "the CAPI events edge only — other Graph edges (/insights, /stats, ad and audience management) are not this module’s and are deliberately not matched. A hand-rolled POST here re-creates four things that took a while to get right: SHA-256 lower-cased/trimmed hashing of email and first name, the `fb.1.<ts>.<fbclid>` fbc derivation that is the whole point of the server path (it survives a consent decline), the shared `eventId` that stops server and browser double-counting the same event, and the error-logging rule — Meta echoes request context back inside `error.message`, so this module logs status and numeric code/type ONLY, never the message and never the body, which carries the access token and hashed PII. It also swallows failures after logging, because a tracking write must never fail the page or the payment that called it."
+        }
+      ]
+    },
     "nextRedirects": {
       "owner": "@/web-core/nextRedirects",
       "resources": [],

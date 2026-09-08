@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08h] — metaCapi: declare the module in shared-modules.json (CI red since 10:39)
+
+### Fixed
+- **`metaCapi` now has a `shared-modules.json` entry.** It was added in
+  `78a276b` (10:39) without one, and the manifest gate — which fails on any
+  root module that is not declared — has failed every CI run on `main` since:
+  seven consecutive reds over 3h30, and two hourly "CI red on main" alerts.
+  Nothing was wrong with the module itself; every other step (lint, typecheck,
+  tests, audit) passed on all seven.
+- The declared resource is the **CAPI events edge only** —
+  `graph.facebook.com/<version>/<pixel>/events`. Other Graph edges are
+  deliberately not matched: `/insights` and `/stats` are read by consuming
+  apps for reporting, and the ad/audience management endpoints are not this
+  module’s. A rule that fired on those is one people would learn to skim past.
+  The pattern was checked against every tracked `.ts`/`.tsx` file across all
+  consumers before being declared: it matches this module, plus one
+  pre-existing hand-rolled copy that predates the module and is being tracked
+  separately. Consumers that import `metaCapi` have registered the resource
+  in the same sweep; none of them has a file the pattern matches, so the
+  inlining gate stays green everywhere.
+
 ## [2026-09-08g] — mailProvider: "later" notice mode, post-submit analytics event, optin auto-stamps mail_provider
 
 ### Added
