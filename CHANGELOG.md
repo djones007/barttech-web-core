@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08] — mailProvider: provider detection + deliverability notice copy
+
+### Added
+- **`mailProvider.ts`**, a new shared module. Turns an email address into a
+  `MailProvider` (`gmail` / `outlook` / `apple` / `yahoo` / `unknown`) —
+  synchronously from a consumer-domain map first, falling back to a raced,
+  cached MX lookup (`node:dns` imported lazily, never at module scope) for
+  custom and business domains. Never throws: any timeout, error, or empty MX
+  result resolves to `unknown`, and only a completed lookup is cached (24h TTL,
+  ~2000-entry cap), so a transient DNS hiccup never pins a domain to `unknown`
+  for a day.
+
+  Also owns `mailProviderNotice()` — the estate's single copy of the
+  post-submit "check your spam/junk folder" copy, phrased per provider (Gmail
+  Promotions-tab, Outlook Safe senders, iCloud/Yahoo Not Junk) across three
+  modes (`asset` / `link` / `confirm`). Consolidates copy that had drifted into
+  five different phrasings across sites; steering the recipient to the exact
+  recovery action their provider rewards is a deliverability signal, not only
+  UX polish. Rendering stays per-consumer, per golden rule 6 (no React here).
+
+  Registered in `shared-modules.json` with two content-pattern resources (a
+  hand-rolled domain-to-provider map, a direct `dns.resolveMx` call) so a
+  consumer's inlining gate can catch a re-implementation once it registers
+  them.
+
 ## [2026-09-07] — `deposit`: the deposit due on a quotation, computed once
 
 ### Added

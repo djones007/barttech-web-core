@@ -105,6 +105,19 @@
       "resources": [],
       "why": "pure escaping before embedding structured data in a script tag. No external system."
     },
+    "mailProvider": {
+      "owner": "@/web-core/mailProvider",
+      "resources": [
+        {
+          "match": "['\"](?:gmail|googlemail|outlook|hotmail|icloud|yahoo)\\.(?:com|co\\.uk)['\"]\\s*:\\s*['\"](?:gmail|outlook|apple|yahoo)['\"]",
+          "reason": "a consumer file mapping specific mailbox domains (gmail.com, hotmail.com, icloud.com, ...) to a provider string is a hand-rolled copy of MAIL_PROVIDER_DOMAINS, and it drifts the moment this module's list is extended (a new consumer domain, a provider consolidation) without the consumer noticing. At least one consumer already carries a local MX-based provider lookup that predates this module (2026-09-08); it registers this resource in its own `.shared-resources.json` with an `allow` entry for its own path until migrated onto this module, rather than the pattern being blocked outright here."
+        },
+        {
+          "match": "dns\\.resolveMx\\s*\\(",
+          "reason": "an MX lookup outside this module has no timeout race and no in-memory cache, and reimplements the suffix-matching providerFromMxHosts owns — three ways to get the same lookup subtly wrong. Same pre-existing consumer and same grandfathering note as above; new callers should go through detectMailProvider."
+        }
+      ]
+    },
     "nextRedirects": {
       "owner": "@/web-core/nextRedirects",
       "resources": [],
