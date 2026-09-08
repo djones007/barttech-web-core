@@ -39,7 +39,7 @@ export function isMailProvider(x: unknown): x is MailProvider {
 // see the file header for why that matters beyond consistency.
 // ---------------------------------------------------------------------------
 
-export type NoticeMode = "asset" | "link" | "confirm";
+export type NoticeMode = "asset" | "link" | "confirm" | "later";
 
 interface ProviderCopy {
   label: string | null;
@@ -98,6 +98,7 @@ function minutesPhrase(minutes: number): string {
 function noticeHeading(mode: NoticeMode, minutes: number): string {
   if (mode === "confirm") return "Can't see the confirmation email? Here is where to look.";
   if (mode === "link") return "Can't see the email with your link? Here is where to look.";
+  if (mode === "later") return "When it arrives, here is where to look if you can't see it.";
   return `Not there in ${minutesPhrase(minutes)}? Here is where to look.`;
 }
 

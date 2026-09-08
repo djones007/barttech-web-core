@@ -20,6 +20,7 @@
 // Exports: bartmailOptin, bartmailPurchase, bartmailEvent, bartmailVerify.
 // ---------------------------------------------------------------------------
 import { createClient } from "@supabase/supabase-js";
+import { detectMailProviderFromDomain } from "./mailProviderDomains";
 
 const BARTMAIL_URL_DEFAULT = "https://bartmail.vercel.app";
 const BARTMAIL_URL_RAW = process.env.BARTMAIL_URL ?? BARTMAIL_URL_DEFAULT;
@@ -137,6 +138,13 @@ export interface BartmailOptinParams {
   /**
    * Extra structured fields stored on the contact record (e.g. a scorecard
    * score). Merged into any existing custom_fields on re-optin, never dropped.
+   *
+   * `mail_provider` is a special key within this bag: `bartmailOptin` always
+   * ensures it is set, from the sync `detectMailProviderFromDomain(email)`
+   * domain-map lookup (never a network MX lookup — that must not sit in the
+   * optin write path), UNLESS this object already sets `mail_provider`
+   * itself, in which case the caller's value is respected as-is. See
+   * `withMailProvider()`.
    */
   custom_fields?: Record<string, string>;
   /**
@@ -148,6 +156,34 @@ export interface BartmailOptinParams {
    * (existing behaviour for every other caller).
    */
   applyOptinTags?: boolean;
+}
+
+/**
+ * Pure helper: ensure `customFields.mail_provider` is set, without clobbering
+ * anything else already in `customFields`. If the caller already set
+ * `mail_provider` (on this call, or — for the update path — on the merged
+ * result of an existing contact's stored fields plus this call's fields),
+ * that value is left exactly as-is; otherwise it is filled in from
+ * `detectMailProviderFromDomain(email)` — the same sync, no-network domain-map
+ * lookup `bartmailOptin` names as `mailProvider` for its own top-of-function
+ * comment. Recomputing it here (rather than threading that value through) is
+ * a deliberate, cheap trade for keeping this function a true black box: a
+ * caller only needs an email and a customFields object to know what it does.
+ *
+ * Extracted as a standalone, dependency-free function (no Supabase, no
+ * network) so it can be exercised by the node test runner directly —
+ * `bartmail.ts` as a whole imports `@supabase/supabase-js` and is not
+ * currently under that runner, but this function needs none of that to be
+ * correct, and correctness here is exactly what a test should pin.
+ */
+export function withMailProvider(
+  customFields: Record<string, string> | undefined,
+  email: string
+): Record<string, string> {
+  if (customFields && Object.prototype.hasOwnProperty.call(customFields, "mail_provider")) {
+    return customFields;
+  }
+  return { ...(customFields ?? {}), mail_provider: detectMailProviderFromDomain(email) };
 }
 
 export async function bartmailOptin(params: BartmailOptinParams): Promise<void> {
@@ -172,6 +208,15 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   } = params;
 
   const supabase = getBartmailSupabase();
+
+  // custom_fields.mail_provider is stamped in below via withMailProvider(),
+  // which calls the SYNC, no-network domain-map lookup in mailProviderDomains
+  // (not the async MX-fallback mailProvider.ts also offers) — a network
+  // lookup must never sit in the optin write path, which is on the critical
+  // path of every form/optin/checkout submission across the estate.
+  // withMailProvider() read-merges rather than replaces, so it never
+  // clobbers an existing contact's other custom_fields, and never overrides
+  // a value the caller already passed as custom_fields.mail_provider.
 
   // Look up brand by slug
   const { data: brandRecord, error: brandError } = await supabase
@@ -223,7 +268,9 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
         // NOT NULL with a '{}' default in BartMail's schema — an explicit null
         // overrides the default and fails the insert, silently killing every
         // optin from a caller that doesn't pass custom_fields. Never send null.
-        custom_fields: custom_fields ?? {},
+        // withMailProvider() also fills in mail_provider (unless the caller
+        // already set it) — see the note above this block.
+        custom_fields: withMailProvider(custom_fields, email),
       })
       .select("id")
       .single();
@@ -251,9 +298,28 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     // Last-write-wins, deliberately unlike the fill-blanks-only fields above:
     // a returning lead's newest quote link must replace the stale one.
     if (quote_url) updates.quote_url = quote_url;
-    if (custom_fields) {
-      // Custom fields always merge in fresh values (e.g. a re-taken scorecard score)
-      updates.custom_fields = { ...(ex.custom_fields ?? {}), ...custom_fields };
+    {
+      // Custom fields always merge in fresh values (e.g. a re-taken scorecard
+      // score) — never a blind replace, or every OTHER key already on the
+      // contact's custom_fields jsonb would be dropped.
+      const existingCustomFields = ex.custom_fields ?? {};
+      const mergedCustomFields = custom_fields
+        ? { ...existingCustomFields, ...custom_fields }
+        : existingCustomFields;
+      // withMailProvider() fills in mail_provider unless it is already present
+      // on the merged result — i.e. unless THIS call's custom_fields set it,
+      // or (having just been spread in above) the existing contact already
+      // had it stored from an earlier optin.
+      const finalCustomFields = withMailProvider(mergedCustomFields, email);
+      // Only write when something actually changes: the caller passed new
+      // fields, or this contact predates mail_provider being tracked and is
+      // being backfilled now. Avoids a no-op write on every routine re-optin.
+      const customFieldsChanged =
+        custom_fields !== undefined ||
+        !Object.prototype.hasOwnProperty.call(existingCustomFields, "mail_provider");
+      if (customFieldsChanged) {
+        updates.custom_fields = finalCustomFields;
+      }
     }
 
     if (Object.keys(updates).length > 0) {

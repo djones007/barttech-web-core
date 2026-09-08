@@ -123,6 +123,11 @@
       "resources": [],
       "why": "MAIL_PROVIDER_DOMAINS and the sync detectMailProviderFromDomain — split out of mailProvider.ts on 2026-09-08 so a client component can do domain-map-only provider detection (no MX fallback available) with zero risk of pulling in the lazy `node:dns` import that file carries for MX lookups. The domain-map resource-detection pattern (a hand-rolled copy of MAIL_PROVIDER_DOMAINS, or a raw dns.resolveMx call) is declared once under the `mailProvider` entry above and covers this file too — same list, same drift risk, just relocated. mailProvider.ts re-exports this whole file, so the public surface is unchanged."
     },
+    "mailProviderEvents": {
+      "owner": "@/web-core/mailProviderEvents",
+      "resources": [],
+      "why": "fires the post-submit deliverability notice's analytics signal (a gtag event, when the site's own gtag already exists, plus a `post-submit-notice` CustomEvent on window regardless). No external system of its own — it only reads `window.gtag` if present and dispatches a DOM event. No imports at all beyond types from mailProviderNotice.ts, deliberately, so a client component can import it directly with zero risk of pulling in mailProvider.ts's lazy `node:dns` dependency."
+    },
     "mailProviderNotice": {
       "owner": "@/web-core/mailProviderNotice",
       "resources": [],

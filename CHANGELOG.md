@@ -2,6 +2,44 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08g] — mailProvider: "later" notice mode, post-submit analytics event, optin auto-stamps mail_provider
+
+### Added
+- **`NoticeMode` gained `"later"`** in `mailProviderNotice.ts`, for a
+  deliverability notice shown before a message has even been sent yet (as
+  opposed to `"asset"`/`"link"`/`"confirm"`, which all assume something was
+  just sent and may already be missing). Heading: "When it arrives, here is
+  where to look if you can't see it." Body and per-provider steps are
+  unchanged — only the heading varies by mode. Every existing export and
+  behaviour is unchanged; new test asserts the `later` heading.
+- **New `mailProviderEvents.ts`**, a browser-safe (no node imports) sibling
+  to `mailProviderNotice.ts`. Exports `PostSubmitNoticeEventKind` (`"view"` |
+  `"resend"`) and `emitPostSubmitNoticeEvent(kind, detail)`, which fires
+  `gtag("event", "post_submit_notice_view" | "post_submit_notice_resend", {
+  mail_provider, notice_mode, brand })` only when `window.gtag` is already a
+  function (this module never loads or stubs gtag itself), and always
+  dispatches a `CustomEvent("post-submit-notice", { detail })` on `window` so
+  a site with no analytics tag configured can still observe the notice being
+  shown or resent. Never throws; no-ops entirely without `window`. As with
+  `consent.ts`/`adPlatforms.ts`, no `declare global` for `gtag` — a local
+  structural type + one cast. Registered in `shared-modules.json`.
+
+### Changed
+- **`bartmailOptin()` in `bartmail.ts` now ensures `custom_fields.mail_provider`
+  is always set**, from the sync, no-network `detectMailProviderFromDomain(email)`
+  domain-map lookup in `mailProviderDomains.ts` — never the async MX-fallback
+  `mailProvider.ts` also offers, because a network lookup must never sit in
+  the optin write path. A caller-supplied `custom_fields.mail_provider` is
+  always respected as-is. The merge logic is extracted into a new pure,
+  exported helper, `withMailProvider(customFields, email)`, so it is
+  testable without touching `@supabase/supabase-js` (which `bartmail.ts` as a
+  whole is not yet under the node test runner for). On the update path, the
+  existing "merge, never replace" behaviour for `custom_fields` is preserved
+  and now also runs (backfilling `mail_provider` alone) even when the caller
+  passes no `custom_fields` at all, for a pre-existing contact that predates
+  this field — the write is skipped when nothing would actually change, to
+  avoid a no-op update on every routine re-optin.
+
 ## [2026-09-08f] — mailProvider: split the sync domain-map into a browser-safe file
 
 ### Changed
