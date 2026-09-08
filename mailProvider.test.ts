@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   isMailProvider,
   detectMailProviderFromDomain,
@@ -162,4 +164,19 @@ test("minutes phrases naturally at 1, 2 and 5+", () => {
   assert.match(one.heading, /a minute\?/);
   assert.match(two.heading, /couple of minutes/);
   assert.match(five.heading, /5 minutes/);
+});
+
+// ---------------------------------------------------------------------------
+// mailProviderNotice.ts is imported directly by client components, so a
+// reintroduced `node:dns` import (or any dynamic import/require) there is a
+// build break waiting to happen the moment a browser bundler tries to resolve
+// it. Pinned the way safeHtmlNoDom.test.ts pins the single-sanitiser-engine
+// invariant: a mistake here fails a test rather than passing silently until
+// someone's client bundle breaks.
+// ---------------------------------------------------------------------------
+test("mailProviderNotice.ts is browser-safe — no node imports at all", () => {
+  const source = readFileSync(join(process.cwd(), "mailProviderNotice.ts"), "utf8");
+  assert.doesNotMatch(source, /\bimport\s*\(/, "no dynamic import(...)");
+  assert.doesNotMatch(source, /\brequire\s*\(/, "no require(...)");
+  assert.doesNotMatch(source, /\bnode:/, "no node: built-in specifier");
 });

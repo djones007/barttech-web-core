@@ -2,6 +2,35 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-08b] — mailProvider: split the notice copy into a browser-safe file
+
+### Changed
+- **`mailProviderNotice.ts` is a new file** carrying the `MailProvider` type,
+  `MAIL_PROVIDERS`, `isMailProvider`, `NoticeMode`, `MailProviderNoticeInput`,
+  `MailProviderNoticeResult`, `mailProviderNotice()`, `MAIL_PROVIDER_PARAM` and
+  `mailProviderQueryParam()` — unchanged, moved out of `mailProvider.ts`. It
+  has no node imports of any kind, pinned by a new test that scans its own
+  source for `import(`, `require(` and `node:`.
+
+  `mailProvider.ts` keeps detection (`MAIL_PROVIDER_DOMAINS`,
+  `detectMailProviderFromDomain`, `providerFromMxHosts`, `detectMailProvider`,
+  `clearMailProviderCache`, `DetectMailProviderOptions`) and re-exports the
+  whole of `mailProviderNotice.ts`, so the public surface is unchanged
+  (golden rule 4) — existing `from "./mailProvider"` imports keep working.
+
+  Reason: the notice copy is meant to be rendered by client components, and
+  `mailProvider.ts` carries a lazy `await import("node:dns")` for the MX
+  fallback. That import is inside an async function body, never at module
+  scope, so it was already safe for a Next.js server component or route
+  handler — but a CLIENT bundler still has to resolve the module graph
+  statically to decide what to include, and a `node:dns` specifier anywhere
+  in that graph is a build break waiting to happen the moment a site renders
+  this notice from `"use client"`. Splitting the copy into a file with zero
+  node imports removes the risk instead of relying on every consumer noticing
+  it. Registered as its own entry, `mailProviderNotice`, in
+  `shared-modules.json` (required by this repo's own manifest-completeness
+  gate for any new root `.ts` file).
+
 ## [2026-09-08] — mailProvider: provider detection + deliverability notice copy
 
 ### Added

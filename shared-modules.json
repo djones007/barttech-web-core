@@ -118,6 +118,11 @@
         }
       ]
     },
+    "mailProviderNotice": {
+      "owner": "@/web-core/mailProviderNotice",
+      "resources": [],
+      "why": "the MailProvider type, the isMailProvider guard, the `?p=` query-param helpers, and the post-submit deliverability notice copy — split out of mailProvider.ts on 2026-09-08 so a client component can import it with zero risk of pulling in the lazy `node:dns` import that file carries for MX lookups. Pure copy and string formatting; owns no external system. mailProvider.ts re-exports this whole file, so the public surface is unchanged."
+    },
     "nextRedirects": {
       "owner": "@/web-core/nextRedirects",
       "resources": [],
