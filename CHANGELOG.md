@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-10g] — Duplicate changelog labels resolved (5 headings)
+
+### Fixed
+- **5 labels in this file named two entries each.** A changelog label is a reference
+  handle — memory files, agent daily logs and other entries cite them — so one label resolving to two
+  entries is a broken reference. Renamed:
+  - `2026-08-30c` → `2026-08-30d`
+  - `2026-08-08c` → `2026-08-08g`
+  - `2026-08-08b` → `2026-08-08f`
+  - `2026-08-06d` → `2026-08-06h`
+  - `2026-07-25h` → `2026-07-25l`
+
+### Notes
+- **The member a citation points at KEEPS its label.** Every citation of every colliding label was
+  read first, across `memory/`, `agents/` and all 26 changelogs, and the OTHER member was renamed.
+  Where nothing cited the label, the older (lower) entry was renamed, so the one a reader meets first
+  scanning newest-first keeps the established label.
+- **Entry bodies were not touched.** Proved twice: the file with all `## [` headings stripped is
+  byte-identical before and after, and the diff contains zero non-heading lines.
+- Estate-wide this pass cleared **67 collisions across 17 repos**; `node
+  tools/check-changelog-labels.js` now reports zero. The 339 dates that reuse a plain unlettered
+  label are the older same-day style and are deliberately left alone.
+- New collisions can no longer be created: `.claude/hooks/guard-changelog-labels.js` blocks a write
+  that would duplicate a label and names the letter to use instead.
+
 ## [2026-09-10f] — Removed: `aiTells.ts`
 
 ### Removed
@@ -664,7 +689,7 @@ Verified against five cases before shipping: clean list; a term matching a modul
 structural + wide); a genuine single-file leak; and a mixed list, which reports both kinds
 separately in one run.
 
-## [2026-08-30c] — Genericise a personal email domain in a doc comment
+## [2026-08-30d] — Genericise a personal email domain in a doc comment
 
 ### Fixed
 
@@ -1187,7 +1212,7 @@ Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one ha
   fired precisely when the security tooling changed. Findings now come back as a forced tool call
   against a declared schema, so the API serialises and validates the JSON.
 
-## [2026-08-08c] — `crossSiteRequestError`: refuse state changes another site initiated
+## [2026-08-08g] — `crossSiteRequestError`: refuse state changes another site initiated
 
 ### Added
 - `crossSiteRequestError(req)` in `validation.ts`. Returns a 403 error object when a browser made
@@ -1205,7 +1230,7 @@ Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one ha
   is a third layer, not a replacement for auth or SameSite — and it is the layer that still holds if a
   cookie is ever widened to SameSite=None for an embed or a payment return.
 
-## [2026-08-08b] — Fixed: the hygiene gate was failing on this repo
+## [2026-08-08f] — Fixed: the hygiene gate was failing on this repo
 
 ### Fixed
 - `nextRedirects.ts` and `supportTicket.ts` carried content this repo must not publish, and the
@@ -1414,7 +1439,7 @@ Two deliberate properties:
 Generic by construction — a table name, a URL and a key, supplied by the caller from its own env.
 No product or business specifics, which is what makes it appropriate here.
 
-## [2026-08-06d] — `cronHeartbeat.ts`: the shared silent-death signal
+## [2026-08-06h] — `cronHeartbeat.ts`: the shared silent-death signal
 
 ### Added
 - **`cronHeartbeat.ts` — `writeCronHeartbeat()`.** A scheduled job that dies quietly produces no error
@@ -1934,7 +1959,7 @@ The second blocker still stands — that engine repo is itself a submodule of mo
 
 Behaviour is unchanged. With no signing secret the signature was `undefined` before and is `undefined` now, and the import never executes. `tsc --noEmit` and `eslint` both stay clean.
 
-## [2026-07-25h] — adPlatforms: document that the `next.config.ts` import works
+## [2026-07-25l] — adPlatforms: document that the `next.config.ts` import works
 
 ### Changed
 - `adPlatforms.ts` — the `AD_CSP_HOSTS` doc block now shows the exact `next.config.ts` import line and states plainly that a relative `.ts` import from `next.config.ts` **works**, so the hostnames must never be copied inline again.
