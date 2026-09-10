@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-10b] — Patch the high-severity js-yaml advisory blocking every push
+
+### Fixed
+- **`js-yaml` 4.3.1 → 4.3.2** (lockfile only). Clears **GHSA-2883-xcg3-v3hh** —
+  high severity, `maxTotalMergeKeys` does not limit CPU use for empty merge
+  sources. Reached transitively through `eslint > @eslint/eslintrc`.
+- **This was failing CI on every push to this repo**, which is the shared-module
+  repo the whole estate consumes — so it blocked unrelated work, not just its
+  own. Unlike the other repos' audit gates, this one runs on every push and
+  without `--omit=dev`. That is correct here and deliberately left alone: this
+  repo is source-only and has **no runtime dependencies at all**, so an
+  `--omit=dev` audit would check nothing and the gate would be vacuous.
+
+Lint, typecheck, all 173 tests and the public-repo hygiene guard pass unchanged.
+
 ## [2026-09-10] — `consentBannerSize.ts`: how much of a phone a cookie banner may cover, and a gate that it is measured
 
 ### Added
