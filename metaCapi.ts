@@ -99,6 +99,17 @@ export interface CAPIEventData {
   eventName: string;
   /** Share this with the browser pixel for the same event to dedupe. */
   eventId: string;
+  /**
+   * Unix SECONDS the event actually happened. Omit for a live event and it is
+   * stamped "now" at send time. Set it on a BACKFILL — an order reconciled from
+   * a payment provider hours after the sale — so Meta attributes it to the
+   * purchase time, not the sync time; otherwise every backfilled event lands in
+   * the wrong attribution window and the wrong hour of the day. Passed through
+   * as given (floored to an integer): Meta itself rejects anything older than 7
+   * days or in the future, and the caller owns that validation. A non-finite
+   * value falls back to "now" rather than failing the send.
+   */
+  eventTime?: number;
   sourceUrl: string;
   email?: string;
   firstName?: string;
@@ -189,7 +200,11 @@ export async function sendCAPIEvent(
     data: [
       {
         event_name: data.eventName,
-        event_time: Math.floor(Date.now() / 1000),
+        event_time: Math.floor(
+          data.eventTime !== undefined && Number.isFinite(data.eventTime)
+            ? data.eventTime
+            : Date.now() / 1000
+        ),
         event_id: data.eventId,
         event_source_url: data.sourceUrl,
         action_source: "website",

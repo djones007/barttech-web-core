@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-10h] — `metaCapi.ts`: a CAPI event can now carry its own `event_time`
+
+### Added
+- **`CAPIEventData.eventTime?: number`** — unix seconds the event actually happened. `sendCAPIEvent`
+  puts it in the Graph API payload as `event_time`, floored to an integer; when absent (or
+  non-finite) the payload is stamped "now" exactly as before. Purely additive: every existing call
+  site, including `sendLandingPageView`, is unchanged.
+
+### Why
+A backfilled event — a Purchase reconciled from a payment provider's order feed hours after the
+sale, for a buyer who never reached the thank-you page — was reporting to Meta as happening at
+sync time, not purchase time. The consumer route that sends those already validates the caller's
+`event_time` against Meta's own 7-day/no-future rules but had no way to pass it through, so every
+backfill landed in the wrong attribution window and the wrong hour of the day. The caller owns that
+validation; this module passes the value through as given.
+
+### Notes
+- Proven with a scratch harness (compiled module, `fetch` captured, `server-only` stubbed): absent →
+  now; supplied → verbatim; float → floored; `NaN` → now, send still made. Not committed as a test
+  file because this module's `import "server-only"` (present since it was written, contrary to golden
+  rule 5) cannot resolve under `node --test` — moving that guard into the consumer shims is the
+  prerequisite for a permanent `metaCapi.test.ts`.
+
 ## [2026-09-10g] — Duplicate changelog labels resolved (5 headings)
 
 ### Fixed
