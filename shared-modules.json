@@ -18,6 +18,11 @@
       "resources": [],
       "why": "NOT expressible as a resource match, and the attempt is worth recording. A rule on the platform hostnames was tried and flagged 17 sites across 11 repos, every one legitimate: the cookie-banner component (deliberately per-repo, because brand styling differs — and it is what actually loads the tags), the CSP host lists this module exports constants for, and Playwright assertions naming the hosts they expect to be absent before consent. The real contract here — 'adding a platform is ONE entry in AD_PLATFORMS' — is about where a REGISTRY ENTRY goes, not about who may name a hostname. A gate cannot see that distinction, and a rule firing on 17 correct sites is one people would disable. Enforced by review and by repo CLAUDE.md instead."
     },
+    "aiTells": {
+      "owner": "@/web-core/aiTells",
+      "resources": [],
+      "why": "a pure text scorer (deterministic AI-writing-tell detectors + computed readability). No external system, nothing to call or write to — there is nothing to resource-match. Consumes ./emailit's htmlToText for stripHtmlForScoring but that is an in-repo import, not an external resource. Ships no per-brand voice map by design (golden rule 1) — a consumer keeps its own brand/tenant-keyed VoiceConfig map and passes the resolved config in. Has a CommonJS twin outside this repo for a scheduled-task runner that cannot import TypeScript; the two must change together — same detector ids, weights and thresholds, or the two disagree about the same piece of copy."
+    },
     "admin": {
       "owner": "@/web-core/admin",
       "resources": [],

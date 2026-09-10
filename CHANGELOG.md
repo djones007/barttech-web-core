@@ -2,6 +2,47 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-10e] — `aiTells.ts`: a deterministic score for AI writing tells
+
+### Added
+- **`aiTells.ts`** — `scoreText(text, opts)`, a pure, dependency-free port of a
+  purchased reference pack's `ai-tells.js` for the estate's Next apps. Sixteen
+  weighted detectors (machine-even sentence rhythm, an AI-vocabulary cluster,
+  formatting overuse, negation pivots, vague attribution, hedge stacks,
+  unearned praise adjectives, em-dash rate, conjunctive openers, the wrap-up
+  reflex, announced payoffs/cliche openers, punctuation tics, superficial
+  "-ing" tails, copula avoidance, "quiet/quietly" gravitas, rule-of-three
+  stacks) plus one zero-tolerance chat-artifact check, and a computed
+  Flesch-Kincaid readability grade kept as a separate axis from the 0-100
+  score. Same detector ids, weights and thresholds as a parallel CommonJS
+  port kept outside this repo for a scheduled-task runner that cannot import
+  TypeScript — the two files are the same spec in two runtimes and must
+  change together.
+- **`DEFAULT_VOICE`** — the safe default (`emDash: "zero"`, among others) for
+  a caller that has not resolved its own voice config yet. Deliberately ships
+  **no per-brand/tenant voice map**: which brand bans which word or sanctions
+  which phrase is product-specific policy, so it stays in the consuming app's
+  own code (golden rule 1) and is passed in as a plain `VoiceConfig` override.
+- **`stripHtmlForScoring(html)`** — delegates to this repo's own `htmlToText`
+  (`emailit.ts`) rather than a naive tag-strip, so block-level tags still
+  become paragraph breaks and entities are decoded before the text reaches
+  the sentence/paragraph splitter the detectors depend on.
+- **Calibration contract, pinned in `aiTells.test.ts`**: a genuine human
+  sample scores clean (< 12), constructed slop scores high (> 45) and hard
+  fails on the chat-artifact check, every detector fires on at least one
+  fixture and stays quiet on the false-positive guards (a single word-list
+  hit, a single em dash under `emDash: "rate"`, a single earned adjective,
+  one hedge, one negation pivot, a sanctioned signature phrase), and
+  `stripHtmlForScoring` is exercised against an HTML email body shape.
+- Declared in `shared-modules.json` (no external resources — a pure text
+  scorer, nothing to call or write to).
+
+### Why
+Nothing in the estate measured whether marketing copy reads as AI-written
+before it ships. This module is the mechanical half of that check — a
+consuming app's own conversion/voice review layers on top of it, and owns
+its own per-brand thresholds and voice map.
+
 ## [2026-09-10d] — A server-side page view now refuses bots, prefetches and crawlers
 
 ### Fixed
