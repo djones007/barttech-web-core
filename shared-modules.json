@@ -64,6 +64,11 @@
         }
       ]
     },
+    "consentBannerSize": {
+      "owner": "@/web-core/consentBannerSize",
+      "resources": [],
+      "why": "owns a THRESHOLD and a measurement, not an external system — there is nothing to write to and nothing to call. The re-implementation worth forbidding is a spec that retypes the percentage instead of importing it, and that is not a resource match: it is caught by scripts/check-consent-banner-size.mjs, which requires the constant to arrive via an import from this module and fails a spec that merely names the same number."
+    },
     "cronHeartbeat": {
       "owner": "@/web-core/cronHeartbeat",
       "resources": [

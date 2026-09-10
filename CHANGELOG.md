@@ -2,6 +2,46 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-10] — `consentBannerSize.ts`: how much of a phone a cookie banner may cover, and a gate that it is measured
+
+### Added
+- **`consentBannerSize.ts`** — `MAX_CONSENT_BANNER_COVERAGE_PCT` (20),
+  `CONSENT_BANNER_TEST_VIEWPORT` (390×844), `measureConsentBanner()` and
+  `consentBannerCoverageMessage()`. No React, no styling, no external imports
+  (golden rules 1b and 6) — the banner component stays per-repo, only the
+  threshold and the measurement are shared.
+- **`scripts/check-consent-banner-size.mjs`** — a repo that ships a consent
+  banner must have the runtime assertion wired, importing the constant rather
+  than retyping it, and reachable from a script some workflow runs. Silent in a
+  repo with no banner. Escape hatch: `.consent-banner-baseline`.
+- **`consentBannerSize.test.ts`** (5 tests) joins `npm test`, now **173**.
+
+**Why a shared number.** A banner's height is not something anyone chooses — it
+is what the component does once its prose runs a paragraph long and its three
+buttons stack on a narrow screen. Measured across sibling sites built from the
+same scaffold, banners ran from **173px to 462px on one 390×844 viewport: 20% to
+55% of the screen**, with no deliberate design change between them. Past roughly
+a fifth of the viewport the banner sits on top of the hero's call to action, so a
+visitor arriving from a paid click lands on what is functionally an interstitial:
+a headline, a wall of cookie text, and both next actions behind a dismissal.
+
+**Why the gate does not grep for the height.** Coverage is a rendered property —
+it falls out of font size, prose length, button direction, padding and viewport
+together, and two components with identical class lists measure differently
+because one has a longer sentence. Any regex broad enough to catch the bad ones
+fires on good ones, and a rule that fires on correct code is a rule people
+disable. So the measurement is a Playwright assertion against the real page, and
+the static gate enforces the one thing a runtime test cannot prove about itself:
+**that it was installed at all.**
+
+**This does not shrink the banner by removing the choice.** Equal prominence is
+about the CONTROLS — putting Accept and Reject side by side instead of stacked
+makes the banner shorter *and* the equality more obvious. "Informed" is satisfied
+by naming the purposes and linking the policy; six lines of the same information
+is not more lawful, only taller. `consentBannerCoverageMessage()` says so in the
+failure text, because the fastest way to hit a size budget is the unlawful one
+and the message is where that gets closed off.
+
 ## [2026-09-08j] — `pdfText.ts`: text that is safe to draw with the standard PDF fonts
 
 ### Added
