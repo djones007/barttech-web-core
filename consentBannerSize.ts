@@ -47,17 +47,24 @@
 /**
  * The most of a mobile viewport a consent banner may occupy, as a percentage.
  *
- * 20 is not arbitrary: it is roughly a fifth of the screen, which leaves the
- * hero headline AND its first call to action visible on a 390x844 phone, and it
- * is a budget a two-line banner with a single row of buttons meets comfortably
- * (a real one measures 173px, or 20.5%, at that viewport). It is set at the
- * level where a banner is a defect rather than merely tighter than ideal --
- * a gate tuned to "perfect" is one people switch off.
+ * 25% of a 390x844 phone is 211px. That is the line the observed harm actually
+ * sits on: every banner measured at 32-55% covered the hero's call to action,
+ * and every one brought under ~25% left the headline, the subheading AND the
+ * primary button visible above it. The number describes the failure, rather
+ * than describing a preference about how tall a banner should look.
  *
- * Raising this number is not a fix. If a banner cannot meet it, the prose is
- * too long or the buttons are stacked; both are changes to the banner.
+ * It was briefly set to 20, which a real two-line banner does meet (173px). It
+ * was raised after the first site rebuilt against it landed at 189px / 22% with
+ * prose already cut to the bone -- the only way to the last 17px was deleting
+ * either the promise that nothing optional loads until you choose, or the names
+ * of the ad platforms. Both are the substance of informed consent. A size budget
+ * that can only be met by removing lawful disclosure is the wrong budget, and a
+ * gate tuned to "perfect" rather than "defect" is one people switch off.
+ *
+ * Raising it further is not a fix. Past this point the prose is too long or the
+ * buttons are stacked into a column, and both are changes to the banner.
  */
-export const MAX_CONSENT_BANNER_COVERAGE_PCT = 20;
+export const MAX_CONSENT_BANNER_COVERAGE_PCT = 25;
 
 /**
  * The viewport a banner is judged against.

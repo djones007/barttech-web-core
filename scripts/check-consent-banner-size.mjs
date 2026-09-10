@@ -8,7 +8,7 @@
 // component does once its prose runs a paragraph long and its buttons stack on
 // a narrow screen. Measured across a set of sibling sites built from the same
 // scaffold, banners ranged from 173px to 462px on a single phone viewport: 20%
-// to 55% of the screen. Nobody picked 55%. Above roughly a fifth of the
+// to 55% of the screen. Nobody picked 55%. Past roughly a quarter of the
 // viewport the banner sits on top of the hero's call to action, so traffic
 // arriving from a paid click lands on what is functionally an interstitial —
 // a headline, a wall of cookie text, and both next actions behind a dismissal.
@@ -151,7 +151,7 @@ if (problems.length) {
   console.log(
     `::error::This repo ships a consent banner but does not measure how much of a phone screen it` +
       ` covers. A banner's height is not chosen — it is what the component does once its prose runs` +
-      ` long and its buttons stack, and past roughly a fifth of the viewport it sits on top of the` +
+      ` long and its buttons stack, and past roughly a quarter of the viewport it sits on top of the` +
       ` hero's call to action, so paid traffic lands on an interstitial. Add the runtime assertion:` +
       ` import { measureConsentBanner, MAX_CONSENT_BANNER_COVERAGE_PCT, CONSENT_BANNER_TEST_VIEWPORT,` +
       ` consentBannerCoverageMessage } from "@/web-core/consentBannerSize", assert it in a Playwright` +

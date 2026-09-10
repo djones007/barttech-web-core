@@ -164,6 +164,28 @@ a CI step that fetches the raw file.
   waiving wherever escaping is a no-op — escaping hex costs nothing and survives
   someone widening the regex later. Plain Node, no dependencies.
 
+- `check-consent-banner-size.mjs` — a repo that ships a **consent banner** must
+  measure how much of a phone screen it covers. A banner's height is not a
+  property anyone chooses: it is what the component does once its prose runs a
+  paragraph long and its three buttons stack on a narrow screen. Measured across
+  sibling sites built from one scaffold, banners ran **173px to 462px on a single
+  390×844 viewport — 20% to 55% of the screen** — with no deliberate design change
+  between them. Past roughly a quarter of the viewport the banner sits on top of
+  the hero's call to action, so traffic from a paid click lands on what is
+  functionally an interstitial. **The gate deliberately does not grep for the
+  height**: coverage falls out of font size, prose length, button direction,
+  padding and viewport together, and two components with identical class lists
+  measure differently because one has a longer sentence — any regex broad enough
+  to catch the bad ones fires on the good ones. So the measurement is a Playwright
+  assertion against the real page (`measureConsentBanner` +
+  `MAX_CONSENT_BANNER_COVERAGE_PCT` from `consentBannerSize.ts`), and this script
+  enforces the one thing a runtime test cannot prove about itself — **that it was
+  installed at all**: a banner in the repo requires a spec that *imports* the
+  constant (a retyped number is the drift the shared module exists to remove),
+  reachable from a package.json script, invoked by a workflow. Silent in a repo
+  with no banner, since not every consumer is a public site. Exceptions go in
+  `.consent-banner-baseline` with a `#` reason. Plain Node, no dependencies.
+
 ## Rules
 
 - **Keep them dependency-free and runnable with a bare `node <file>.mjs`.** They

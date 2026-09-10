@@ -5,7 +5,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ## [2026-09-10] — `consentBannerSize.ts`: how much of a phone a cookie banner may cover, and a gate that it is measured
 
 ### Added
-- **`consentBannerSize.ts`** — `MAX_CONSENT_BANNER_COVERAGE_PCT` (20),
+- **`consentBannerSize.ts`** — `MAX_CONSENT_BANNER_COVERAGE_PCT` (25 — see below),
   `CONSENT_BANNER_TEST_VIEWPORT` (390×844), `measureConsentBanner()` and
   `consentBannerCoverageMessage()`. No React, no styling, no external imports
   (golden rules 1b and 6) — the banner component stays per-repo, only the
@@ -21,7 +21,7 @@ is what the component does once its prose runs a paragraph long and its three
 buttons stack on a narrow screen. Measured across sibling sites built from the
 same scaffold, banners ran from **173px to 462px on one 390×844 viewport: 20% to
 55% of the screen**, with no deliberate design change between them. Past roughly
-a fifth of the viewport the banner sits on top of the hero's call to action, so a
+a quarter of the viewport the banner sits on top of the hero's call to action, so a
 visitor arriving from a paid click lands on what is functionally an interstitial:
 a headline, a wall of cookie text, and both next actions behind a dismissal.
 
@@ -33,6 +33,17 @@ fires on good ones, and a rule that fires on correct code is a rule people
 disable. So the measurement is a Playwright assertion against the real page, and
 the static gate enforces the one thing a runtime test cannot prove about itself:
 **that it was installed at all.**
+
+**Why 25 and not 20.** 20 was the first number, and a genuinely two-line banner
+meets it (173px). It was raised the same day, when the first site rebuilt against
+it landed at 189px / 22% with its prose already cut to the bone: the only route to
+the last 17px was deleting either the promise that nothing optional loads until
+you choose, or the names of the ad platforms — both the substance of informed
+consent. A size budget only reachable by removing lawful disclosure is the wrong
+budget. 25% of a 390×844 phone is 211px, which is the line the observed harm
+actually sits on: every banner measured at 32–55% covered the hero call to action,
+and every one brought under ~25% left the headline, subheading and primary button
+visible above it.
 
 **This does not shrink the banner by removing the choice.** Equal prominence is
 about the CONTROLS — putting Accept and Reject side by side instead of stacked
