@@ -1,5 +1,10 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
+import { isAutomatedRequest } from "./requestSignals";
+
+// Re-exported so the existing import surface is unchanged (golden rule 4) and so
+// the gate below and its tests name the same function.
+export { isAutomatedRequest };
 
 /**
  * Meta Conversions API (CAPI) — server-side Meta events.
@@ -235,6 +240,16 @@ export async function sendCAPIEvent(
  * can be an ad set's optimisation goal (`CONTENT_VIEW`), and the pixel never
  * fires it on these pages. Note that Meta's "landing page views" metric is
  * pixel-derived and is NOT populated by this — optimise on CONTENT_VIEW instead.
+ *
+ * AUTOMATED REQUESTS ARE REFUSED HERE, NOT AT THE CALL SITE. This function is
+ * called from a server render, so it runs for crawlers, link-scrapers and
+ * prefetches as well as people — and on 2026-09-08 that inflated the event
+ * roughly twentyfold on a live campaign optimising on it (see
+ * `isAutomatedRequest`). Putting the check in the page would mean every future
+ * page has to remember it, and one of them would not. Returns `false` when it
+ * skips, the same as any other not-sent outcome; callers fire this inside
+ * `after()` and ignore the result, and the honest signal that it is working is
+ * the event volume on the pixel, not a log line per crawler.
  */
 export async function sendLandingPageView(args: {
   hdrs: { get(name: string): string | null };
@@ -245,6 +260,7 @@ export async function sendLandingPageView(args: {
   /** Per-brand pixel + token; omit on a single-brand site to use the env vars. */
   credentials?: CAPICredentials;
 }): Promise<boolean> {
+  if (isAutomatedRequest(args.hdrs)) return false;
   if (!isCapiConfigured(args.credentials)) return false;
   return sendCAPIEvent(
     {

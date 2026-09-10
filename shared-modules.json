@@ -144,6 +144,10 @@
         {
           "match": "graph\\.facebook\\.com/[^\"'\\s]*/events\\b",
           "reason": "the CAPI events edge only — other Graph edges (/insights, /stats, ad and audience management) are not this module’s and are deliberately not matched. A hand-rolled POST here re-creates four things that took a while to get right: SHA-256 lower-cased/trimmed hashing of email and first name, the `fb.1.<ts>.<fbclid>` fbc derivation that is the whole point of the server path (it survives a consent decline), the shared `eventId` that stops server and browser double-counting the same event, and the error-logging rule — Meta echoes request context back inside `error.message`, so this module logs status and numeric code/type ONLY, never the message and never the body, which carries the access token and hashed PII. It also swallows failures after logging, because a tracking write must never fail the page or the payment that called it."
+        },
+        {
+          "match": "sendCAPIEvent\\((?:[^)]|\\n){0,400}?eventName:\\s*['\\\"](ViewContent|PageView)['\\\"]",
+          "reason": "a page-view-shaped CAPI event must go through sendLandingPageView, which refuses automated requests. Building one by hand with sendCAPIEvent skips that gate. On 2026-09-08 a server-side ViewContent was added to a landing page inside after(); the page was force-dynamic, so every crawler, link-scraper and prefetch rendered it and fired the event too. Server-side ViewContent on that pixel went from about 1/hour to 267, 333 and 230 in single hours — a twentyfold inflation of the exact event the live ad sets were optimising on, so real money was spent teaching Meta to find traffic that looks like a crawler. Purchase, Lead and other webhook-driven events are NOT matched: those have no browser request behind them and the gate would be meaningless there."
         }
       ]
     },
@@ -252,6 +256,11 @@
           "reason": "a local UTM/click-id store is how this went wrong twice. One consumer lost two paid leads to a per-tab store and an internal link that overwrote the source; another wrote its own five-key sessionStorage capture inside a single page component and dropped fbclid and gclid entirely, so a site whose traffic is bought could not attribute a sale to an ad even in principle. The 90-day TTL, the consent gate, the paid-touch stickiness and the internal-link merge rule are each a fixed incident and none of them survive a re-implementation. Reading a stored value is fine; keeping your own store is not."
         }
       ]
+    },
+    "requestSignals": {
+      "owner": "@/web-core/requestSignals",
+      "resources": [],
+      "why": "a pure classifier over request headers — it reads no table, calls no endpoint and holds no secret, so it owns no external resource. Its resources are deliberately empty rather than missing: the thing worth forbidding is not calling this function, it is BYPASSING the gate that calls it, and that is enforced on metaCapi's own match below because the bypass is written as a sendCAPIEvent call, not as a copy of this file. Extracted from metaCapi on 2026-09-10 so it could be tested at all — metaCapi imports server-only, which cannot resolve in the node:test build, and these rules are the ones stopping a costly incident from recurring."
     }
   }
 }

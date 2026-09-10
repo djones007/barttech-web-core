@@ -2,6 +2,47 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-10d] — A server-side page view now refuses bots, prefetches and crawlers
+
+### Fixed
+- **`sendLandingPageView()` refuses automated requests.** It is called from a
+  server render, so it fired for crawlers, link-scrapers and prefetches as well
+  as people. On a live campaign that inflated the event about **twentyfold**:
+  server-side ViewContent on the pixel went from roughly **1 an hour to 267, 333
+  and 230 in single hours** once the page went behind ads. The ad sets were
+  optimising on that exact event, so real money was spent teaching the delivery
+  system to find traffic that looks like a crawler.
+- **The gate is inside the module, not at the call site.** The page was not
+  wrong to forget this — a call site that has to remember is the bug. Every
+  future page inherits the check by existing.
+
+### Added
+- **`requestSignals.ts`** — `isAutomatedRequest(hdrs)`: bot/crawler/scripted user
+  agents, prefetch and prerender headers (`sec-purpose`, `purpose`, `x-purpose`,
+  `x-moz`, `next-router-prefetch`), and Sec-Fetch metadata that says the request
+  is a subresource, an API call or an embed rather than a navigation.
+  Pure header inspection — no secrets, no I/O, no Node built-ins, and therefore
+  no `server-only` guard (golden rule 5). It is a separate module precisely so it
+  can be tested: `metaCapi.ts` imports `server-only`, which cannot resolve in the
+  node:test build.
+- **13 tests** (`requestSignals.test.ts`), one per rule, including the ones that
+  must NOT fire: an older browser sending no Sec-Fetch headers, a genuine
+  client-side navigation, and an unrecognised but browser-shaped agent.
+- **A registry rule against bypassing the gate** — building a page-view-shaped
+  event by hand with `sendCAPIEvent({ eventName: "ViewContent" | "PageView" })`
+  is now flagged. Verified against three bypass shapes (single line, multiline
+  inside `after()`, single quotes) and against three legitimate calls that must
+  stay silent (`Purchase`, `Lead`, and a correct `sendLandingPageView`).
+
+### Note — the bias is deliberate
+Only POSITIVE evidence of automation blocks; anything browser-shaped is sent.
+A missed genuine view under-counts by one, while blocking real traffic starves
+the optimisation signal — which is by far the harder failure to notice. Anything
+that makes this stricter needs a good reason.
+
+Webhook-driven events (`Purchase`, `Lead`) are deliberately NOT gated: there is
+no browser request behind them and the check would be meaningless.
+
 ## [2026-09-10c] — `attribution.ts`: one place that knows where a visitor came from
 
 ### Added
