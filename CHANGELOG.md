@@ -2,6 +2,49 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-10c] — `attribution.ts`: one place that knows where a visitor came from
+
+### Added
+- **`attribution.ts`** — the ONE implementation of UTM + click-id capture and
+  storage for every consuming site. Framework-agnostic (no React, no Next), so a
+  consumer wraps it in a three-line hook rather than owning a copy of the rules.
+  `captureAttribution()`, `promoteStoredAttribution()`, `getStoredUtmParams()`,
+  `getStoredClickIds()`, `attributionQueryString()`.
+- **`fbclid` is now a first-class click id**, kept as its own field beside
+  `gclid` and never folded into it — different network, different attribution
+  window, different consumer, and one merged "clickId" would make it impossible
+  to tell which platform to credit.
+- **`attributionQueryString()`** — the stored touch as query params for
+  forwarding onto an OFF-SITE checkout (a hosted payment page), so the
+  processor's order record can be joined back to the ad that produced it.
+  Off-site links only: an internal link must never carry
+  `utm_source`/`utm_medium`.
+- **15 tests** (`attribution.test.ts`), one per rule. Storage and consent are
+  stubbed rather than pulling in jsdom, which golden rule 1d forbids.
+
+### Why
+This logic existed **twice**, in two consumer repos, and a third site was about
+to get a copy. That third site had already written its own weaker version inside
+a single page component: five UTM keys, sessionStorage only, **no click ids at
+all** — so a site whose traffic is bought could not attribute a sale to an ad
+even in principle, while the finished rule set sat in a sibling repo.
+
+Every rule carried over is a fixed incident and none survives a
+re-implementation: the 90-day TTL (a per-tab store lost two paid leads on
+2026-09-01), the marketing-consent gate on the durable copy with an
+unconditional per-tab mirror, paid-touch stickiness (a blog CTA hard-coding
+`utm_medium=organic` overwrote a paid click and the lead was filed organic), and
+the internal-link merge rule that lets a link name itself without claiming to be
+the traffic source.
+
+### Note — two consumers still hold their own copy
+The two existing implementations are NOT migrated in this change. One of them is
+a live lead site whose store holds populated 90-day records, so its migration is
+a deliberate separate change — `storageKey` is a parameter here precisely so it
+can keep its existing key and data. Until then there are knowingly three copies
+rather than one; that is worse than two if it is forgotten, so it is recorded
+here and in the private estate notes.
+
 ## [2026-09-10b] — Patch the high-severity js-yaml advisory blocking every push
 
 ### Fixed

@@ -243,6 +243,15 @@
       "owner": "@/web-core/validation",
       "resources": [],
       "why": "pure predicates over strings. No external system."
+    },
+    "attribution": {
+      "owner": "@/web-core/attribution",
+      "resources": [
+        {
+          "match": "(sessionStorage|localStorage)\\s*\\.\\s*(get|set)Item\\(\\s*['\\\"][^'\\\"]*(utm|attribution|gclid|fbclid)",
+          "reason": "a local UTM/click-id store is how this went wrong twice. One consumer lost two paid leads to a per-tab store and an internal link that overwrote the source; another wrote its own five-key sessionStorage capture inside a single page component and dropped fbclid and gclid entirely, so a site whose traffic is bought could not attribute a sale to an ad even in principle. The 90-day TTL, the consent gate, the paid-touch stickiness and the internal-link merge rule are each a fixed incident and none of them survive a re-implementation. Reading a stored value is fine; keeping your own store is not."
+        }
+      ]
     }
   }
 }
