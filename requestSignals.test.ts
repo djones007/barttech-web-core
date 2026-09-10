@@ -56,6 +56,21 @@ test("an older browser that sends no Sec-Fetch headers is still a real view", ()
   assert.equal(isAutomatedRequest(hdrs({ "user-agent": IPHONE_SAFARI })), false);
 });
 
+test("in-app browsers are real views — this is where most paid social traffic lands", () => {
+  // The highest-risk false positive on an ad-driven brand. A visitor who taps an
+  // ad usually lands in the platform's own in-app webview, NOT the system
+  // browser, so blocking these would silence the majority of genuine paid
+  // traffic while looking like the filter was working. Note `FBAN/FBIOS` — a
+  // naive "fb" or "facebook" pattern would catch it and be very hard to spot.
+  for (const ua of [
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/450.0]",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 300.0",
+    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/30.0 Chrome/143.0.0.0 Mobile Safari/537.36",
+  ]) {
+    assert.equal(isAutomatedRequest(hdrs({ "user-agent": ua })), false, ua);
+  }
+});
+
 test("a client-side navigation (RSC, not a prefetch) is a real view", () => {
   // Next.js fetches the RSC payload when a visitor navigates in-app. That IS a
   // person arriving on the page — only the hover PREFETCH is not.
