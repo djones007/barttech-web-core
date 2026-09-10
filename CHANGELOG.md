@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-10f] — Removed: `aiTells.ts`
+
+### Removed
+- **`aiTells.ts` and `aiTells.test.ts`**, added earlier today in `[2026-09-10e]`. The
+  scorer is a port of code from a source pack that ships with no licence to
+  redistribute, so it does not belong in a public repo — moved to the private
+  consumer that uses it. This repo is public; that one is not. The
+  `shared-modules.json` entry and the `package.json` test-list entry are
+  removed with it. The consumer's `stripHtmlForScoring` keeps importing this
+  repo's own `htmlToText` (`emailit.ts`) directly — that part of the module
+  was genuinely shared code, not pack-derived, and stays here.
+
 ## [2026-09-10e] — `aiTells.ts`: a deterministic score for AI writing tells
 
 ### Added
