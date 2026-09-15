@@ -261,6 +261,21 @@
       "owner": "@/web-core/requestSignals",
       "resources": [],
       "why": "a pure classifier over request headers — it reads no table, calls no endpoint and holds no secret, so it owns no external resource. Its resources are deliberately empty rather than missing: the thing worth forbidding is not calling this function, it is BYPASSING the gate that calls it, and that is enforced on metaCapi's own match below because the bypass is written as a sendCAPIEvent call, not as a copy of this file. Extracted from metaCapi on 2026-09-10 so it could be tested at all — metaCapi imports server-only, which cannot resolve in the node:test build, and these rules are the ones stopping a costly incident from recurring."
+    },
+    "device": {
+      "owner": "@/web-core/device",
+      "resources": [],
+      "why": "a pure classifier over request headers (Client Hints + user-agent fallback) — no table, no endpoint, no secret, so it owns no external resource. Promoted here 2026-09-15 from the consumer site that first proved it, alongside pageEvents.ts (its main caller). The re-implementation risk this module exists to stop is not expressible as a resource match: enforced instead by scripts/check-classifier-tests.mjs, which requires any classifier of this shape (headers in, a small literal-string union out) to carry a committed, wired-in test — this file's own device.test.ts is that proof, and this repo's CI runs the gate on itself for exactly that reason."
+    },
+    "pageEvents": {
+      "owner": "@/web-core/pageEvents",
+      "resources": [
+        {
+          "match": "from\\(\\s*['\"]campaign_page_events['\"]\\s*\\)\\s*\\.\\s*(insert|upsert)",
+          "reason": "the table is owned by the receiving app (a token-gated ingest route, via its own service-role client) — that route is the ONE legitimate writer and does not consume this module. Any OTHER repo writing to this table directly means it is holding a service-role key for a project it should not have one for, which is the exact indirection trackServerEvent()/the ingest endpoint exist to avoid. A sender site should never match this pattern in its own code at all — it only ever calls trackServerEvent(), which POSTs to the endpoint, never touches the table."
+        }
+      ],
+      "why": "sends one aggregate, no-identifier funnel event (`landing` / `reserve_click` / `lead_submit`) to a shared ingest endpoint so consent-gated client analytics is not the only measurement of paid traffic. `site` is a caller parameter, never a constant. Deliberately reuses requestSignals' isAutomatedRequest and device.ts rather than re-checking either locally — see both modules' own why."
     }
   }
 }

@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-15a] — `pageEvents.ts` (`trackServerEvent`) + `device.ts` promoted from a consumer
+
+### Added
+- **`pageEvents.ts`** — `trackServerEvent()`, promoted from a consumer site's repo-local `lib/page-events.ts`
+  (there `recordPageEvent()`). Posts one aggregate, no-identifier funnel event to a shared ingest endpoint
+  (`PAGE_EVENTS_URL`/`PAGE_EVENTS_TOKEN`) so consent-gated client analytics is never the only measurement of
+  paid traffic. `site` is now a caller parameter, not a hardcoded constant — the whole point of promoting it.
+  Event vocabulary widened from a single consumer's two names (`landing`, `reserve_click`) to a third,
+  `lead_submit`, for lead-capture form POSTs on a second brand's site. Reuses `requestSignals.ts`'s
+  `isAutomatedRequest` (never a second crawler-gate copy) and the new `device.ts` below. No test file —
+  same reason as `metaCapi.ts`: it imports `server-only`, which cannot resolve in the `node:test` build.
+- **`device.ts`** + **`device.test.ts`** — client-hint-with-user-agent-fallback device classifier, promoted
+  alongside `pageEvents.ts` from the same consumer, where it was split out into its own file specifically so
+  `check-classifier-tests.mjs` (added the same day, see the entry below) had something real to prove. Nine
+  real-shaped UA cases carried over verbatim. Declared in `shared-modules.json` with an empty `resources` —
+  same reasoning as `requestSignals.ts`: a pure header classifier owns no external resource, so the
+  classifier-test gate is the enforcement, not a resource match.
+
+### Why
+The consumer's own `device()` classifier is the exact case study in this repo's `check-classifier-tests.mjs`
+gate — see the entry below. Moving both files here means every future consumer of `trackServerEvent()` gets
+the same proven classifier for free instead of writing its own and risking the same bug (a client-hint-only
+classifier that is null for the majority of iOS in-app-browser traffic). `campaign_page_events`'s DB `CHECK`
+constraint and the receiving endpoint's allowlist were widened to match `lead_submit` in the same session,
+in the receiving app, not here — this repo names no brand, no repo, no table and no endpoint URL.
+
 ## [2026-09-15] — New CI gate: input classifiers are proven, not assumed
 
 ### Added
