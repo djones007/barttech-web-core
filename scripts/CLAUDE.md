@@ -186,6 +186,30 @@ a CI step that fetches the raw file.
   with no banner, since not every consumer is a public site. Exceptions go in
   `.consent-banner-baseline` with a `#` reason. Plain Node, no dependencies.
 
+- `check-classifier-tests.mjs` — a function that maps untrusted request input
+  (headers, cookies, a user agent) to a fixed set of outcomes must ship with a
+  **committed, wired-in** test — not one run once from a throwaway script and
+  discarded. A consumer site's `device(headers: Headers): "mobile" | "desktop"
+  | null` read a single client hint that Safari and every iOS browser never
+  send: 66 of its first 69 rows came back null, in a live paid campaign, for a
+  day, before anyone looked. The fix was proven against nine real user-agent
+  strings and shipped — but those nine cases were run from a script that was
+  deleted afterwards, so the exact function this gate exists to catch remained
+  itself unproven, one bug fixed and one left in place at the same time.
+  Detects the shape structurally (a request-like parameter, a return type
+  that's a union of 2-6 string literals) rather than by name, so it needs no
+  per-repo config to find the next one. **Deliberately does not read what the
+  classifier's rules ARE** — same reasoning as `check-consent-banner-size.mjs`:
+  a static pattern cannot verify behaviour, and a rule that fires on correct
+  code is a rule people switch off. What it proves instead is that a sibling
+  `<name>.test.ts` exists, imports the function by name, carries at least four
+  real cases, and is reachable from `package.json`'s test script or a
+  `.github/workflows` file — a test nothing runs is a comment. `--self-test`
+  proves the gate itself both ways (fires on the untested case, silent on the
+  proven one, untouched by a same-shaped function returning a boolean).
+  Exceptions go in `.classifier-baseline`, same ratchet as
+  `.consent-banner-baseline`. Plain Node, no dependencies.
+
 ## Rules
 
 - **Keep them dependency-free and runnable with a bare `node <file>.mjs`.** They

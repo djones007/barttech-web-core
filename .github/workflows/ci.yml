@@ -44,6 +44,19 @@ jobs:
       - if: always()
         run: npm audit --audit-level=high
 
+      # A classifier over untrusted input (headers, user agent, query params)
+      # shipped in a consumer site with no test at all — 66 of its
+      # first 69 rows came back null because the one signal it read never
+      # exists on iOS. This runs here too, not just on consumers, because a
+      # classifier written directly in web-core is exactly as untested by
+      # default as one written in a consumer's lib/ folder.
+      - name: Input classifiers are proven, not assumed
+        if: always()
+        run: node scripts/check-classifier-tests.mjs .
+      - name: Classifier-test gate proves itself both ways
+        if: always()
+        run: node scripts/check-classifier-tests.mjs --self-test
+
       # Every module MUST be declared in shared-modules.json — including modules
       # that own nothing, which say so explicitly with a `why`. That declaration
       # is what each consumer's resource-registration gate reads, so an

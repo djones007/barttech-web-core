@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-15] — New CI gate: input classifiers are proven, not assumed
+
+### Added
+- `scripts/check-classifier-tests.mjs` — a repo consuming this module (or this repo itself) must not
+  ship a function that maps untrusted request input (headers, user agent, cookies) to a fixed set of
+  outcomes without a committed, wired-in test proving it against real-shaped input. Detects the shape
+  structurally (a function taking a `Headers`/request-like parameter, returning a union of 2-6 string
+  literals) and requires a sibling `<name>.test.ts` that imports the function, carries >= 4 real cases,
+  and is actually reachable from `package.json`'s test script or a `.github/workflows` file — a test
+  nothing runs is a comment, same closing condition as `check-consent-banner-size.mjs`.
+- `--self-test` proves the gate both ways: fires on an untested classifier, stays silent on a fully
+  proven one, and never touches a same-shaped function that returns a boolean rather than a literal
+  union. `--baseline` grandfathers existing matches with `.classifier-baseline`, same ratchet as
+  `.web-core-baseline`.
+
+### Why
+a consumer site shipped a `device()` classifier derived from a single
+client hint that Safari and every iOS browser never send — 66 of its first 69 rows came back null, in
+a live paid campaign, for a day, before anyone looked. The fix was proven against nine real
+user-agent strings from a throwaway script that was never committed, so the exact function this gate
+exists to catch remained itself unproven after being fixed. This does not check that a classifier's
+logic is correct — same reasoning as the consent-banner gate: a static pattern cannot verify
+behaviour, and a rule that fires on correct code gets switched off. It checks that proof exists and
+runs.
+
 ## [2026-09-10h] — `metaCapi.ts`: a CAPI event can now carry its own `event_time`
 
 ### Added
