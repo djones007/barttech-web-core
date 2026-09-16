@@ -122,6 +122,26 @@ export interface BartmailOptinParams {
   utm_campaign?: string;
   utm_content?: string;
   utm_term?: string;
+  /**
+   * Google's auto-tagging click id (`gclid`; also carries `gbraid`/`wbraid` on
+   * iOS campaigns, which occupy the same slot from our side). Meta's is
+   * `fbclid`.
+   *
+   * These matter independently of `utm_*`: auto-tagging appends a click id and
+   * NOTHING else, so an ad click whose final URL has no hand-written UTMs is
+   * invisible to every `utm_*` column above while being fully attributable by
+   * its click id. A consumer recorded two real leads with no attribution at all
+   * on day one of a live paid campaign for exactly that reason (2026-09-01),
+   * while the ad platform counted both as conversions.
+   *
+   * Stored fill-blanks-only, like the `utm_*` fields — first touch wins. They
+   * are columns on `contacts` rather than keys in `custom_fields` precisely
+   * because that bag merges last-write-wins, which is the wrong semantics for
+   * attribution. Requires the `contacts.gclid` / `contacts.fbclid` columns
+   * (BartMail migration `20260916c_contacts_click_ids`).
+   */
+  gclid?: string;
+  fbclid?: string;
   referrer?: string;
   source_page?: string;
   country?: string;
@@ -198,6 +218,8 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     utm_campaign,
     utm_content,
     utm_term,
+    gclid,
+    fbclid,
     referrer,
     source_page,
     country,
@@ -238,7 +260,7 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   const { data: existing, error: lookupError } = await supabase
     .from("contacts")
     .select(
-      "id, first_name, last_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, source_page, country, custom_fields"
+      "id, first_name, last_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, gclid, fbclid, referrer, source_page, country, custom_fields"
     )
     .eq("email", email)
     .eq("tenant_id", tenantId)
@@ -261,6 +283,8 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
         utm_campaign: utm_campaign ?? null,
         utm_content: utm_content ?? null,
         utm_term: utm_term ?? null,
+        gclid: gclid ?? null,
+        fbclid: fbclid ?? null,
         referrer: referrer ?? null,
         source_page: source_page ?? null,
         country: country ?? null,
@@ -292,6 +316,8 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     if (utm_campaign && !ex.utm_campaign) updates.utm_campaign = utm_campaign;
     if (utm_content && !ex.utm_content) updates.utm_content = utm_content;
     if (utm_term && !ex.utm_term) updates.utm_term = utm_term;
+    if (gclid && !ex.gclid) updates.gclid = gclid;
+    if (fbclid && !ex.fbclid) updates.fbclid = fbclid;
     if (referrer && !ex.referrer) updates.referrer = referrer;
     if (source_page && !ex.source_page) updates.source_page = source_page;
     if (country && !ex.country) updates.country = country;

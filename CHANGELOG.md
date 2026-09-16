@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-16] — `bartmailOptin()` stores Google and Meta click ids
+
+### Added
+- **`gclid` and `fbclid` on `BartmailOptinParams`**, written to the new `contacts.gclid` / `contacts.fbclid`
+  columns (BartMail migration `20260916c_contacts_click_ids`, applied 2026-09-16). **Fill-blanks-only on
+  re-optin, exactly like the `utm_*` fields — first touch wins.**
+- They are columns rather than keys in `custom_fields` deliberately: that bag merges **last-write-wins**, so a
+  returning lead's newest click id would overwrite the one that actually won them — the opposite of every
+  other attribution field's semantics.
+
+### Why
+- Auto-tagging appends a click id and **nothing else**. An ad click whose final URL carries no hand-written
+  UTMs is invisible to every `utm_*` column while being fully attributable by its `gclid` — which is how a consumer
+  recorded two real leads with no attribution at all on day one of a live paid campaign (2026-09-01) while the
+  ad platform counted both as conversions — the incident behind the estate's "capture the click ids, not just
+  utm_*" rule.
+- `attribution.ts` has captured `gclid`/`fbclid` client-side since 2026-09-10 and all seven consumers were on
+  it by 2026-09-16, but the id had nowhere to land: BartMail is the primary lead store and `contacts` had no
+  column for it. This closes that end of the path.
+- `gbraid`/`wbraid` occupy the `gclid` slot, matching what `attribution.ts` captures.
+
+### Note
+- Not unit-tested: the fill-blanks logic lives inline in `bartmailOptin()`, which needs a live Supabase client,
+  so `bartmail.test.ts` covers only the pure `withMailProvider()`. The `utm_*` fill-blanks rules alongside it
+  are uncovered for the same reason — this adds no new gap, but it is a gap.
+
 ## [2026-09-15a] — `pageEvents.ts` (`trackServerEvent`) + `device.ts` promoted from a consumer
 
 ### Added
