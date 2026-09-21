@@ -14,8 +14,15 @@
 //   * A line the caller has marked exempt is removed from the deposit AND from
 //     the threshold test — an excluded line must not be able to push the rest
 //     of the quotation over the threshold and trigger one.
-//   * Categories named in `fullPaymentCategories` are due in full and ignore
-//     the threshold entirely.
+//   * A category named in `fullQuoteTriggerCategories` (typically "hardware")
+//     switches the WHOLE deposit-bearing value — every one-off line, not only
+//     the triggering category — to `fullPercent`, and bypasses `standardPercent`
+//     and `thresholdNet` entirely. (Dom, 2026-09-21: splitting the deposit —
+//     100% of hardware, 50% of the rest — left a small odd balance that had to
+//     be chased separately after the deposit was paid. If hardware is on the
+//     quote, the whole one-off value is due up front, full stop.)
+//   * Otherwise, categories named in `fullPaymentCategories` are due in full
+//     and ignore the threshold entirely.
 //   * Everything else takes `standardPercent`, but only once the WHOLE
 //     deposit-bearing net value exceeds `thresholdNet` — the threshold is a
 //     property of the quotation, not of the part the standard rate applies to.
@@ -54,6 +61,19 @@ export interface DepositRule {
   thresholdNet: number;
   /** Categories payable in full up front. Compared lower-cased. */
   fullPaymentCategories: readonly string[];
+  /**
+   * Categories whose mere PRESENCE anywhere on the quote — not just their own
+   * lines — switches the ENTIRE deposit-bearing value to `fullPercent`,
+   * bypassing `standardPercent`, `thresholdNet` and `fullPaymentCategories`
+   * entirely for that quote.
+   *
+   * Optional and defaults to none: a caller that never sets it (every caller
+   * before 2026-09-21) gets the old tiered behaviour unchanged. Compared
+   * lower-cased, same as `fullPaymentCategories`. A per-brand setting, not a
+   * constant — clearing it for a brand switches that brand back to the tiered
+   * rule with no code change. See the file header for why this exists.
+   */
+  fullQuoteTriggerCategories?: readonly string[];
 }
 
 export interface DepositTax {
@@ -108,17 +128,37 @@ export function computeDeposit(
   const isFullPayment = (l: DepositLine) => full.has((l.category ?? "").toLowerCase());
 
   const bearing = depositBearingLines(lines);
-  const fullNet = round2(
-    bearing.filter(isFullPayment).reduce((t, l) => t + netOf(l.amount), 0)
-  );
-  const otherNet = round2(
-    bearing.filter((l) => !isFullPayment(l)).reduce((t, l) => t + netOf(l.amount), 0)
-  );
-  const totalNet = round2(fullNet + otherNet);
 
-  const fullDue = round2(fullNet * (rule.fullPercent / 100));
-  const standardDue =
-    totalNet > rule.thresholdNet ? round2(otherNet * (rule.standardPercent / 100)) : 0;
+  /* A trigger category anywhere on the quote takes the WHOLE bearing value at
+     `fullPercent` — see the file header. Checked against `bearing`, not `lines`,
+     so a triggering line that is itself monthly or exempt cannot switch the
+     rule (it has already been excluded from consideration, same as everywhere
+     else in this function). */
+  const trigger = new Set((rule.fullQuoteTriggerCategories ?? []).map((c) => c.toLowerCase()));
+  const quoteTriggered =
+    trigger.size > 0 && bearing.some((l) => trigger.has((l.category ?? "").toLowerCase()));
+
+  let fullNet: number;
+  let otherNet: number;
+  let totalNet: number;
+  let fullDue: number;
+  let standardDue: number;
+
+  if (quoteTriggered) {
+    totalNet = round2(bearing.reduce((t, l) => t + netOf(l.amount), 0));
+    fullNet = totalNet;
+    otherNet = 0;
+    fullDue = round2(fullNet * (rule.fullPercent / 100));
+    standardDue = 0;
+  } else {
+    fullNet = round2(bearing.filter(isFullPayment).reduce((t, l) => t + netOf(l.amount), 0));
+    otherNet = round2(
+      bearing.filter((l) => !isFullPayment(l)).reduce((t, l) => t + netOf(l.amount), 0)
+    );
+    totalNet = round2(fullNet + otherNet);
+    fullDue = round2(fullNet * (rule.fullPercent / 100));
+    standardDue = totalNet > rule.thresholdNet ? round2(otherNet * (rule.standardPercent / 100)) : 0;
+  }
 
   const net = round2(fullDue + standardDue);
   const taxDue = round2(net * (taxRate / 100));

@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-21] — `deposit.ts`: a category can trigger a full-quote deposit
+
+### Added
+- **`DepositRule.fullQuoteTriggerCategories`** (optional). When set and any deposit-bearing line's
+  category is in it, `computeDeposit()` takes `fullPercent` of the ENTIRE deposit-bearing value —
+  every one-off line, not only the triggering category — and bypasses `standardPercent`/
+  `thresholdNet`/`fullPaymentCategories` for that quote. Unset (every caller before this) leaves the
+  old tiered behaviour completely unchanged — all 13 pre-existing `deposit.test.ts` cases pass with no
+  edits, since none of them set the new field.
+
+### Why
+- A consumer's old rule split a deposit that contained hardware: 100% of the hardware lines, 50% of
+  everything else above the threshold. That left a small, odd balance uncharged at acceptance that had
+  to be chased separately later (real example: hardware at 100% + labour at 50% = a residual nobody had
+  a clean way to collect). The fix requested: if hardware is on the quote, the whole one-off quote is
+  due up front, monthly-billed lines excepted.
+- Kept generic and caller-configured, same as every other value in this module — this file states no
+  commercial policy of its own. Consuming repos wire it from a per-brand settings column, so it can
+  apply to one brand and not another sharing the same `deposit_full_categories` list.
+
 ## [2026-09-16] — `bartmailOptin()` stores Google and Meta click ids
 
 ### Added

@@ -10,6 +10,8 @@ const RULE: DepositRule = {
   thresholdNet: 350,
   fullPaymentCategories: ["hardware", "software"],
 };
+// Same rule, plus the hardware-escalation trigger a consumer added 2026-09-21.
+const TRIGGERED_RULE: DepositRule = { ...RULE, fullQuoteTriggerCategories: ["hardware"] };
 const EX = { taxRate: 20 };
 const INC = { taxRate: 20, taxMode: "inclusive" };
 
@@ -129,4 +131,90 @@ test("depositIsFullValue is false when there is nothing to deposit", () => {
     ),
     false
   );
+});
+
+// ---------------------------------------------------------------------------
+// Hardware-triggered full-quote deposit (Dom, 2026-09-21). Replaces the old
+// "100% of hardware, 50% of the rest" split, which left a small odd balance
+// to chase after the deposit was paid. `fullQuoteTriggerCategories` is unset
+// on every test above, so all of them prove the OLD tiered rule is completely
+// unchanged for a caller that hasn't opted in.
+// ---------------------------------------------------------------------------
+
+test("hardware present: the WHOLE bearing value is due, not just hardware's share", () => {
+  // Old split would have been 100% of 300 + 50% of 100 = 350. The new rule is
+  // 100% of the full 400.
+  const d = computeDeposit(
+    [
+      { category: "hardware", billingType: "one_off", amount: 300 },
+      { category: "labour", billingType: "one_off", amount: 100 },
+    ],
+    TRIGGERED_RULE,
+    EX
+  );
+  assert.equal(d.full, 400);
+  assert.equal(d.standard, 0);
+  assert.equal(d.net, 400);
+  assert.equal(d.amount, 480);
+});
+
+test("hardware escalation ignores the threshold — small hardware + small labour is still 100%", () => {
+  const d = computeDeposit(
+    [
+      { category: "hardware", billingType: "one_off", amount: 20 },
+      { category: "labour", billingType: "one_off", amount: 30 },
+    ],
+    TRIGGERED_RULE,
+    EX
+  );
+  assert.equal(d.net, 50);
+  assert.equal(d.amount, 60);
+});
+
+test("hardware escalation still excludes monthly lines", () => {
+  const d = computeDeposit(
+    [
+      { category: "hardware", billingType: "one_off", amount: 300 },
+      { category: "labour", billingType: "one_off", amount: 100 },
+      { category: "software", billingType: "monthly", billingPeriodMonths: 1, amount: 5000 },
+    ],
+    TRIGGERED_RULE,
+    EX
+  );
+  assert.equal(d.net, 400);
+  assert.equal(d.amount, 480);
+});
+
+test("hardware escalation still excludes an exempt line", () => {
+  const d = computeDeposit(
+    [
+      { category: "hardware", billingType: "one_off", amount: 300 },
+      { category: "labour", billingType: "one_off", amount: 1000, depositExempt: true },
+    ],
+    TRIGGERED_RULE,
+    EX
+  );
+  assert.equal(d.net, 300);
+  assert.equal(d.amount, 360);
+});
+
+test("no hardware line: the trigger is armed but silent, and the old tiered rule applies", () => {
+  const d = computeDeposit(
+    [{ category: "labour", billingType: "one_off", amount: 1000 }],
+    TRIGGERED_RULE,
+    EX
+  );
+  assert.equal(d.full, 0);
+  assert.equal(d.standard, 500);
+  assert.equal(d.amount, 600);
+});
+
+test("a single hardware line behaves the same whether triggered or not", () => {
+  const untriggered = computeDeposit([{ category: "hardware", billingType: "one_off", amount: 90 }], RULE, EX);
+  const triggered = computeDeposit(
+    [{ category: "hardware", billingType: "one_off", amount: 90 }],
+    TRIGGERED_RULE,
+    EX
+  );
+  assert.deepEqual(untriggered, triggered);
 });
