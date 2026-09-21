@@ -15,12 +15,18 @@
 //     the threshold test — an excluded line must not be able to push the rest
 //     of the quotation over the threshold and trigger one.
 //   * A category named in `fullQuoteTriggerCategories` (typically "hardware")
-//     switches the WHOLE deposit-bearing value — every one-off line, not only
-//     the triggering category — to `fullPercent`, and bypasses `standardPercent`
-//     and `thresholdNet` entirely. (Dom, 2026-09-21: splitting the deposit —
-//     100% of hardware, 50% of the rest — left a small odd balance that had to
-//     be chased separately after the deposit was paid. If hardware is on the
-//     quote, the whole one-off value is due up front, full stop.)
+//     switches the ENTIRE quote's non-monthly value — every one-off line, not
+//     only the triggering category, and NOT respecting a per-line
+//     `depositExempt` either — to `fullPercent`, bypassing `standardPercent`,
+//     `thresholdNet` and `fullPaymentCategories` entirely. (Dom, 2026-09-21:
+//     splitting the deposit — 100% of hardware, 50% of the rest — left a small
+//     odd balance that had to be chased separately after the deposit was paid.
+//     "If hardware is on the quote, the entire quote bar any monthly services
+//     should be 100% required upfront" — his words, and deliberately wider
+//     than the exempt-line carve-out below: verified against a real quote,
+//     where the escalated total included a `depositExempt` line (an operator
+//     had excluded a shipping charge under the old rule) specifically because
+//     Dom's rule names only ONE exception — monthly services.)
 //   * Otherwise, categories named in `fullPaymentCategories` are due in full
 //     and ignore the threshold entirely.
 //   * Everything else takes `standardPercent`, but only once the WHOLE
@@ -129,14 +135,13 @@ export function computeDeposit(
 
   const bearing = depositBearingLines(lines);
 
-  /* A trigger category anywhere on the quote takes the WHOLE bearing value at
-     `fullPercent` — see the file header. Checked against `bearing`, not `lines`,
-     so a triggering line that is itself monthly or exempt cannot switch the
-     rule (it has already been excluded from consideration, same as everywhere
-     else in this function). */
+  /* A trigger category anywhere on the NON-MONTHLY quote (not `bearing` —
+     `depositExempt` does not disarm the trigger, see below) switches the whole
+     non-monthly value to `fullPercent`. */
+  const nonMonthly = lines.filter((l) => !isMonthlyInstalment(l));
   const trigger = new Set((rule.fullQuoteTriggerCategories ?? []).map((c) => c.toLowerCase()));
   const quoteTriggered =
-    trigger.size > 0 && bearing.some((l) => trigger.has((l.category ?? "").toLowerCase()));
+    trigger.size > 0 && nonMonthly.some((l) => trigger.has((l.category ?? "").toLowerCase()));
 
   let fullNet: number;
   let otherNet: number;
@@ -145,7 +150,13 @@ export function computeDeposit(
   let standardDue: number;
 
   if (quoteTriggered) {
-    totalNet = round2(bearing.reduce((t, l) => t + netOf(l.amount), 0));
+    /* Deliberately `nonMonthly`, not `bearing` — a per-line `depositExempt`
+       stops applying once the trigger fires. Dom's rule names exactly one
+       exception ("bar any monthly services"); a line an operator excluded
+       under the OLD tiered rule for its own reasons is not automatically also
+       an exception to this one — a deposit-exempt shipping line on the real
+       quote this rule was written for was still part of "the entire quote". */
+    totalNet = round2(nonMonthly.reduce((t, l) => t + netOf(l.amount), 0));
     fullNet = totalNet;
     otherNet = 0;
     fullDue = round2(fullNet * (rule.fullPercent / 100));

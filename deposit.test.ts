@@ -185,7 +185,10 @@ test("hardware escalation still excludes monthly lines", () => {
   assert.equal(d.amount, 480);
 });
 
-test("hardware escalation still excludes an exempt line", () => {
+test("hardware escalation does NOT respect a per-line depositExempt — only monthly is excepted", () => {
+  // The rule this implements names one exception ("bar any monthly
+  // services"), not two — a depositExempt line is swept into the escalated
+  // total, unlike under the old tiered rule.
   const d = computeDeposit(
     [
       { category: "hardware", billingType: "one_off", amount: 300 },
@@ -194,8 +197,26 @@ test("hardware escalation still excludes an exempt line", () => {
     TRIGGERED_RULE,
     EX
   );
-  assert.equal(d.net, 300);
-  assert.equal(d.amount, 360);
+  assert.equal(d.net, 1300);
+  assert.equal(d.amount, 1560);
+});
+
+test("real-world shape: hardware + labour + a deposit-exempt shipping line, all swept into 100%", () => {
+  // The case this was written for: a shipping line an operator had excluded
+  // from the deposit under the OLD rule was still part of "the entire quote"
+  // once hardware triggered the new one.
+  const d = computeDeposit(
+    [
+      { category: "hardware", billingType: "one_off", amount: 1621.5 },
+      { category: "hardware", billingType: "one_off", amount: 423.2 },
+      { category: "labour", billingType: "one_off", amount: 171.42 },
+      { category: "shipping", billingType: "one_off", amount: 29.9, depositExempt: true },
+    ],
+    TRIGGERED_RULE,
+    EX
+  );
+  assert.equal(d.net, 2246.02);
+  assert.equal(d.amount, 2695.22);
 });
 
 test("no hardware line: the trigger is armed but silent, and the old tiered rule applies", () => {

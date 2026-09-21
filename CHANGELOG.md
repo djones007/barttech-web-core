@@ -5,12 +5,14 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ## [2026-09-21] — `deposit.ts`: a category can trigger a full-quote deposit
 
 ### Added
-- **`DepositRule.fullQuoteTriggerCategories`** (optional). When set and any deposit-bearing line's
-  category is in it, `computeDeposit()` takes `fullPercent` of the ENTIRE deposit-bearing value —
-  every one-off line, not only the triggering category — and bypasses `standardPercent`/
-  `thresholdNet`/`fullPaymentCategories` for that quote. Unset (every caller before this) leaves the
-  old tiered behaviour completely unchanged — all 13 pre-existing `deposit.test.ts` cases pass with no
-  edits, since none of them set the new field.
+- **`DepositRule.fullQuoteTriggerCategories`** (optional). When set and any NON-MONTHLY line's
+  category is in it, `computeDeposit()` takes `fullPercent` of the ENTIRE non-monthly value — every
+  one-off line, not only the triggering category, and **not respecting a per-line `depositExempt`
+  either** — and bypasses `standardPercent`/`thresholdNet`/`fullPaymentCategories` for that quote.
+  `depositExempt` still applies under the old tiered rule; the escalation deliberately has only one
+  exception (monthly-billed lines), matching the plain-English instruction it implements. Unset (every
+  caller before this) leaves the old tiered behaviour completely unchanged — all 13 pre-existing
+  `deposit.test.ts` cases pass with no edits, since none of them set the new field.
 
 ### Why
 - A consumer's old rule split a deposit that contained hardware: 100% of the hardware lines, 50% of
