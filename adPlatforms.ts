@@ -183,6 +183,17 @@ export const AD_PLATFORMS: Record<string, AdPlatform> = {
         // Found in a real browser 2026-07-25 while rolling ads out to the
         // brand sites; vendor docs do not list it.
         "https://ad.doubleclick.net",
+        // gtag's newer conversion endpoint (`/measurement/conversion`), which
+        // it reaches by `fetch`, not an image — so it needs connect-src, not
+        // the img-src the older conversion pings use. Google moved the
+        // `ads_conversion_*` beacon here at some point between 2026-09-15 and
+        // 2026-09-21: a consuming site's weekly browser audit went green-to-red
+        // across those two scheduled runs with no ad-config change, and the
+        // console error named this host blocking an `ads_conversion_*` event on
+        // a live lead form. A blocked beacon is SILENT — the form still submits
+        // and the lead is still stored, only the conversion is never recorded —
+        // so the CSP console error is the only signal it is happening.
+        "https://pagead2.googlesyndication.com",
         "https://www.google.com",
         "https://www.google.co.uk",
       ],

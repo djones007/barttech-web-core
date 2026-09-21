@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-21b] — Google Ads CSP: allow the conversion beacon's new host
+
+### Fixed
+- **`adPlatforms.ts` — added `https://pagead2.googlesyndication.com` to the `google_ads`
+  `connectSrc` allowlist.** gtag now reaches its `/measurement/conversion` endpoint on that host by
+  `fetch`, so it needs `connect-src`, not the `img-src` the older conversion pings use. Google moved
+  the `ads_conversion_*` beacon there at some point between 2026-09-15 and 2026-09-21: a consuming
+  site's weekly browser audit went green-to-red across those two scheduled runs with no ad-config
+  change, and the console error named this exact host blocking an `ads_conversion_*` event on a live
+  lead form.
+- **Why this mattered more than a red test.** A blocked beacon is completely silent — the form still
+  submits and the lead is still stored, only the Google Ads conversion is never recorded. Any site
+  running `google_ads` through this registry was under-reporting lead conversions for as long as the
+  host was blocked, and the CSP console error was the only signal.
+- Additive allowlist entry only; no behaviour change for a site that does not enable `google_ads`.
+
 ## [2026-09-21] — `deposit.ts`: a category can trigger a full-quote deposit
 
 ### Added
