@@ -47,8 +47,25 @@
 
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 
 const PATTERN = /\.(not|in)\(\s*['"][a-z_]*id['"]\s*,[\s\S]*`\(\$\{/;
+
+/**
+ * Defense-in-depth: every path reaching this function comes from this
+ * script's own `git ls-files` listing — never external input — but static
+ * analysis cannot see that, and the check is cheap. Refuses to read outside
+ * cwd regardless of how the path was built. Same idiom as
+ * check-post-submit-notice.mjs's readWithinRoot.
+ */
+function readWithinRoot(root, target) {
+  const base = path.resolve(root) + path.sep;
+  const resolved = path.resolve(root, target);
+  if (!resolved.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${target}`);
+  }
+  return fs.readFileSync(resolved, 'utf8');
+}
 
 function trackedSourceFiles() {
   const out = execSync('git ls-files', { encoding: 'utf8' });
@@ -63,7 +80,7 @@ const violations = [];
 for (const file of trackedSourceFiles()) {
   let src;
   try {
-    src = fs.readFileSync(file, 'utf8');
+    src = readWithinRoot(process.cwd(), file);
   } catch {
     continue; // deleted between ls-files and read
   }

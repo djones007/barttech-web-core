@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-21c] — Path-traversal defense-in-depth for three more scripts/ gates
+
+### Fixed
+- **`check-classifier-tests.mjs`, `check-id-list-filters.mjs`, `check-webhook-verification.mjs` — added the same `readWithinRoot` guard the rest of `scripts/` already uses.** Each script reads only files it discovered itself (`git ls-files` or its own directory walk), never external input, but a SAST scanner cannot see that provenance and flags the raw `readFileSync` as a potential file-inclusion sink — Aikido grouped-issue finding, medium severity, three files. Resolves and prefix-checks the target against the script's own root before reading, same idiom as `check-post-submit-notice.mjs`'s existing `readWithinRoot`. Behaviour is unchanged (`--self-test` and a direct run against this repo both stay green); this is belt-and-braces plus closing a scanner finding, not a fix for an exploitable path.
+
 ## [2026-09-21b] — Google Ads CSP: allow the conversion beacon's new host
 
 ### Fixed

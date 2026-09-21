@@ -52,9 +52,25 @@
 // ---------------------------------------------------------------------------
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
-import { join, relative, sep } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 
 const root = process.argv[2] || process.cwd()
+
+/**
+ * Defense-in-depth: every path reaching this function comes from this
+ * script's own `walk()` of root — never external input — but static
+ * analysis cannot see that, and the check is cheap. Refuses to read outside
+ * root regardless of how the path was built. Same idiom as
+ * check-post-submit-notice.mjs's readWithinRoot.
+ */
+function readWithinRoot(rootDir, target) {
+  const base = resolve(rootDir) + sep
+  const resolved = resolve(rootDir, target)
+  if (!resolved.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${target}`)
+  }
+  return readFileSync(resolved, 'utf8')
+}
 
 let config = { roots: ['src/app', 'app'], ignore: [] }
 const configPath = join(root, '.webhook-auth-gate.json')
@@ -117,7 +133,7 @@ for (const file of files) {
   if (/\/cron\//.test(rel)) continue
   if (ignoreRe.some(r => r.test(rel))) continue
 
-  const raw = readFileSync(file, 'utf8')
+  const raw = readWithinRoot(root, file)
   const src = stripComments(raw)
 
   const looksLikeReceiver = /\/(?:webhooks?|hooks?)\//.test(rel) || /webhook/i.test(rel) || SIG_HEADERS.test(src)

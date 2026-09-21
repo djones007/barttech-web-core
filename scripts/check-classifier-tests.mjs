@@ -72,6 +72,22 @@ import path from "node:path";
 const BASELINE_FILE = ".classifier-baseline";
 const MIN_CASES = 4;
 
+/**
+ * Defense-in-depth: every path reaching this function comes from this
+ * script's own `git ls-files` listing of repoRoot — never external input —
+ * but static analysis cannot see that, and the check is cheap. Refuses to
+ * read outside repoRoot regardless of how the path was built. Same idiom as
+ * check-post-submit-notice.mjs's readWithinRoot.
+ */
+function readWithinRoot(repoRoot, target) {
+  const base = path.resolve(repoRoot) + path.sep;
+  const resolved = path.resolve(repoRoot, target);
+  if (!resolved.startsWith(base)) {
+    throw new Error(`refusing to read outside repo root: ${target}`);
+  }
+  return readFileSync(resolved, "utf8");
+}
+
 const REQUEST_LIKE_TYPE = /\b(Headers|NextRequest|IncomingMessage)\b/;
 const REQUEST_LIKE_NAME = /\b(headers?|hdrs|req|request|cookies?|ua|useragent|user_?agent)\b/i;
 
@@ -125,7 +141,7 @@ function checkRepo(repoRoot, { write = false } = {}) {
   for (const file of tracked) {
     const abs = path.join(repoRoot, file);
     if (!existsSync(abs)) continue;
-    const source = readFileSync(abs, "utf8");
+    const source = readWithinRoot(repoRoot, file);
     const names = findClassifiers(source);
     if (!names.length) continue;
 
@@ -143,7 +159,7 @@ function checkRepo(repoRoot, { write = false } = {}) {
         continue;
       }
 
-      const testSource = readFileSync(testAbs, "utf8");
+      const testSource = readWithinRoot(repoRoot, testFile);
       if (!new RegExp(`\\b${name}\\b`).test(testSource)) {
         violations.push(`${file}:${name} — ${testFile} exists but never references ${name}`);
         continue;
