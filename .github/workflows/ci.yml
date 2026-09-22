@@ -57,6 +57,19 @@ jobs:
         if: always()
         run: node scripts/check-classifier-tests.mjs --self-test
 
+      # This is this repo's OWN tree, checked directly against the local script —
+      # not the same thing as `check-third-party-fonts.test.ts` above (`npm test`),
+      # which exercises the script's *logic* against synthetic fixtures in a temp
+      # dir and proves nothing about any real file here. A consumer running this
+      # script skips this repo's own mount path on the stated assumption that a
+      # vendored submodule gates itself in its own repo — this step is what makes
+      # that assumption true for this one. Run locally, not fetched: this repo IS
+      # the canonical source the fetched copies pin to, so fetching it here would
+      # mean this step could go stale relative to its own working tree.
+      - name: No third-party font CDN loaded at runtime (this repo's own tree)
+        if: always()
+        run: node scripts/check-third-party-fonts.mjs .
+
       # Every module MUST be declared in shared-modules.json — including modules
       # that own nothing, which say so explicitly with a `why`. That declaration
       # is what each consumer's resource-registration gate reads, so an

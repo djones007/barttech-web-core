@@ -2,7 +2,27 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
-## [2026-09-22b] — `check-third-party-fonts.mjs`: third-party font CI gate promoted into `scripts/`
+## [2026-09-22c] — CI now runs `check-third-party-fonts.mjs` against this repo's own tree
+
+### Added
+- **`.github/workflows/ci.yml`** — new step "No third-party font CDN loaded at runtime (this
+  repo's own tree)": runs `scripts/check-third-party-fonts.mjs .` directly (local, not fetched —
+  this repo is the canonical source the fetched copies pin to) against this repo's own working
+  tree. Passes clean: 54 files checked, 0 findings.
+
+### Why
+- The gate's own `SKIP_PATH` excludes a small set of named mount-path directories when a
+  consumer runs the fetched script against its tree, on the stated assumption that each of
+  those directories is a repo that gates *itself*, in its own CI, against its own tree. This
+  repo is one of those named directories, and that assumption was unchecked here: CI already
+  ran `check-third-party-fonts.test.ts` via `npm test`, but that only exercises the script's
+  logic against synthetic fixtures in a temp directory — it asserts nothing about any real
+  file in this repo. This repo had no step that ever pointed the script at its own tree. The
+  test and the new CI step are not duplicates and both stay: one proves the script's logic,
+  the other proves this repo's tree is currently clean.
+- Found while closing the same hole for a second, unrelated public repo that mounts this one
+  as a submodule and had the identical gap — checked here too rather than assuming a script
+  written to run in every consumer had ever been pointed at its own home.
 
 ### Added
 - **`scripts/check-third-party-fonts.mjs`** — CI gate: no runtime font load from a third-party CDN
