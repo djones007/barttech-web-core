@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-22d] — `SKIP_PATH` entries must be verified to self-gate, not assumed
+
+### Changed
+- **`scripts/check-third-party-fonts.mjs`** — expanded the comment above `SKIP_PATH` to state the
+  rule the list depends on: every directory name skipped there is a hole punched in every
+  consumer's coverage, justified only by that repo running this exact gate in its own CI. On
+  2026-09-22 two of the three names did not — one had no font gate at all despite being vendored
+  into eleven consumers, and one only unit-tested this script's logic against fixtures without ever
+  running it over its own tree. Both were fixed the same day, but the comment had asserted it for
+  months and nobody had checked. Adding a fourth name now requires confirming that repo's CI runs
+  the gate AND reports a non-zero file count — a gate that checks nothing passes just as green as
+  one that checks everything. Comment only; `SKIP_PATH` behaviour is unchanged.
+
 ## [2026-09-22c] — CI now runs `check-third-party-fonts.mjs` against this repo's own tree
 
 ### Added

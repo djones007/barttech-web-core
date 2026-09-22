@@ -117,9 +117,23 @@ const SKIP_DIRS = new Set([
   "node_modules", ".next", ".git", "dist", "build", ".vercel", ".turbo", "coverage", ".testbuild",
   "out", ".output", "storybook-static",
 ]);
-// A consumer's own vendored submodules (web-core itself, app-ui, the LMS
-// engine) are gated in their own repo — a consumer running this script
-// against its tree does not need to re-check what it mounted read-only.
+// A consumer's own vendored submodules are gated in their own repo — a
+// consumer running this script against its tree does not need to re-check
+// what it mounted read-only.
+//
+// EVERY NAME HERE MUST BE VERIFIED TO SELF-GATE, NEVER ASSUMED. Each entry
+// is a hole punched in every consumer's coverage, justified only by the
+// named repo running this exact gate in its own CI. On 2026-09-22 two of
+// the three names below did not: one had no font gate at all despite being
+// vendored into eleven consumers, and one only unit-tested this script's
+// logic against fixtures without ever running it over its own tree. A font
+// CDN added to either would have been invisible to every consumer and
+// shipped to all of them. Both were fixed the same day; the comment had
+// asserted it for months and nobody had checked.
+//
+// So: before adding a fourth name, confirm that repo's CI actually runs
+// this gate and that it reports a non-zero file count. A gate that checks
+// nothing passes just as green as one that checks everything.
 const SKIP_PATH = /(^|\/)(web-core|app-ui|lms)(\/|$)/;
 const EXT = /\.(tsx?|jsx?|mjs|cjs|css|html?)$/;
 const TEST_FILE = /\.test\.(tsx?|jsx?)$/;
