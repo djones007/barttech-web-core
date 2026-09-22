@@ -276,6 +276,11 @@
         }
       ],
       "why": "sends one aggregate, no-identifier funnel event (`landing` / `reserve_click` / `lead_submit`) to a shared ingest endpoint so consent-gated client analytics is not the only measurement of paid traffic. `site` is a caller parameter, never a constant. Deliberately reuses requestSignals' isAutomatedRequest and device.ts rather than re-checking either locally — see both modules' own why."
+    },
+    "posthogSessionRecording": {
+      "owner": "@/web-core/posthogSessionRecording",
+      "resources": [],
+      "why": "a plain literal config object (masking defaults + the `data-ph-mask` selector convention) spread into a consumer's own `posthog.init()` call — it owns no external system and imports nothing, deliberately not even `posthog-js` types (golden rule 1b: posthog-js is not a dependency every web-core consumer installs). Added 2026-09-22 after estate issue 8e6fb948-935c-467b-bf9d-759d031bdb72 found all 12+ `posthog.init()` call sites across the estate had never set a `session_recording` or `enable_recording_console_log` option at all, so rrweb's factory defaults applied unchosen — 100% of checkout sessions recorded, console output captured, no client-side masking override. The project-level fix (URL blocklist, console opt-in, masking config) was made via the PostHog API directly and holds no place in this PUBLIC repo; this module is the client-side twin, set once so a future call site does not repeat the same unchosen default. No resource match: the re-implementation risk is a hand-typed `session_recording: { maskAllInputs: true, maskTextSelector: \"...\" }` literal inline at a call site instead of importing this module, which has no reliable textual signature distinct from a legitimate one-off override — enforced by review, same as consentBannerSize's convention-only entries. Rolling this into the 12+ consumer call sites is a separate estate-wide sweep, not done as part of adding the module — see the estate issue for the exact file/line list."
     }
   }
 }

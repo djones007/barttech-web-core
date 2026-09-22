@@ -2,6 +2,33 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-22] — `posthogSessionRecording.ts`: shared client-side session-replay defaults
+
+### Added
+- **New module `posthogSessionRecording.ts`** — exports `POSTHOG_CLIENT_DEFAULTS` (spread into a
+  consumer's own `posthog.init()` call), `POSTHOG_SESSION_RECORDING_DEFAULTS`, and
+  `POSTHOG_PII_MASK_SELECTOR` (`"[data-ph-mask]"`, the `data-ph-mask` markup convention for masking
+  rendered PII text that `maskAllInputs` does not cover). `enable_recording_console_log: false` and
+  `maskAllInputs: true` client-side, matching the PostHog project-level
+  `session_recording_masking_config` set the same day — belt-and-braces so a consumer's replay
+  masking does not depend solely on the project dashboard setting staying correct. Owns no external
+  system, imports nothing (deliberately not `posthog-js` — golden rule 1b), covered by 6 new
+  `posthogSessionRecording.test.ts` cases, and declared in `shared-modules.json`.
+
+### Why
+- Estate issue `8e6fb948-935c-467b-bf9d-759d031bdb72`: PostHog session replay was enabled at the
+  project level and none of the estate's 12+ `posthog.init()` call sites had ever set a
+  `session_recording` or `enable_recording_console_log` option, so rrweb's factory defaults applied
+  unchosen — 100% of sessions recorded (including the checkout domain), console output captured into
+  replays, and no masking override beyond posthog-js's own input-only default. The project-level fix
+  (URL blocklist for payment/admin routes, console-recording opt-in off, project masking config) was
+  made directly via the PostHog API and holds no place in this public repo. This module is the
+  client-side twin — shipped here, once, so a future `posthog.init()` call does not repeat the same
+  unchosen default.
+- **Not yet rolled out to consumers.** Wiring `...POSTHOG_CLIENT_DEFAULTS` into the 12+ existing
+  `posthog.init()` call sites is a separate estate-wide sweep, tracked on the same estate issue —
+  several of those repos had other agents working in them at the time this shipped.
+
 ## [2026-09-21c] — Path-traversal defense-in-depth for three more scripts/ gates
 
 ### Fixed
