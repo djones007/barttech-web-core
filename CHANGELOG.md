@@ -2,6 +2,43 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-22b] — `check-third-party-fonts.mjs`: third-party font CI gate promoted into `scripts/`
+
+### Added
+- **`scripts/check-third-party-fonts.mjs`** — CI gate: no runtime font load from a third-party CDN
+  (Google Fonts, Bunny Fonts, Adobe Fonts/Typekit, Font Awesome CDN, jsDelivr/unpkg font paths).
+  Named denylist, not an arbitrary-third-party-origin match — see the script's own header for why.
+  Correctly skips a host named only inside a Content-Security-Policy directive string (a
+  permission, not a load). Waivers: `// third-party-font-ok: <reason>` on the line or the line
+  above, or a path plus a `#` reason in `.font-cdn-baseline`. Plain Node, no dependencies, same
+  `readWithinRoot` defense-in-depth as the rest of `scripts/`.
+- **`check-third-party-fonts.test.ts`** — 10 cases, both directions: fires on a Google Fonts
+  `<link>`, a Bunny Fonts `@import`, and a hardcoded Adobe Fonts/Typekit URL; stays silent on the
+  same hosts named only in a CSP directive or a `Content-Security-Policy` header line, on
+  `next/font/google` self-hosting, on an annotated exception with a reason, and on a
+  `.font-cdn-baseline` entry; confirms a bare annotation with no reason does NOT suppress a
+  finding, and that the `web-core` mount path is excluded. Wired into `package.json`'s `test`
+  script alongside the other `scripts/check-*.mjs` gates — 234 tests now pass (was 224).
+- Documented in `scripts/CLAUDE.md` alongside the other gate scripts.
+
+### Why
+- Written 2026-09-22 as a local script in a consumer's scaffold template because this repo was
+  mid-edit by another session that same day — its own header carried a promotion follow-up naming
+  this repo as the right home. Moved here unchanged in behaviour (same denylist, same CSP-vs-load
+  distinction, same annotation/baseline escape hatches); only the header's promotion note and the
+  `SKIP_PATH` comment (now written for a general consumer rather than the template specifically)
+  changed. The template's own local copy and `ci.yml` step are untouched by this commit — another
+  session owns that repo today, and rolling consumers onto the pinned SHA here is a separate,
+  later step.
+- **Not registered in `shared-modules.json`.** That manifest declares TypeScript modules at this
+  repo's root consumed via `@/web-core/<name>` import — the CI-enforced "every module MUST be
+  declared" gate only walks root-level `*.ts` files. `check-third-party-fonts.mjs` is a standalone
+  CLI under `scripts/`, fetched and run directly by consumer CI, the same family as
+  `check-lead-store-ordering.mjs`, `check-postgrest-filter-terms.mjs` and the other `scripts/`
+  gates — none of which carry a `shared-modules.json` entry either, since none owns an external
+  resource in that sense. Registration for this family is the `scripts/CLAUDE.md` doc entry, which
+  this commit adds.
+
 ## [2026-09-22] — `posthogSessionRecording.ts`: shared client-side session-replay defaults
 
 ### Added

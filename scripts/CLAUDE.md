@@ -259,6 +259,34 @@ a CI step that fetches the raw file.
   warn containing "skip" flagged four healthy routes, so the message must name
   what is being skipped. Plain Node, no dependencies.
 
+- `check-third-party-fonts.mjs` — flags a **runtime font load from a
+  third-party CDN**: Google Fonts, Bunny Fonts, Adobe Fonts/Typekit, Font
+  Awesome CDN (kit loader and cdnjs), jsDelivr/unpkg font packages. Loading a
+  webfont from someone else's server sends every visitor's IP to that host on
+  every page load — LG München I awarded €100 damages for exactly this
+  (Google Fonts, Jan 2022) and it remains a live GDPR complaint pattern.
+  Deliberately a **named denylist**, not an arbitrary-third-party-origin
+  match: a regex for "any external URL near font-looking code" would fire on
+  `@font-face { src: url(...) }` pointing at a repo's own R2/Cloudinary
+  bucket, which is the false-positive rate that gets a gate switched off
+  within a week. **Skips a host named only inside a Content-Security-Policy
+  directive string** (`style-src`/`font-src`/the `Content-Security-Policy`
+  header itself) — that is a permission, not a load, the same distinction
+  `check-webhook-verification.mjs` draws between checking a signature and
+  acting on it. Promoted here 2026-09-22 from a consumer's scaffold
+  template, where it was written the same day web-core was mid-edit by
+  another session — behaviour is unchanged, only the location and header's
+  promotion note. **What it cannot see:** a per-brand or DB-sourced font URL
+  (a `brands.theme.fontUrl`-shaped design, found live in one consumer) is
+  the same violation with an extra layer of indirection — the hostname
+  lives in a database row, not in the consuming repo's source, so no grep
+  can see it — that needs a self-hosted-file-path allowlist instead, never
+  a hostname regex. Waivers
+  are `// third-party-font-ok: <reason>` on the line or the line above, or a
+  path plus a `#` reason in `.font-cdn-baseline` for a whole-file exception;
+  a bare annotation with no reason does not suppress the finding. Plain
+  Node, no dependencies.
+
 - `check-post-submit-notice.mjs` — flags **hand-written inbox/spam-folder
   copy** in a `.tsx`/`.jsx` file that does not import the shared
   deliverability notice. Any page telling a visitor "if you don't see it,
