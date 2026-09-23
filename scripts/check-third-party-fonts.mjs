@@ -171,7 +171,7 @@ function loadBaseline(root) {
   const p = join(root, ".font-cdn-baseline");
   if (!existsSync(p)) return new Set();
   return new Set(
-    readFileSync(p, "utf8")
+    readWithinRoot(root, p)
       .split("\n")
       .map((s) => s.replace(/#.*$/, "").trim())
       .filter(Boolean)

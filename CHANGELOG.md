@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-23b] — Font gate reads its baseline through `readWithinRoot`
+
+### Changed
+- **`scripts/check-third-party-fonts.mjs` `loadBaseline()`** now reads `.font-cdn-baseline` via the
+  file's own `readWithinRoot()` helper instead of a bare `readFileSync(p, "utf8")`. No behaviour
+  change and no vulnerability closed — `p` is a constant filename joined to the root, so there was
+  never a traversal to exploit. The point is consistency: `readWithinRoot` is defined sixty lines
+  above, its docstring says "Same idiom as the rest of scripts/", and the sibling gate
+  `check-migration-prefixes.mjs` already routes the identical baseline read through it. One of the
+  two contradicted the convention the file itself documents, which invites the next reader to treat
+  the guard as optional.
+  Verified in both directions against a fixture tree: the gate still fails (exit 1) on a runtime
+  Google Fonts reference and still passes (exit 0, 1 baselined) once that path is listed in
+  `.font-cdn-baseline`. No repo in the estate currently ships a baseline file, so this line was not
+  exercised by any real run.
+  Also clears the Aikido finding `Potential file inclusion attack via reading file` at line 174 —
+  one of four sinks in that group, all of which trace to `ROOT = process.argv[2] || process.cwd()`.
+  These scripts are build-time CI gates invoked only from `ci.yml` and their own tests; nothing
+  reaches them from a request, so the group is a false positive driven by Aikido classifying this
+  repo as "backend". The other three sinks are left as they are.
+
 ## [2026-09-23] — New gate: duplicate migration filename prefixes
 
 ### Added
