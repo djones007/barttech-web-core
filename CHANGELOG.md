@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-23] — New gate: duplicate migration filename prefixes
+
+### Added
+- **`scripts/check-migration-prefixes.mjs`** — flags two migration files under
+  `supabase/migrations/` that share the same leading prefix (the digits, optionally
+  followed by a single lowercase letter, before the first underscore). A migration
+  runner records what it applied by filename and assigns its own version independently
+  of that prefix, so a duplicate is a labelling fault, not a replay risk — but it is
+  exactly the mistake two authors make when they do not know about each other's work.
+  The rule has one deliberate nuance: a short numeric prefix (`0053`) or a full
+  timestamp-style prefix must be unique, and an 8-digit date prefix WITH a
+  disambiguating letter (`20260901b`) must be unique, but an 8-digit date prefix with
+  NO letter is allowed to repeat — several files sharing a bare same-day date is an
+  established, intentional convention, not a defect, and failing on it would fire on
+  every pre-existing same-day group in every consumer. Escape hatch:
+  `.migration-prefix-baseline` (one prefix per line, `# reason` required — a bare entry
+  does not suppress).
+- **`check-migration-prefixes.test.ts`** — covers a sequential duplicate failing, a
+  lettered-date duplicate failing, an unlettered same-date group passing even with many
+  files, a baselined prefix passing, a baseline entry with no reason NOT suppressing,
+  and a clean repo passing with a non-zero file count.
+
 ## [2026-09-22d] — `SKIP_PATH` entries must be verified to self-gate, not assumed
 
 ### Changed
