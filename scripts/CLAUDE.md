@@ -308,3 +308,24 @@ a CI step that fetches the raw file.
   `// post-submit-notice-ok: <reason>` on the line or the line above; a bare
   annotation with no reason does not suppress the finding. Plain Node, no
   dependencies.
+
+- `check-migration-prefixes.mjs` — flags two files under `supabase/migrations/`
+  that share the same leading prefix (the digits, optionally followed by one
+  lowercase letter, before the first underscore). A migration runner assigns its
+  own version and records what it applied by filename, so the prefix controls
+  neither ordering nor dedup — a duplicate is a silent labelling fault, not a
+  replay risk, but it is exactly the mistake two authors make without knowing
+  about each other's work. The one deliberate nuance: a short numeric prefix
+  (`0053`) or a long timestamp-style prefix must be unique, and an 8-digit date
+  prefix WITH a disambiguating letter (`20260901b`) must be unique, but an
+  8-digit date prefix with NO letter is allowed to repeat — several files on one
+  bare same-day date is an established, intentional convention in repos that use
+  this style, not a defect, and failing on it would fire on every pre-existing
+  same-day group and teach everyone to ignore the gate. Only a
+  repeated disambiguating LETTER on the same date is a real collision.
+  Deliberately does not decide the fix (rename vs. leave alone) — a migration
+  already applied may have its filename recorded verbatim in the runner's own
+  ledger, so renaming after the fact can desync it from that record, which is
+  worse than the original labelling fault. Waivers are
+  `.migration-prefix-baseline` (one prefix per line, `# reason` required — a
+  bare entry does not suppress). Plain Node, no dependencies.
