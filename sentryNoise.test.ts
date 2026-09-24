@@ -46,6 +46,10 @@ test("drops browser-extension DOM serialisation noise", () => {
     isNoiseEvent(errorEvent("Converting circular structure to JSON ... HTMLAnchorElement")),
     true,
   );
+  assert.equal(
+    isNoiseEvent(errorEvent("Invalid call to runtime.sendMessage(). Tab not found.")),
+    true,
+  );
 });
 
 test("drops the framework's internal redirect signal, by digest and by message", () => {

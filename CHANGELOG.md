@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-24b] — `sentryNoise`: drop Safari extension `runtime.sendMessage` rejections
+
+### Fixed
+- **`isNoiseEvent()`** now drops `Invalid call to runtime.sendMessage(). Tab not found.` — Safari's
+  WebExtension runtime rejecting a content-script message after its tab closed or navigated. It
+  arrives via `onunhandledrejection` with no application frame, and page code has no `runtime` API,
+  so the match cannot swallow a real error. Raised as a high-priority issue from a production site.
+  Test added to `sentryNoise.test.ts`. No new import.
+
 ## [2026-09-24] — New module: shared scroll motion (`motion.ts` + `motion.css`)
 
 ### Added

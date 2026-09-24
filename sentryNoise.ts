@@ -126,9 +126,16 @@ const TRANSLATE_PROXY_HOST = ".translate.goog";
  * observers that walk the DOM and try to serialise nodes React has attached its
  * own circular internals to. The throw surfaces in the page's error handler
  * with no application frame involved.
+ *
+ * "Invalid call to runtime.sendMessage(). Tab not found." is Safari's
+ * WebExtension runtime rejecting a message from an extension's content script
+ * whose tab has gone (closed, navigated, or reloaded mid-call). The rejection
+ * is unhandled, so it lands on `onunhandledrejection` — ours. Page code has no
+ * `runtime` API to call, so this message cannot come from the application.
  */
 function isBrowserExtensionNoise(value: string): boolean {
   if (value.includes("Object Not Found Matching Id")) return true;
+  if (value.includes("Invalid call to runtime.sendMessage()")) return true;
   if (value.includes("Converting circular structure to JSON") && value.includes("HTMLAnchorElement")) {
     return true;
   }
