@@ -1,0 +1,135 @@
+/*
+ * Shared scroll motion styles. Pair with `motion.ts` (`initMotion()`); see the
+ * header there for the markup contract and why each rule is shaped this way.
+ *
+ * Every value a brand might want to tune is a custom property with a default,
+ * so a site restyles by setting variables in its own CSS, never by forking
+ * these rules:
+ *   --wc-reveal-duration   --wc-reveal-distance   --wc-ease
+ *   --wc-reveal-delay      --wc-parallax          --wc-lift
+ *   --wc-progress-color    --wc-progress-height
+ */
+
+:root {
+  --wc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --wc-reveal-duration: 420ms;
+  --wc-reveal-distance: 12px;
+  --wc-lift: 2px;
+}
+
+/* ---------- Reveal on entry ----------
+ * Hidden state only under html.wc-motion, which initMotion() adds after it has
+ * already marked on-screen elements revealed. No JS = everything visible. */
+
+[data-reveal] {
+  transition:
+    opacity var(--wc-reveal-duration) var(--wc-ease),
+    transform var(--wc-reveal-duration) var(--wc-ease);
+  transition-delay: var(--wc-reveal-delay, 0ms);
+}
+
+html.wc-motion [data-reveal]:not([data-revealed]) {
+  opacity: 0;
+  transform: translateY(var(--wc-reveal-distance));
+}
+html.wc-motion [data-reveal="fade"]:not([data-revealed]) {
+  transform: none;
+}
+html.wc-motion [data-reveal="left"]:not([data-revealed]) {
+  transform: translateX(calc(var(--wc-reveal-distance) * -1.5));
+}
+html.wc-motion [data-reveal="right"]:not([data-revealed]) {
+  transform: translateX(calc(var(--wc-reveal-distance) * 1.5));
+}
+html.wc-motion [data-reveal="scale"]:not([data-revealed]) {
+  transform: scale(0.96);
+}
+
+/* ---------- Hover lift ----------
+ * Movement, not an opacity change (design standard §7). Shadow is left to the
+ * site — it is brand-specific. */
+
+.wc-lift {
+  transition: transform 200ms var(--wc-ease), box-shadow 200ms var(--wc-ease);
+}
+.wc-lift:hover,
+.wc-lift:focus-visible {
+  transform: translateY(calc(var(--wc-lift) * -1));
+}
+
+/* Count-up numbers must not reflow the line as digits change width. */
+[data-count-to] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Scroll-driven effects (no JavaScript) ----------
+ * Only where the browser supports scroll timelines; elsewhere the element is
+ * simply static. Never a polyfill — a JS scroll listener is the main-thread
+ * cost this approach exists to avoid. */
+
+.wc-scroll-progress {
+  display: none;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* data-parallax on a decorative layer; --wc-parallax sets travel (default 40px). */
+    [data-parallax] {
+      animation: wc-parallax linear both;
+      animation-timeline: view();
+      animation-range: cover;
+      will-change: transform;
+    }
+
+    /* A thin reading-progress bar pinned to the top of the viewport. */
+    .wc-scroll-progress {
+      display: block;
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 50;
+      height: var(--wc-progress-height, 3px);
+      background: var(--wc-progress-color, currentColor);
+      transform-origin: 0 50%;
+      animation: wc-progress linear both;
+      animation-timeline: scroll(root block);
+      pointer-events: none;
+    }
+  }
+}
+
+@keyframes wc-parallax {
+  from {
+    transform: translateY(calc(var(--wc-parallax, 40px) * -1));
+  }
+  to {
+    transform: translateY(var(--wc-parallax, 40px));
+  }
+}
+
+@keyframes wc-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* ---------- Reduced motion ----------
+ * initMotion() already declines to hide anything; this also stops hover
+ * movement and any transition a site's own CSS might trigger. */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal],
+  .wc-lift {
+    transition: none;
+  }
+  html.wc-motion [data-reveal]:not([data-revealed]) {
+    opacity: 1;
+    transform: none;
+  }
+  .wc-lift:hover,
+  .wc-lift:focus-visible {
+    transform: none;
+  }
+}

@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-24] — New module: shared scroll motion (`motion.ts` + `motion.css`)
+
+### Added
+- **`motion.ts` / `motion.css`** — reveal-on-entry, staggered siblings, count-up numbers, hover lift,
+  and CSS scroll-driven parallax and reading-progress bar. Driven by data attributes
+  (`data-reveal`, `data-reveal-stagger`, `data-count-to`, `data-parallax`, `.wc-scroll-progress`,
+  `.wc-lift`); one `initMotion()` call from a single client component in the root layout covers
+  every route, including client-side navigations (MutationObserver). Every tunable is a CSS custom
+  property with a default, so a site restyles by setting variables, never by forking rules.
+  Framework-free per golden rule 6, and no animation library — transitions are CSS, parallax and
+  progress are scroll timelines with no JavaScript at all (static where unsupported, never
+  polyfilled).
+  Three behaviours are deliberate and are what the per-site reveal hooks this replaces got wrong:
+  the hidden start state only applies once `initMotion()` has run (no JS = everything visible);
+  elements already on screen at init are shown immediately and never animate, so a hero is never
+  hidden behind a fade and Largest Contentful Paint is not delayed; and reduced-motion users get
+  no hiding and no count-up at all, not just shorter transitions.
+  **No new external import** — nothing for consumers to install. The stylesheet is imported by the
+  consumer (`import "@/web-core/motion.css"` in its root layout).
+- `motion.test.ts` (7 tests: stagger cap, easing clamp, count formatting and parsing, viewport
+  overlap, server-side no-op); registered in `shared-modules.json` with no owned resources.
+
 ## [2026-09-23b] — Font gate reads its baseline through `readWithinRoot`
 
 ### Changed
