@@ -56,6 +56,9 @@ jobs:
       - name: Classifier-test gate proves itself both ways
         if: always()
         run: node scripts/check-classifier-tests.mjs --self-test
+      - name: Landing-page server-event gate proves itself both ways
+        if: always()
+        run: node scripts/check-landing-page-events.mjs --self-test
 
       # This is this repo's OWN tree, checked directly against the local script —
       # not the same thing as `check-third-party-fonts.test.ts` above (`npm test`),

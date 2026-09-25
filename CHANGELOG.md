@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-25c] — New gate: landing routes must record a server-side page event in `after()`
+
+### Added
+- **`scripts/check-landing-page-events.mjs`** — opt-in CI gate. A repo lists its landing routes in
+  `.landing-routes`; each listed page must import `after` from `next/server` and call
+  `recordPageEvent` / `trackServerEvent` (or a name from a `calls:` line) inside an `after()`
+  argument. Fails on a missing call, a manifest entry that resolves to no file, or an empty manifest;
+  no manifest passes with a notice. `--self-test` (15 cases) runs in this repo's CI. Documented in
+  `scripts/CLAUDE.md`. No module change, so consumers only see it once their CI adds the step.
+
 ## [2026-09-25b] — New module: consent-independent split testing (`experiments.ts`); `pageEvents` carries the variant
 
 ### Added

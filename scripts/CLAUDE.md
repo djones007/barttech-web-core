@@ -352,3 +352,19 @@ a CI step that fetches the raw file.
   colour type 6; every ICO entry an RGBA PNG or a 32bpp BMP). `public/` is not
   Next's icon pipeline and is ignored. Opt-in `prebuild` step, no git needed.
   Tested in `check-icon-rgba.test.ts`.
+
+- `check-landing-page-events.mjs` — **every listed landing route counts its visits
+  server-side in `after()`.** Opt-in via a `.landing-routes` manifest at the repo
+  root: one URL route (`/`, `/offer`, `/[slug]`; route groups ignored) or file path
+  per line, `#` comments, and an optional `calls: a, b` line naming the repo's own
+  wrapper. Each listed page must import `after` from `next/server` and call
+  `recordPageEvent`/`trackServerEvent` (or a `calls:` name) inside an `after(...)`
+  argument. Comments are blanked first; arguments are found by paren balancing.
+  Fails on a missing call, on an entry that resolves to no file (a renamed page
+  must not drop out of coverage silently) and on an empty manifest (an empty
+  manifest is a disabled gate that looks enabled). No manifest = announced pass.
+  It proves the call is PRESENT, never that the env vars are set: code without
+  env is the common real failure, so pair it with a runtime monitor on the event
+  store. `--self-test` proves it both ways (15 cases, run in this repo's CI).
+  Consumers fetch it pinned by `WEB_CORE_REF`, like the other gates. Plain Node,
+  no dependencies.
