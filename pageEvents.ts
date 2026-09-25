@@ -119,7 +119,13 @@ export async function trackServerEvent({
   // Meta CAPI sends already use — never a second copy of that rule, which is
   // what let a server-side ViewContent run at 300+/hour before this gate
   // existed. See requestSignals.ts.
-  if (isAutomatedRequest(headers)) return;
+  //
+  // `lead_submit` is posted from a route handler answering the form's own
+  // fetch(), so it is gated as a form submit: a real browser fetch is
+  // `sec-fetch-mode: cors`, which the page-visit rule would read as automated
+  // and drop — which is exactly what happened to every lead_submit until
+  // 2026-09-25. Bots are still caught by the user-agent/prefetch rules.
+  if (isAutomatedRequest(headers, { formSubmit: event === "lead_submit" })) return;
 
   try {
     await fetch(url, {

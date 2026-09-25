@@ -12,6 +12,17 @@ All notable changes to this project are documented here. Format follows [Keep a 
   no manifest passes with a notice. `--self-test` (15 cases) runs in this repo's CI. Documented in
   `scripts/CLAUDE.md`. No module change, so consumers only see it once their CI adds the step.
 
+## [2026-09-25c] — `lead_submit` page events were silently dropped; form submits now pass the bot gate
+
+### Fixed
+- **`trackServerEvent({ event: "lead_submit" })` never sent anything.** It ran the page-visit bot
+  gate, which requires `sec-fetch-mode: navigate` + `sec-fetch-dest: document`. A lead is posted by
+  the form's own `fetch()` (`cors` / `empty`), so every real submit read as automated and was
+  dropped. `isAutomatedRequest()` takes an optional `{ formSubmit: true }` that lifts only the
+  navigate/document rule (user-agent and prefetch rules still apply), and `trackServerEvent` sets it
+  for `lead_submit`. Backwards-compatible: the new parameter is optional and `landing` /
+  `reserve_click` are gated exactly as before. Pinned in `requestSignals.test.ts`.
+
 ## [2026-09-25b] — New module: consent-independent split testing (`experiments.ts`); `pageEvents` carries the variant
 
 ### Added

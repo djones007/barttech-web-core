@@ -59,7 +59,22 @@ const PREFETCH_HEADERS: readonly [string, RegExp][] = [
  * real traffic is a starved optimisation signal, which is the harder failure to
  * notice. Only positive evidence of automation blocks.
  */
-export function isAutomatedRequest(hdrs: { get(name: string): string | null }): boolean {
+export type AutomatedRequestOptions = {
+  /**
+   * The request is a form's own `fetch()` POST to a route handler, not a page
+   * load — e.g. a lead-capture submit. Such a request legitimately carries
+   * `sec-fetch-mode: cors` + `sec-fetch-dest: empty`, which the page-visit rule
+   * below reads as "not a visit". Without this, every server-side `lead_submit`
+   * was silently dropped (0 rows estate-wide). The user-agent and prefetch
+   * checks still apply; only the navigate/document requirement is lifted.
+   */
+  formSubmit?: boolean;
+};
+
+export function isAutomatedRequest(
+  hdrs: { get(name: string): string | null },
+  opts: AutomatedRequestOptions = {},
+): boolean {
   const ua = hdrs.get("user-agent");
 
   // No user agent at all is not a browser. Every real one sends it.
@@ -75,6 +90,8 @@ export function isAutomatedRequest(hdrs: { get(name: string): string | null }): 
   // visit is `navigate` + `document`; anything else is a subresource, an API
   // call or an embed. Absent entirely (Safari below 16.4, some proxies) it
   // proves nothing, so it is not treated as evidence either way.
+  // A form submit is a fetch by definition, so this rule does not apply to it.
+  if (opts.formSubmit) return false;
   const mode = hdrs.get("sec-fetch-mode");
   if (mode && mode !== "navigate") return true;
   const dest = hdrs.get("sec-fetch-dest");

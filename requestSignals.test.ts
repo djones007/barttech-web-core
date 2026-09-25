@@ -161,6 +161,22 @@ test("an embed in an iframe is not a landing-page view", () => {
   assert.equal(isAutomatedRequest(hdrs({ "user-agent": CHROME, "sec-fetch-dest": "iframe" })), true);
 });
 
+// ── Form submits: a lead POST is a fetch, and that is fine ─────────────────
+
+test("a form's fetch POST counts when gated as a form submit", () => {
+  // Every server-side lead_submit was dropped until 2026-09-25 because a real
+  // browser fetch carries sec-fetch-mode: cors / dest: empty.
+  const fetchPost = { "user-agent": CHROME, "sec-fetch-mode": "cors", "sec-fetch-dest": "empty", "sec-fetch-site": "same-origin" };
+  assert.equal(isAutomatedRequest(hdrs(fetchPost)), true, "still not a page view");
+  assert.equal(isAutomatedRequest(hdrs(fetchPost), { formSubmit: true }), false);
+});
+
+test("a form submit from a bot or a prefetch is still automated", () => {
+  assert.equal(isAutomatedRequest(hdrs({ "user-agent": "curl/8.4.0", "sec-fetch-mode": "cors" }), { formSubmit: true }), true);
+  assert.equal(isAutomatedRequest(hdrs({ "user-agent": "" }), { formSubmit: true }), true);
+  assert.equal(isAutomatedRequest(hdrs({ "user-agent": CHROME, "sec-purpose": "prefetch" }), { formSubmit: true }), true);
+});
+
 // ── The bias itself ────────────────────────────────────────────────────────
 
 test("an unrecognised but browser-shaped agent is allowed through", () => {
