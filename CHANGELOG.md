@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-25e] — Landing gate: `wrapper:` manifest lines
+
+### Added
+- **`check-landing-page-events.mjs` `wrapper: <fn> <file>`** — for repos whose pages call one helper
+  that schedules the `after()` page event itself. The helper file must pass the full check, and a
+  listed page then passes by calling `<fn>(` outside a comment. 3 new self-test cases (18 total).
+
 ## [2026-09-25d] — New gate: landing routes must record a server-side page event in `after()`
 
 ### Added

@@ -357,7 +357,9 @@ a CI step that fetches the raw file.
   server-side in `after()`.** Opt-in via a `.landing-routes` manifest at the repo
   root: one URL route (`/`, `/offer`, `/[slug]`; route groups ignored) or file path
   per line, `#` comments, and an optional `calls: a, b` line naming the repo's own
-  wrapper. Each listed page must import `after` from `next/server` and call
+  wrapper, plus `wrapper: <fn> <file>` for a repo whose pages call one helper that
+  schedules the `after()` itself (the helper file must pass the full check; a page
+  then passes by calling `<fn>(`). Otherwise each listed page must import `after` from `next/server` and call
   `recordPageEvent`/`trackServerEvent` (or a `calls:` name) inside an `after(...)`
   argument. Comments are blanked first; arguments are found by paren balancing.
   Fails on a missing call, on an entry that resolves to no file (a renamed page
@@ -365,6 +367,6 @@ a CI step that fetches the raw file.
   manifest is a disabled gate that looks enabled). No manifest = announced pass.
   It proves the call is PRESENT, never that the env vars are set: code without
   env is the common real failure, so pair it with a runtime monitor on the event
-  store. `--self-test` proves it both ways (15 cases, run in this repo's CI).
+  store. `--self-test` proves it both ways (18 cases, run in this repo's CI).
   Consumers fetch it pinned by `WEB_CORE_REF`, like the other gates. Plain Node,
   no dependencies.

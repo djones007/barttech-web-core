@@ -34,6 +34,14 @@
 //     /[slug]                  # dynamic segments are written literally
 //     src/components/Hero.tsx  # or a FILE path, when after() lives outside page.tsx
 //     calls: recordLanding, trackLanding
+//     wrapper: measureLanding lib/landing-measurement.ts
+//
+// `wrapper: <fn> <file>` is for a repo whose pages call ONE helper that does
+// the after() scheduling itself. The helper's file must pass the full check
+// (imports `after`, calls a page-event function inside after()), and then a
+// listed page passes if it calls `<fn>(` outside a comment. Both halves are
+// checked on every run, so emptying the helper fails as surely as dropping
+// the call from a page.
 //
 // An entry that resolves to no file FAILS (a renamed page must not silently
 // drop out of coverage). A manifest with no entries FAILS (an empty manifest
@@ -73,13 +81,16 @@ function readWithinRoot(root, target) {
   return readFileSync(resolved, "utf8");
 }
 
-/** Parse the manifest text into { entries: [{value, line}], calls: [...] }. */
+/** Parse the manifest text into { entries: [{value, line}], calls: [...], wrappers: [{name, file, line}] }. */
 export function parseManifest(text) {
   const entries = [];
   const calls = [...DEFAULT_CALLS];
+  const wrappers = [];
   text.split(/\r?\n/).forEach((raw, i) => {
     const line = raw.replace(/\s+#.*$/, "").replace(/^#.*$/, "").trim();
     if (!line) return;
+    const w = line.match(/^wrapper:\s*([A-Za-z_$][\w$]*)\s+(\S+)$/i);
+    if (w) { wrappers.push({ name: w[1], file: w[2], line: i + 1 }); return; }
     const m = line.match(/^calls:\s*(.+)$/i);
     if (m) {
       for (const n of m[1].split(",").map((s) => s.trim()).filter(Boolean)) {
@@ -89,7 +100,7 @@ export function parseManifest(text) {
     }
     entries.push({ value: line, line: i + 1 });
   });
-  return { entries, calls };
+  return { entries, calls, wrappers };
 }
 
 /** Blank // and /* *\/ comments without touching string contents or line numbers. */
@@ -202,12 +213,25 @@ export function pageRoutes(root) {
 export function run(root) {
   const manifestPath = join(root, MANIFEST);
   if (!existsSync(manifestPath)) return { status: "no-manifest", problems: [], checked: [] };
-  const { entries, calls } = parseManifest(readWithinRoot(root, MANIFEST));
+  const { entries, calls, wrappers } = parseManifest(readWithinRoot(root, MANIFEST));
   const problems = [];
   const checked = [];
   if (!entries.length) {
     problems.push(`${MANIFEST} lists no routes — an empty manifest is a disabled gate. List the landing routes, or delete the file.`);
     return { status: "fail", problems, checked };
+  }
+  // Wrappers first: a wrapper only counts if its own file is wired.
+  const goodWrappers = [];
+  for (const w of wrappers) {
+    const abs = resolve(root, w.file);
+    if (!abs.startsWith(resolve(root) + sep) || !existsSync(abs)) {
+      problems.push(`${MANIFEST}:${w.line} wrapper file ${w.file} does not exist in this repo — update the manifest.`);
+      continue;
+    }
+    const why = checkSource(readWithinRoot(root, w.file), calls);
+    checked.push(`wrapper ${w.name} -> ${w.file}`);
+    if (why) problems.push(`wrapper ${w.name} (${w.file}): ${why}.`);
+    else goodWrappers.push(w.name);
   }
   const routes = pageRoutes(root);
   for (const { value, line } of entries) {
@@ -226,7 +250,13 @@ export function run(root) {
       }
       file = value;
     }
-    const why = checkSource(readWithinRoot(root, file), calls);
+    const source = readWithinRoot(root, file);
+    let why = checkSource(source, calls);
+    if (why && goodWrappers.length) {
+      const stripped = stripComments(source);
+      if (goodWrappers.some((n) => new RegExp(`(^|[^\\w$.])${n.replace(/\$/g, "\\$")}\\s*\\(`).test(stripped))) why = null;
+      else why = `${why}, and calls no wrapper (${goodWrappers.join(", ")})`;
+    }
     checked.push(`${value} -> ${file}`);
     if (why) problems.push(`${value} (${file}): ${why}.`);
   }
@@ -270,6 +300,16 @@ function selfTest() {
     now("unwired route fails", () => run(dir).status === "fail");
     writeFileSync(join(dir, MANIFEST), "/gone\n");
     now("missing route fails", () => run(dir).status === "fail");
+    mkdirSync(join(dir, "src/lib"), { recursive: true });
+    writeFileSync(join(dir, "src/lib/measure.ts"), `import { after } from "next/server";\nexport function measureLanding(){ after(() => recordPageEvent({})); }`);
+    writeFileSync(join(dir, "src/app/(site)/offer/page.tsx"), `import { measureLanding } from "@/lib/measure";\nexport default function P(){ measureLanding(); return null; }`);
+    writeFileSync(join(dir, MANIFEST), "wrapper: measureLanding src/lib/measure.ts\n/offer\n");
+    now("page calling a wired wrapper passes", () => run(dir).status === "pass");
+    writeFileSync(join(dir, "src/lib/measure.ts"), `export function measureLanding(){ /* gutted */ }`);
+    now("gutted wrapper fails", () => run(dir).status === "fail");
+    writeFileSync(join(dir, "src/lib/measure.ts"), `import { after } from "next/server";\nexport function measureLanding(){ after(() => recordPageEvent({})); }`);
+    writeFileSync(join(dir, "src/app/(site)/offer/page.tsx"), `export default function P(){ /* measureLanding(); */ return null; }`);
+    now("page with the wrapper call commented out fails", () => run(dir).status === "fail");
     writeFileSync(join(dir, MANIFEST), "../outside.tsx\n");
     now("path outside root fails, not read", () => run(dir).status === "fail");
   } finally {
