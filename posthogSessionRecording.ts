@@ -123,3 +123,28 @@ export const POSTHOG_CLIENT_DEFAULTS: {
   enable_recording_console_log: false,
   session_recording: POSTHOG_SESSION_RECORDING_DEFAULTS,
 };
+
+/**
+ * Route prefixes PostHog must never load on at all: admin screens, sign-in and auth callbacks.
+ * Security standard: payment and admin routes are excluded from session replay, and a sign-in page
+ * is where a one-time code or magic-link state is on screen. Checked once at load (these routes are
+ * entered directly, not reached by client navigation from a recorded page).
+ *
+ * A consumer with more private surfaces (an account area, an in-app checkout) passes its own extra
+ * prefixes; it never re-types this list.
+ */
+export const POSTHOG_NO_RECORD_PREFIXES: readonly string[] = ["admin", "auth", "login"];
+
+/**
+ * True when PostHog must not be initialised on this path. Matches a whole leading segment only:
+ * `/admin`, `/admin/users` and `/login?next=/x` are excluded, `/administration-guide` is not.
+ *
+ * ```ts
+ * if (POSTHOG_KEY && !isPosthogNoRecordPath(window.location.pathname)) posthog.init(…)
+ * ```
+ */
+export function isPosthogNoRecordPath(pathname: string, extraPrefixes: readonly string[] = []): boolean {
+  const first = (pathname || "/").split(/[?#]/)[0].replace(/^\/+/, "").split("/")[0].toLowerCase();
+  if (!first) return false;
+  return [...POSTHOG_NO_RECORD_PREFIXES, ...extraPrefixes].some((p) => p.replace(/^\/+|\/+$/g, "").toLowerCase() === first);
+}

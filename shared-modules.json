@@ -286,6 +286,11 @@
       "owner": "@/web-core/motion",
       "resources": [],
       "why": "scroll motion (reveal on entry, stagger, count-up) driven by data attributes, with its styles in motion.css. Owns no table, endpoint or secret. The duplication it replaces is per-site IntersectionObserver reveal hooks, each with its own threshold, class name and reduced-motion handling — not expressible as a resource match without firing on every legitimate IntersectionObserver use (lazy tracking, impressions). Enforced by review and the design standard instead."
+    },
+    "clientEvents": {
+      "owner": "@/web-core/clientEvents",
+      "resources": [],
+      "why": "browser-side GA4 `track()` and Meta `trackMeta()` (eventID dedupe + waitForConsent), plus the single-product param builders for both platforms. Owns no table, endpoint or secret: it calls `window.gtag`/`window.fbq` that the consumer's banner and adPlatforms loaded, and never loads a tag or decides consent itself. Promoted 2026-09-25 because every site hand-wrote the pair and the copies drifted on exactly the two details that make the numbers right: a missing eventID double-counts every consenting visitor against the server-side twin, and a load-time event that does not wait for consent is never sent. Not expressible as a resource match (a local `gtag(\"event\", …)` call has no textual signature distinct from a legitimate one-off), so enforced by review and the scaffold's example wiring. Existing per-site copies are left alone: moving them is the per-site rollout, not this change."
     }
   }
 }

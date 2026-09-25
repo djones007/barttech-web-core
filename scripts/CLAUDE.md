@@ -329,3 +329,26 @@ a CI step that fetches the raw file.
   worse than the original labelling fault. Waivers are
   `.migration-prefix-baseline` (one prefix per line, `# reason` required — a
   bare entry does not suppress). Plain Node, no dependencies.
+
+- `check-legal-placeholders.mjs` — **a production build must not ship placeholder
+  legal pages.** Scans the `/privacy`, `/terms` and `/disclaimer` page files (any
+  route group, `app/` or `src/app/`) and a `lib/seller.ts` seller-identity module
+  for `TODO`, `[BRAND]`/`[CONTACT EMAIL]`-style brackets and `REPLACE_WITH_*`,
+  with comments blanked first. FAILS only when `VERCEL_ENV=production` or with
+  `--strict`; anywhere else it prints `::warning::` findings and exits 0, so work
+  in progress is visible but never blocked. The deliberate complement to
+  `check-scaffold-metadata.mjs`, which skips legal body copy because it runs in
+  every environment. Self-skips (announced) for a `*-template` package. Waiver:
+  `// legal-placeholder-ok: <why>`. Needs no git (runs as a `prebuild` step,
+  where `vercel --prod` uploads without `.git`). Opt-in: a consumer wires it
+  into its own `prebuild`; it is NOT fetched by any CI job, so adding it here
+  changes nothing for a repo that has not chosen it. Tested in
+  `check-legal-placeholders.test.ts`.
+
+- `check-icon-rgba.mjs` — **app-router icon files must be RGBA.** Next.js rejects
+  a non-RGBA `icon.png`/`apple-icon.png` at build time, and on Vercel a failed
+  build leaves production silently on the previous deploy. Checks every
+  `favicon*.ico`, `icon*.png`, `apple-icon*.png` under `app/`/`src/app/` (PNG
+  colour type 6; every ICO entry an RGBA PNG or a 32bpp BMP). `public/` is not
+  Next's icon pipeline and is ignored. Opt-in `prebuild` step, no git needed.
+  Tested in `check-icon-rgba.test.ts`.

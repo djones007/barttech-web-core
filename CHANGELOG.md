@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-25] — Consent-independent measurement defaults: `clientEvents`, PostHog no-record paths, two opt-in prebuild gates
+
+### Added
+- **`clientEvents.ts`** (new module, registered in `shared-modules.json`) — browser `track()` (GA4)
+  and `trackMeta()` (Meta pixel) with `eventId` dedupe against a server-side twin and
+  `waitForConsent` for load-time events, plus `ga4ItemParams()` / `metaProductParams()` so one
+  product description renders both platforms' shapes. Imports only `./consent`; no React, no tag
+  ids, no new dependency. Tests: `clientEvents.test.ts`. The header documents the double-count
+  rules (Purchase never from a site; InitiateCheckout never from a site whose checkout sends it).
+- **`posthogSessionRecording.ts`: `POSTHOG_NO_RECORD_PREFIXES` + `isPosthogNoRecordPath()`** —
+  admin, auth and login routes never load PostHog; whole-segment match, consumer-extensible.
+  Additive export only.
+- **`scripts/check-legal-placeholders.mjs`** — fails a PRODUCTION build (`VERCEL_ENV=production`
+  or `--strict`) whose `/privacy`, `/terms`, `/disclaimer` or `lib/seller.ts` still carry `TODO`,
+  `[BRAND]`-style brackets or `REPLACE_WITH_*`; warns elsewhere; skips `*-template` packages.
+- **`scripts/check-icon-rgba.mjs`** — fails when an app-router icon (`favicon.ico`, `icon.png`,
+  `apple-icon.png`) is not RGBA, which Next.js rejects at build time. Dry-run against every repo in
+  the estate on 2026-09-25: all pass.
+
+### Notes
+- Both scripts are **opt-in prebuild steps** (the scaffold wires them in); no CI job fetches them,
+  so a consumer bumping this pointer changes nothing until it chooses to. No existing export
+  changed. Per-site adoption is a separate rollout; nothing was propagated.
+
 ## [2026-09-24b] — `sentryNoise`: drop Safari extension `runtime.sendMessage` rejections
 
 ### Fixed

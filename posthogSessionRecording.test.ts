@@ -4,6 +4,7 @@ import {
   POSTHOG_PII_MASK_SELECTOR,
   POSTHOG_SESSION_RECORDING_DEFAULTS,
   POSTHOG_CLIENT_DEFAULTS,
+  isPosthogNoRecordPath,
 } from "./posthogSessionRecording";
 
 test("masking defaults on — the whole point of this module is never off by default", () => {
@@ -67,4 +68,19 @@ test("exported shapes carry no function values — safe to spread into posthog.i
   for (const [key, value] of Object.entries(POSTHOG_SESSION_RECORDING_DEFAULTS)) {
     assert.notEqual(typeof value, "function", `${key} must not be a function`);
   }
+});
+
+test("no-record paths: admin, auth and login are excluded by whole segment", () => {
+  for (const p of ["/admin", "/admin/", "/admin/users", "/auth/callback", "/login", "/login?next=/account", "/LOGIN"]) {
+    assert.equal(isPosthogNoRecordPath(p), true, `${p} must never be recorded`);
+  }
+  for (const p of ["/", "", "/administration-guide", "/blog/admin", "/logins-explained", "/pricing"]) {
+    assert.equal(isPosthogNoRecordPath(p), false, `${p} is an ordinary page`);
+  }
+});
+
+test("no-record paths: a consumer adds its own private prefixes without re-typing the base list", () => {
+  assert.equal(isPosthogNoRecordPath("/account/orders", ["account"]), true);
+  assert.equal(isPosthogNoRecordPath("/account/orders"), false);
+  assert.equal(isPosthogNoRecordPath("/admin", ["account"]), true, "the base list still applies");
 });
