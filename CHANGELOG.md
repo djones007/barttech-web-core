@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
-## [2026-09-25c] — New gate: landing routes must record a server-side page event in `after()`
+## [2026-09-25d] — New gate: landing routes must record a server-side page event in `after()`
 
 ### Added
 - **`scripts/check-landing-page-events.mjs`** — opt-in CI gate. A repo lists its landing routes in
