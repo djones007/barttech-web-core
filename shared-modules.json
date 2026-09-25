@@ -275,7 +275,7 @@
           "reason": "the table is owned by the receiving app (a token-gated ingest route, via its own service-role client) — that route is the ONE legitimate writer and does not consume this module. Any OTHER repo writing to this table directly means it is holding a service-role key for a project it should not have one for, which is the exact indirection trackServerEvent()/the ingest endpoint exist to avoid. A sender site should never match this pattern in its own code at all — it only ever calls trackServerEvent(), which POSTs to the endpoint, never touches the table."
         }
       ],
-      "why": "sends one aggregate, no-identifier funnel event (`landing` / `reserve_click` / `lead_submit`) to a shared ingest endpoint so consent-gated client analytics is not the only measurement of paid traffic. `site` is a caller parameter, never a constant. Deliberately reuses requestSignals' isAutomatedRequest and device.ts rather than re-checking either locally — see both modules' own why."
+      "why": "sends one aggregate, no-identifier funnel event (`landing` / `reserve_click` / `lead_submit`) to a shared ingest endpoint so consent-gated client analytics is not the only measurement of paid traffic. `site` is a caller parameter, never a constant. Deliberately reuses requestSignals' isAutomatedRequest and device.ts rather than re-checking either locally — see both modules' own why. Optionally carries a split-test assignment (`experiment` / `variant` / `experiment_forced`, from experiments.ts); a variant id is shared by many visitors, so the row stays aggregate-only."
     },
     "posthogSessionRecording": {
       "owner": "@/web-core/posthogSessionRecording",
@@ -291,6 +291,11 @@
       "owner": "@/web-core/clientEvents",
       "resources": [],
       "why": "browser-side GA4 `track()` and Meta `trackMeta()` (eventID dedupe + waitForConsent), plus the single-product param builders for both platforms. Owns no table, endpoint or secret: it calls `window.gtag`/`window.fbq` that the consumer's banner and adPlatforms loaded, and never loads a tag or decides consent itself. Promoted 2026-09-25 because every site hand-wrote the pair and the copies drifted on exactly the two details that make the numbers right: a missing eventID double-counts every consenting visitor against the server-side twin, and a load-time event that does not wait for consent is never sent. Not expressible as a resource match (a local `gtag(\"event\", …)` call has no textual signature distinct from a legitimate one-off), so enforced by review and the scaffold's example wiring. Existing per-site copies are left alone: moving them is the per-site rollout, not this change."
+    },
+    "experiments": {
+      "owner": "@/web-core/experiments",
+      "resources": [],
+      "why": "server-side, cookie-free split-test assignment: validates an experiment config read live from the operator's token-gated config endpoint (cached per instance, fail-safe to the control), makes the weighted or forced (`?v=`) pick, and carries the assignment to the next step as `exp`/`v`/`xf` query params that the click endpoint and the checkout read back with parseExperimentParams(). Owns no table, secret or endpoint of its own: the config endpoint's URL and token are passed in by the consumer's shim, and the events it produces travel through pageEvents. No resource match: the re-implementation risk is a local Math.random() bucketing or a cookie-based assignment, neither of which has a textual signature distinct from legitimate code, so it is enforced by review and the scaffold's example wiring. A cookie- or storage-based assignment would need consent and would only measure consenting visitors, which is the exact problem this module exists to avoid."
     }
   }
 }

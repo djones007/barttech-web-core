@@ -40,6 +40,11 @@ import { device } from "./device";
  *   - `reserve_click` — a mid-funnel reservation/intent click. Ignore if your
  *                        funnel has no such step.
  *   - `lead_submit`    — a lead-capture form POST succeeded server-side.
+ *
+ * SPLIT TESTS: pass `experiment` (from `experiments.ts`) on a tested page's
+ * `landing` and on its buy click's `reserve_click`. The receiving endpoint
+ * stores experiment / variant / experiment_forced; the vocabulary above does
+ * not change.
  */
 const TIMEOUT_MS = 2000;
 
@@ -64,6 +69,12 @@ type TrackServerEventArgs = {
   /** Brand-specific context (e.g. a product/game slug). Optional, passed through as-is. */
   game?: string | null;
   currency?: string | null;
+  /**
+   * The split-test assignment this event belongs to (see `experiments.ts`).
+   * A variant id is not an identifier: many visitors share it, so the row
+   * stays aggregate-only. `forced` marks a QA view (`?v=`) for exclusion.
+   */
+  experiment?: { key: string; variant: string; forced?: boolean } | null;
 };
 
 function first(value: string | string[] | undefined): string | null {
@@ -97,6 +108,7 @@ export async function trackServerEvent({
   searchParams = {},
   game = null,
   currency = null,
+  experiment = null,
 }: TrackServerEventArgs): Promise<void> {
   const url = process.env.PAGE_EVENTS_URL;
   const token = process.env.PAGE_EVENTS_TOKEN;
@@ -128,6 +140,15 @@ export async function trackServerEvent({
         referrer_host: referrerHost(headers, site),
         device: device(headers),
         country: headers.get("x-vercel-ip-country"),
+        // Absent (not null) when there is no experiment, so a receiver that
+        // predates these fields sees exactly the payload it always did.
+        ...(experiment
+          ? {
+              experiment: experiment.key,
+              variant: experiment.variant,
+              experiment_forced: experiment.forced === true,
+            }
+          : {}),
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
       cache: "no-store",

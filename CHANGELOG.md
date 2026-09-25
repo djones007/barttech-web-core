@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-25b] — New module: consent-independent split testing (`experiments.ts`); `pageEvents` carries the variant
+
+### Added
+- **`experiments.ts`** — server-side, cookie-free A/B assignment. `assignVariant()` makes a weighted
+  pick for a running experiment, gives everyone the control when paused and the winner (or control)
+  when concluded, and honours a `?v=<variant>` QA override flagged `forced` so reporting can exclude
+  it. `experimentParams()` / `parseExperimentParams()` carry the assignment to the next step as
+  `exp` / `v` / `xf` query params (nothing is stored on the device, so no consent is needed and every
+  visitor is measured, not just those who accept cookies). `createExperimentConfigReader()` reads the
+  experiment configs live from a token-gated endpoint the consumer names, caches them per instance
+  (30s default), serves the last good list for up to 5 minutes if the endpoint fails, then falls back
+  to no experiment: a split test can never break the page it tests. `experimentSuperProperties()`
+  builds product-analytics super-properties so recordings can be filtered by variant.
+  No new external import. `experiments.test.ts` (13 tests); registered in `shared-modules.json`.
+
+### Changed
+- **`trackServerEvent()`** accepts an optional `experiment: { key, variant, forced }` and sends
+  `experiment` / `variant` / `experiment_forced`. The fields are omitted entirely when absent, so an
+  existing receiver sees an unchanged payload. The event vocabulary is unchanged.
+
 ## [2026-09-25] — Consent-independent measurement defaults: `clientEvents`, PostHog no-record paths, two opt-in prebuild gates
 
 ### Added
