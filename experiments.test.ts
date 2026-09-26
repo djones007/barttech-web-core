@@ -2,6 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  assignSticky,
+  requestVisitorKey,
+  safeHttpsUrl,
+  stickyBucket,
+  variantCheckoutUrl,
   assignVariant,
   createExperimentConfigReader,
   experimentParams,
@@ -178,4 +183,70 @@ test("config reader: a failing endpoint serves the last good list, then falls ba
 test("config reader: a non-200 is treated as a failure", async () => {
   const read = createExperimentConfigReader({ url: "https://e.test/x", token: "t", site: "s", fetchImpl: async () => jsonResponse({ error: "no" }, 401) });
   assert.deepEqual(await read(), []);
+});
+
+// ---- Sticky assignment (assignSticky / stickyBucket), 2026-09-26 ----
+
+function hdrs(h: Record<string, string>) {
+  return { get: (n: string) => h[n.toLowerCase()] ?? null };
+}
+
+test("stickyBucket is deterministic, in [0,1), and keyed by experiment", async () => {
+  const a1 = await stickyBucket("price-test", "1.2.3.4|UA");
+  const a2 = await stickyBucket("price-test", "1.2.3.4|UA");
+  assert.equal(a1, a2);
+  assert.ok(a1 >= 0 && a1 < 1);
+  // Another experiment gives an independent position for the same visitor.
+  const others = await Promise.all(["t1", "t2", "t3", "t4", "t5"].map((k) => stickyBucket(k, "1.2.3.4|UA")));
+  assert.ok(new Set(others.map((x) => x.toFixed(6))).size > 1);
+});
+
+test("stickyBucket splits a population close to 50/50", async () => {
+  let low = 0;
+  const n = 4000;
+  for (let i = 0; i < n; i++) if ((await stickyBucket("split", `10.0.${i >> 8}.${i & 255}|Mozilla/${i % 7}`)) < 0.5) low++;
+  assert.ok(Math.abs(low / n - 0.5) < 0.03, `share ${low / n}`);
+});
+
+test("assignSticky returns the same variant on every visit for one visitor", async () => {
+  const cfg: ExperimentConfig = { ...base, key: "price" };
+  const vk = requestVisitorKey(hdrs({ "x-forwarded-for": "81.2.69.160, 10.0.0.1", "user-agent": "Mozilla/5.0 Test" }));
+  assert.equal(vk, "81.2.69.160|Mozilla/5.0 Test");
+  const first = await assignSticky(cfg, { visitorKey: vk });
+  for (let i = 0; i < 20; i++) assert.deepEqual(await assignSticky(cfg, { visitorKey: vk }), first);
+  assert.equal(first.live, true);
+  assert.equal(first.forced, false);
+  // Both variants occur across visitors.
+  const seen = new Set<string>();
+  for (let i = 0; i < 50; i++) seen.add((await assignSticky(cfg, { visitorKey: `ip${i}|ua` })).variant);
+  assert.deepEqual([...seen].sort(), ["a", "b"]);
+});
+
+test("assignSticky: forced wins, paused gives the control, concluded the winner", async () => {
+  assert.deepEqual(await assignSticky(base, { forced: "b", visitorKey: "x|y" }), { key: "home-test", variant: "b", forced: true, live: true });
+  assert.equal((await assignSticky({ ...base, status: "paused" }, { visitorKey: "x|y" })).variant, "a");
+  const c = await assignSticky({ ...base, status: "concluded", winner: "b" }, { visitorKey: "x|y" });
+  assert.equal(c.variant, "b");
+  assert.equal(c.live, false);
+});
+
+test("requestVisitorKey is null with no headers (falls back to per-view random)", () => {
+  assert.equal(requestVisitorKey(hdrs({})), null);
+});
+
+test("checkoutUrl: https only, kept by normalise, read by variantCheckoutUrl", () => {
+  assert.equal(safeHttpsUrl("http://x.example/a"), null);
+  assert.equal(safeHttpsUrl("javascript:alert(1)"), null);
+  assert.equal(safeHttpsUrl("https://u:p@x.example/a"), null);
+  assert.equal(safeHttpsUrl("https://checkout.example/play-p"), "https://checkout.example/play-p");
+  const cfg = normaliseExperimentConfig({
+    key: "price", path: "/", status: "running", control: "a", winner: null,
+    variants: [
+      { id: "a", weight: 1, checkoutUrl: "https://checkout.example/play" },
+      { id: "b", weight: 1, checkoutUrl: "http://evil.example/x" },
+    ],
+  });
+  assert.ok(cfg);
+  assert.equal(variantCheckoutUrl(cfg!, "a"), "https://checkout.example/play");
+  assert.equal(variantCheckoutUrl(cfg!, "b"), null);
 });

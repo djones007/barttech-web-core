@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26d] — `experiments.ts`: sticky assignment across visits, per-variant checkout URL
+
+### Added
+- `assignSticky(config, { forced, visitorKey, salt })`: the same visitor gets the same variant on
+  every visit while a test runs. The random pick is replaced by `stickyBucket()` (SHA-256 of the
+  experiment key + the request's own address and user agent, first 4 bytes), computed per request
+  and discarded, so nothing is stored anywhere and it behaves the same when cookies are rejected.
+  Needed for anything a visitor would notice flipping between visits, a price test above all.
+  `requestVisitorKey(headers)` builds the key; null (no headers) falls back to a per-view pick.
+- `ExperimentVariant.checkoutUrl` (optional, https only, validated by `safeHttpsUrl()` in
+  `normaliseExperimentConfig`) and `variantCheckoutUrl()`: a test can send each variant to its own
+  checkout offer. Consumers must still check the host is one they trust.
+- 6 tests: determinism, ~50/50 split over 4,000 synthetic visitors, stickiness over 20 visits,
+  forced/paused/concluded behaviour, the no-header fallback, and https-only URL validation.
+
 ## [2026-09-26c] — Public hygiene: describe the affected consumer by role, not by name
 
 ### Fixed

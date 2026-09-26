@@ -8,11 +8,20 @@
  * per page view, and stores nothing on the device.
  *
  * HOW A VISIT IS KEPT ON ONE VARIANT without a cookie: the assignment is made
- * once when the page renders, and carried in the URL of the visitor's next
- * internal step (for example the buy click, as `?exp=<key>&v=<variant>`). A
- * returning visitor may see the other variant on a later visit; that is the
- * accepted cost of storing nothing, and it dilutes a real effect rather than
- * inventing one.
+ * when the page renders, and carried in the URL of the visitor's next
+ * internal step (for example the buy click, as `?exp=<key>&v=<variant>`).
+ *
+ * ACROSS VISITS (`assignSticky`): the random number is replaced by a hash of
+ * the experiment key and the request's own network address + user agent, so
+ * the same browser on the same connection gets the same variant on every
+ * visit. Nothing is written to or read from the device beyond the headers
+ * every request already carries, and the hash is computed per request and
+ * discarded: no identifier is stored anywhere, so it works identically when
+ * cookies are rejected. A visitor who changes network or browser may land in
+ * the other variant; that dilutes an effect rather than inventing one. Use it
+ * for anything the visitor would notice changing between visits (a PRICE
+ * test above all). Changing weights mid-test moves some visitors; set them
+ * before starting.
  *
  * CONFIG IS DATA, NOT CODE. Experiments (key, page path, variants + weights,
  * status, control, winner) live in the operator's database and are read live
@@ -37,6 +46,12 @@ export type ExperimentVariant = {
   /** Relative weight. Weights need not sum to 100; 0 means never assigned while running. */
   weight: number;
   label?: string;
+  /**
+   * Optional: where this variant's buy click goes (an absolute https URL, e.g.
+   * a checkout offer). Lets a test send each variant to its own offer (a price
+   * test). The consumer must still check the host is one it trusts.
+   */
+  checkoutUrl?: string;
 };
 
 export type ExperimentConfig = {
@@ -71,6 +86,18 @@ export function isVariantId(value: unknown): value is string {
   return typeof value === "string" && VARIANT_RE.test(value);
 }
 
+/** An absolute https URL with no credentials, or null. */
+export function safeHttpsUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 500) return null;
+  try {
+    const u = new URL(value);
+    if (u.protocol !== "https:" || u.username || u.password) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Validate one config object from the wire. Anything malformed returns null
  * (treated as "no experiment"), never a partially-trusted object.
@@ -90,7 +117,13 @@ export function normaliseExperimentConfig(raw: unknown): ExperimentConfig | null
     if (!isVariantId(vv.id) || seen.has(vv.id)) return null;
     const weight = typeof vv.weight === "number" && Number.isFinite(vv.weight) && vv.weight >= 0 ? vv.weight : 0;
     seen.add(vv.id);
-    variants.push({ id: vv.id, weight, ...(typeof vv.label === "string" ? { label: vv.label.slice(0, 100) } : {}) });
+    const checkoutUrl = safeHttpsUrl(vv.checkoutUrl);
+    variants.push({
+      id: vv.id,
+      weight,
+      ...(typeof vv.label === "string" ? { label: vv.label.slice(0, 100) } : {}),
+      ...(checkoutUrl ? { checkoutUrl } : {}),
+    });
   }
   if (variants.length < 2) return null;
   if (!isVariantId(r.control) || !seen.has(r.control)) return null;
@@ -158,6 +191,50 @@ export function assignVariant(
   }
   const fallback = config.status === "concluded" && config.winner ? config.winner : config.control;
   return { key: config.key, variant: fallback, forced: false, live: false };
+}
+
+/**
+ * The request's own network address + user agent, as one string, for
+ * `stickyBucket`. Null when neither is present (the caller then falls back to
+ * a per-view random pick). Read only from headers every request carries.
+ */
+export function requestVisitorKey(headers: { get(name: string): string | null }): string | null {
+  const ip = (headers.get("x-forwarded-for")?.split(",")[0] ?? headers.get("x-real-ip") ?? "").trim().slice(0, 100);
+  const ua = (headers.get("user-agent") ?? "").trim().slice(0, 400);
+  if (!ip && !ua) return null;
+  return `${ip}|${ua}`;
+}
+
+/**
+ * A stable number in [0, 1) for (experiment, visitor): SHA-256 of both, first
+ * 4 bytes. The key is in the hash so a visitor's position in one test says
+ * nothing about their position in another. Web Crypto, so it runs in the
+ * Node and edge runtimes alike.
+ */
+export async function stickyBucket(experimentKey: string, visitorKey: string, salt = ""): Promise<number> {
+  const data = new TextEncoder().encode(`${salt}\n${experimentKey}\n${visitorKey}`);
+  const digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", data));
+  const n = ((digest[0] << 24) >>> 0) + (digest[1] << 16) + (digest[2] << 8) + digest[3];
+  return n / 0x1_0000_0000;
+}
+
+/**
+ * `assignVariant`, but the same visitor gets the same variant on every visit
+ * while the test runs (see the header comment). No visitor key = a per-view
+ * random pick, exactly as `assignVariant`.
+ */
+export async function assignSticky(
+  config: ExperimentConfig,
+  opts: { forced?: string | null; visitorKey: string | null; salt?: string },
+): Promise<ExperimentAssignment> {
+  if (config.status !== "running" || !opts.visitorKey) return assignVariant(config, { forced: opts.forced });
+  const r = await stickyBucket(config.key, opts.visitorKey, opts.salt);
+  return assignVariant(config, { forced: opts.forced, random: () => r });
+}
+
+/** The variant's own checkout URL, if the config gives it one. */
+export function variantCheckoutUrl(config: ExperimentConfig, variant: string): string | null {
+  return config.variants.find((v) => v.id === variant)?.checkoutUrl ?? null;
 }
 
 /**
