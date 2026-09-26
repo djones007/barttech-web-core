@@ -295,8 +295,21 @@
     },
     "experiments": {
       "owner": "@/web-core/experiments",
-      "resources": [],
-      "why": "server-side, cookie-free split-test assignment: validates an experiment config read live from the operator's token-gated config endpoint (cached per instance, fail-safe to the control), makes the weighted or forced (`?v=`) pick, and carries the assignment to the next step as `exp`/`v`/`xf` query params that the click endpoint and the checkout read back with parseExperimentParams(). Owns no table, secret or endpoint of its own: the config endpoint's URL and token are passed in by the consumer's shim, and the events it produces travel through pageEvents. No resource match: the re-implementation risk is a local Math.random() bucketing or a cookie-based assignment, neither of which has a textual signature distinct from legitimate code, so it is enforced by review and the scaffold's example wiring. A cookie- or storage-based assignment would need consent and would only measure consenting visitors, which is the exact problem this module exists to avoid."
+      "resources": [
+        {
+          "match": "parseExperimentParams[\\s\\S]{0,3000}reserve_click|reserve_click[\\s\\S]{0,3000}parseExperimentParams",
+          "reason": "a hand-rolled split-test buy-click route. The click endpoint (variant -> offer, exp/v passthrough, same-site referrer, the logged click, the trusted-host redirect) is createCheckoutClickHandler(); the site's route file is a one-line shim that passes its default offer and its event logger. Two sites each carried a copy of this route and they had already diverged (one resolved the variant's own offer for a price test, the other could not). Matches the COMBINATION: a funnel click logged without an experiment, or an order reading exp/v, is legitimate."
+        },
+        {
+          "match": "\\.get\\(\\s*['\"](exp|xf)['\"]\\s*\\)",
+          "reason": "reading the split-test query params by hand skips the key/variant validation and the forced (QA) flag, so a malformed or forced view is counted as a real one. Use parseExperimentParams()."
+        },
+        {
+          "match": "cookies[\\s\\S]{0,40}\\.(get|set)\\(\\s*['\"][^'\"]*(experiment|variant|ab[_-]?test)[^'\"]*['\"]",
+          "reason": "a cookie-carried split-test assignment needs consent, so it only ever measures the visitors who accepted cookies. Assignment is server-side and stateless (assignPageRequest / assignSticky)."
+        }
+      ],
+      "why": "THE split-testing module (server-side, cookie-free), one file so a plain `node --test` can load it: (1) config: validates an experiment config read live from the operator's token-gated endpoint (cached per instance, fail-safe to the control); (2) assignment: weighted, forced (`?v=`) or sticky-per-visitor pick, and assignPageRequest() for a page request (several tests per page, crawlers get the control, or the WINNER of a concluded test, never tagged) with the proxy->page header codec and experimentEventTag() (events logged under the path the visitor REQUESTED); (3) price tests: createVariantOfferResolver() maps variant -> offer -> that offer's own per-currency price rows, so the page price always equals the checkout price; (4) the buy click: createCheckoutClickHandler() is the whole `/go/checkout` route (variant's offer on the trusted checkout host only, exp/v/UTM/click-id passthrough, click event deferred). Reporting and auto-conclude live in the operator's reporting app, not here. Each site keeps only a thin shim (its site name, header name, default offer, event logger). The resources below flag the copies that existed before this was shared: a hand-rolled click route, hand-read exp/v params, a cookie assignment. A second offer-price reader is not matched here: the checkout app serves and embeds that endpoint legitimately, so it is registered only by the sites that run price tests."
     },
     "ccNotify": {
       "owner": "@/web-core/ccNotify",

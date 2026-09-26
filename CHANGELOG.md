@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26f] — `experiments.ts`: the whole split-testing flow is now shared (page assignment, price tests, the buy click)
+
+### Added
+- `assignPageRequest(configs, { pathname, searchParams, headers, automated, salt })`: one
+  assignment per experiment on a page. Sticky per visitor, `?v=` forces the running test (or any
+  test when none runs), and an automated request (the caller passes its `isAutomatedRequest`
+  verdict) is never tagged and gets the control, or the WINNER of a concluded test. Consumers each
+  carried a copy of this and the copies had drifted (one still gave crawlers the control of a
+  concluded test and supported only one experiment per page).
+- `encodeAssignment(s)` / `decodeAssignments` (the proxy->page header codec), `liveAssignment`, and
+  `experimentEventTag` (tags a page event with the live variant under the path the visitor
+  REQUESTED, so a variant rendered from another page's component counts on the tested page).
+- Price tests: `trustedCheckoutUrl`, `offerSlugOf`, `checkoutCurrency`, `formatPrice`, `priceFor`,
+  and `createVariantOfferResolver({ defaultCheckoutUrl, readConfigs, ... })` → `checkoutUrlFor`,
+  `offerPrices`, `offerFor`: variant -> offer -> that offer's own per-currency price rows (cached,
+  never throws, no price rather than a guessed one), so a page's price always equals the checkout's.
+- `createCheckoutClickHandler({ checkoutUrl, variantCheckoutUrl?, offerParam?, onClick?, defer? })`:
+  the whole buy-click route (standard Request/Response). Variant's own offer or the priced offer
+  (`o=` slug), accepted only as a bare slug on the default offer's host; every other param passed
+  through; the click event deferred and never able to break the redirect; 404 when unconfigured.
+- `shared-modules.json` `experiments`: resource patterns for a hand-rolled click route, hand-read
+  `exp`/`xf` params and a cookie-carried assignment. **Cross-repo:** every consumer importing
+  `experiments` must register them in `.shared-resources.json` (the registration gate asks).
+- 13 tests in `experiments.test.ts`.
+
+No new external imports; the file still has no runtime imports at all. Backwards-compatible: nothing
+existing was renamed or removed.
+
 ## [2026-09-26e] — Docs: `experiments.ts` points at the estate split-testing hub
 
 ### Changed
