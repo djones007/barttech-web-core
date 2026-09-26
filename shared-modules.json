@@ -94,7 +94,8 @@
           "match": "api\\.emailit\\.com",
           "reason": "send pacing, the 2/sec API cap and retry handling live in this module. A direct call bypasses all three and can trip the rate limit for every other sender."
         }
-      ]
+      ],
+      "why": "Owns the transactional send transport AND the provider's per-address suppression switch (the delivery gate, never an audience). clearSelfRequestedSoftFailSuppression() is the ONE implementation of 'a person just asked for mail, so a soft-fail suppression on that exact address is cleared first' — soft-fail only, hard/complaint/unsubscribe never touched, fail-closed on its audit+throttle store. Before it existed a soft-fail suppression from a months-old deferral silently swallowed sign-in codes and purchase receipts, with the provider accepting the API call and dropping the mail."
     },
     "graph": {
       "owner": "@/web-core/graph",
@@ -296,6 +297,16 @@
       "owner": "@/web-core/experiments",
       "resources": [],
       "why": "server-side, cookie-free split-test assignment: validates an experiment config read live from the operator's token-gated config endpoint (cached per instance, fail-safe to the control), makes the weighted or forced (`?v=`) pick, and carries the assignment to the next step as `exp`/`v`/`xf` query params that the click endpoint and the checkout read back with parseExperimentParams(). Owns no table, secret or endpoint of its own: the config endpoint's URL and token are passed in by the consumer's shim, and the events it produces travel through pageEvents. No resource match: the re-implementation risk is a local Math.random() bucketing or a cookie-based assignment, neither of which has a textual signature distinct from legitimate code, so it is enforced by review and the scaffold's example wiring. A cookie- or storage-based assignment would need consent and would only measure consenting visitors, which is the exact problem this module exists to avoid."
+    },
+    "ccNotify": {
+      "owner": "@/web-core/ccNotify",
+      "resources": [
+        {
+          "match": "/api/notifications['\"`]",
+          "reason": "the notification-centre ingest. A hand-rolled POST re-creates the never-throws contract, the base-URL safety check and the category vocabulary, and a drifted copy that swallows a 400 (unknown category) makes an alert vanish silently."
+        }
+      ],
+      "why": "server-side producer for the central notification centre's token-gated ingest, for apps other than the receiver. The receiver owns rendering and whether a notification also emails or pushes; this module only raises it and reports whether it landed."
     }
   }
 }

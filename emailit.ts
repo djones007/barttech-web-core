@@ -416,3 +416,338 @@ export async function claimEmailitSendSlot(
 
   return { paced: true, waitedMs: Math.max(0, waitMs) };
 }
+
+// ---------------------------------------------------------------------------
+// SUPPRESSIONS — the delivery gate, not the audience.
+//
+// The header above says this module must never grow an audience/contact
+// operation, and that still holds. A suppression is not an audience: it is the
+// provider's own per-workspace "refuse to deliver to this address" switch, and
+// it decides whether a send here is delivered at all. That is why it lives in
+// the send transport and not beside any contact store.
+//
+// THE PROBLEM THIS SOLVES. The provider suppresses an address after "too many
+// soft fails" — temporary deferrals (greylisting, a receiving provider
+// throttling a sender whose reputation dipped). It then refuses EVERY later send
+// to that address, including a sign-in code, a password reset or a purchase
+// receipt the person has just asked for. Nothing errors in the sending app: the
+// API accepts the message and the provider drops it. A soft fail from months
+// ago is not evidence that a mailbox is undeliverable today, so when the person
+// themselves has just requested mail, the soft-fail suppression is cleared
+// first. Hard fails, bounces, complaints and unsubscribes are never touched.
+//
+// THE THREE PROVIDER FACTS THIS DEPENDS ON (measured live, not documented):
+//   * `GET /v2/suppressions/{email}` looks up by URL-encoded address and returns
+//     ONE record (404 when there is none). The list endpoint IGNORES every
+//     filter parameter (email=, search=, filter[email]= all return page 1), so a
+//     per-address check must use this path, never the list.
+//   * An address can hold more than one record (one per failure kind). The
+//     by-address GET returns only one of them, so after deleting a soft record
+//     the address is looked up AGAIN, and a hard record found underneath is left
+//     alone and reported as `kept`.
+//   * Reason vocabulary seen: "too many soft fails", "too many hard fails",
+//     "too many bounces". Only the first is soft. Anything unrecognised is
+//     treated as NOT soft — an unknown reason is never cleared.
+// ---------------------------------------------------------------------------
+
+const EMAILIT_ORIGIN = "https://api.emailit.com";
+const DEFAULT_SUPPRESSION_TIMEOUT_MS = 4000;
+
+export interface EmailitSuppression {
+  id: string;
+  email: string;
+  type?: string | null;
+  reason?: string | null;
+  created_at?: string | null;
+  keep_until?: string | null;
+}
+
+/**
+ * True only for a suppression recorded because of repeated SOFT failures.
+ *
+ * Deliberately narrow: a complaint/unsubscribe type is never soft whatever its
+ * reason says, and an unrecognised reason is not soft. Clearing the wrong kind
+ * of suppression is the harm; missing a soft one only means an email stays
+ * blocked, which is the status quo.
+ */
+export function isSoftFailSuppression(s: Pick<EmailitSuppression, "type" | "reason"> | null | undefined): boolean {
+  if (!s) return false;
+  const type = String(s.type ?? "").toLowerCase();
+  if (/(complain|unsub|spam|abuse|manual)/.test(type)) return false;
+  const reason = String(s.reason ?? "").toLowerCase();
+  if (/(hard|complain|unsub|spam|abuse)/.test(reason)) return false;
+  return /\bsoft[\s_-]*(fail|bounce)/.test(reason);
+}
+
+/**
+ * One interface rather than a union on `ok`: consumers compile this source with
+ * their own tsconfig, and boolean-discriminant narrowing silently stops working
+ * in any consumer without strictNullChecks.
+ */
+export interface SuppressionLookup {
+  ok: boolean;
+  /** Present when ok: the record, or null when the address is not suppressed. */
+  suppression?: EmailitSuppression | null;
+  status?: number;
+  error?: string;
+}
+
+async function suppressionFetch(
+  apiKey: string,
+  path: string,
+  init: { method?: string; timeoutMs?: number }
+): Promise<Response> {
+  return fetch(new URL(path, EMAILIT_ORIGIN), {
+    method: init.method ?? "GET",
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(init.timeoutMs ?? DEFAULT_SUPPRESSION_TIMEOUT_MS),
+  });
+}
+
+/** Look up the suppression (if any) for one address. Never throws. */
+export async function getEmailitSuppression(
+  apiKey: string,
+  email: string,
+  opts?: { timeoutMs?: number }
+): Promise<SuppressionLookup> {
+  const addr = email.trim().toLowerCase();
+  if (!addr || !addr.includes("@")) return { ok: false, error: "invalid address" };
+  try {
+    const res = await suppressionFetch(apiKey, `/v2/suppressions/${encodeURIComponent(addr)}`, opts ?? {});
+    if (res.status === 404) return { ok: true, suppression: null };
+    if (!res.ok) {
+      return { ok: false, status: res.status, error: (await res.text().catch(() => "")).slice(0, 300) };
+    }
+    const body = (await res.json()) as EmailitSuppression;
+    if (!body || typeof body.id !== "string") return { ok: false, status: res.status, error: "malformed suppression record" };
+    return { ok: true, suppression: body };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Delete one suppression by id. A 404 counts as success (already gone). Never throws. */
+export async function deleteEmailitSuppression(
+  apiKey: string,
+  id: string,
+  opts?: { timeoutMs?: number }
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  if (!id) return { ok: false, error: "no id" };
+  try {
+    const res = await suppressionFetch(apiKey, `/v2/suppressions/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      timeoutMs: opts?.timeoutMs,
+    });
+    if (res.ok || res.status === 404) return { ok: true, status: res.status };
+    return { ok: false, status: res.status, error: (await res.text().catch(() => "")).slice(0, 300) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export interface SuppressionListResult {
+  ok: boolean;
+  records: EmailitSuppression[];
+  /** Pages fetched. */
+  requests: number;
+  /**
+   * True only when the walk reached a null `next_page_url`. The provider
+   * returns no total, so this is the ONLY completeness guarantee — a caller
+   * acting on the list must refuse to treat an incomplete walk as the truth.
+   */
+  complete: boolean;
+  error?: string;
+}
+
+/**
+ * Walk the whole suppression list (100 per page — the provider rejects more).
+ * Retries a 429/5xx page with backoff. Never throws.
+ */
+export async function listEmailitSuppressions(
+  apiKey: string,
+  opts?: { maxPages?: number; timeoutMs?: number }
+): Promise<SuppressionListResult> {
+  const maxPages = opts?.maxPages ?? 2000;
+  const records: EmailitSuppression[] = [];
+  let next: string | null = "/v2/suppressions?limit=100";
+  let requests = 0;
+  while (next) {
+    if (requests >= maxPages) {
+      return { ok: false, records, requests, complete: false, error: `page cap ${maxPages} reached` };
+    }
+    let res: Response | null = null;
+    let lastErr = "";
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        res = await suppressionFetch(apiKey, next, { timeoutMs: opts?.timeoutMs ?? 15000 });
+        if (res.ok) break;
+        lastErr = `HTTP ${res.status}`;
+        if (res.status !== 429 && res.status < 500) break;
+      } catch (err) {
+        res = null;
+        lastErr = err instanceof Error ? err.message : String(err);
+      }
+      await new Promise((r) => setTimeout(r, backoffMs(attempt, 1)));
+    }
+    requests++;
+    if (!res || !res.ok) {
+      return { ok: false, records, requests, complete: false, error: `page ${requests}: ${lastErr}` };
+    }
+    const body = (await res.json().catch(() => null)) as { data?: EmailitSuppression[]; next_page_url?: string | null } | null;
+    if (!body || !Array.isArray(body.data)) {
+      return { ok: false, records, requests, complete: false, error: `page ${requests}: malformed body` };
+    }
+    records.push(...body.data);
+    next = body.next_page_url || null;
+  }
+  return { ok: true, records, requests, complete: true };
+}
+
+/**
+ * The audit + throttle store for self-requested clears. Structural (same reason
+ * as SendSlotStore): a real Supabase client satisfies it and this module keeps
+ * zero runtime imports. The two RPCs are `claim_suppression_clear` and
+ * `finish_suppression_clear`; the consuming estate owns their definitions.
+ */
+export interface SuppressionClearStore {
+  rpc(
+    fn: string,
+    args: Record<string, unknown>
+  ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+}
+
+export interface ClearSelfRequestedOptions {
+  apiKey: string;
+  /** The ONE address in the request. Never a list. */
+  email: string;
+  /** Who is clearing, for the audit row, e.g. "app:auth-signup". */
+  source: string;
+  /** Requester IP when there is one (throttled per IP). Omit for server-to-server flows. */
+  ip?: string | null;
+  /** Non-secret label of the workspace, for the audit row. */
+  workspaceRef?: string | null;
+  /**
+   * REQUIRED to clear anything. Without it the function only looks and reports
+   * `error` — an unaudited, unthrottled clear is never performed.
+   */
+  store: SuppressionClearStore | null | undefined;
+  timeoutMs?: number;
+  label?: string;
+}
+
+export type ClearSelfRequestedResult =
+  | { action: "none" }
+  | { action: "cleared"; suppressionId: string; reason: string | null }
+  | { action: "kept"; reason: string | null; suppressionId: string }
+  | { action: "throttled"; why: string }
+  | { action: "error"; error: string };
+
+/**
+ * Before a SELF-REQUESTED transactional send (a receipt, sign-in code, sign-up
+ * confirmation, password reset), clear a soft-fail suppression on that exact
+ * address. Hard fails, bounces, complaints and unsubscribes are never touched.
+ *
+ * NEVER call this before a send the recipient did not just ask for — an
+ * abandoned-cart email, a marketing send, a reminder. Those must respect the
+ * suppression.
+ *
+ * Never throws, and never blocks the send: every outcome returns, and the
+ * caller sends regardless (a suppressed address just stays suppressed, which is
+ * the status quo). Throttle and audit are fail-CLOSED — if the store cannot be
+ * reached, nothing is cleared.
+ */
+export async function clearSelfRequestedSoftFailSuppression(
+  opts: ClearSelfRequestedOptions
+): Promise<ClearSelfRequestedResult> {
+  const label = opts.label ?? "emailit-suppression";
+  const email = opts.email.trim().toLowerCase();
+  const t = { timeoutMs: opts.timeoutMs ?? DEFAULT_SUPPRESSION_TIMEOUT_MS };
+
+  const first = await getEmailitSuppression(opts.apiKey, email, t);
+  if (!first.ok) {
+    console.warn(`[${label}] suppression lookup failed (${first.status ?? "no status"}): ${first.error}`);
+    return { action: "error", error: `lookup: ${first.error ?? "unknown"}` };
+  }
+  if (!first.suppression) return { action: "none" };
+  const firstRec: EmailitSuppression = first.suppression;
+  if (!isSoftFailSuppression(firstRec)) {
+    // Visible on purpose: this send is about to be dropped by the provider.
+    console.warn(
+      `[${label}] ${opts.source}: address is suppressed for a non-soft reason ("${firstRec.reason ?? ""}") — left in place, the send will not be delivered`
+    );
+    return { action: "kept", reason: firstRec.reason ?? null, suppressionId: firstRec.id };
+  }
+  if (!opts.store) {
+    console.error(`[${label}] ${opts.source}: soft-fail suppression found but no audit store supplied — NOT cleared`);
+    return { action: "error", error: "no audit store" };
+  }
+
+  let claimId: string | null = null;
+  try {
+    const { data, error } = await opts.store.rpc("claim_suppression_clear", {
+      p_email: email,
+      p_ip: opts.ip ?? null,
+      p_source: opts.source,
+      p_suppression_id: firstRec.id,
+      p_reason: firstRec.reason ?? null,
+      p_workspace_ref: opts.workspaceRef ?? null,
+    });
+    if (error) {
+      console.error(`[${label}] claim_suppression_clear failed — NOT cleared:`, error.message);
+      return { action: "error", error: `claim: ${error.message}` };
+    }
+    const claim = (data ?? {}) as { allowed?: boolean; why?: string; id?: string };
+    if (!claim.allowed) {
+      console.warn(`[${label}] ${opts.source}: clear throttled (${claim.why ?? "unknown"})`);
+      return { action: "throttled", why: claim.why ?? "unknown" };
+    }
+    claimId = claim.id ?? null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[${label}] claim_suppression_clear threw — NOT cleared:`, msg);
+    return { action: "error", error: `claim: ${msg}` };
+  }
+
+  const finish = async (outcome: "cleared" | "kept" | "error", detail: Record<string, unknown>) => {
+    if (!claimId || !opts.store) return;
+    try {
+      const { error } = await opts.store.rpc("finish_suppression_clear", {
+        p_id: claimId,
+        p_outcome: outcome,
+        p_detail: detail,
+      });
+      if (error) console.error(`[${label}] finish_suppression_clear failed:`, error.message);
+    } catch (err) {
+      console.error(`[${label}] finish_suppression_clear threw:`, err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  // Delete, then look again: an address can carry a second record underneath.
+  // Bounded at 3 rounds so a provider quirk cannot loop.
+  let current: EmailitSuppression = firstRec;
+  const deleted: string[] = [];
+  for (let round = 0; round < 3; round++) {
+    const del = await deleteEmailitSuppression(opts.apiKey, current.id, t);
+    if (!del.ok) {
+      await finish("error", { deleted, failed_id: current.id, status: del.status ?? null, error: del.error ?? null });
+      return { action: "error", error: `delete: ${del.status ?? ""} ${del.error ?? ""}`.trim() };
+    }
+    deleted.push(current.id);
+    const again = await getEmailitSuppression(opts.apiKey, email, t);
+    if (!again.ok) {
+      await finish("error", { deleted, recheck_error: again.error ?? null });
+      return { action: "error", error: `recheck: ${again.error ?? "unknown"}` };
+    }
+    if (!again.suppression) {
+      await finish("cleared", { deleted });
+      return { action: "cleared", suppressionId: firstRec.id, reason: firstRec.reason ?? null };
+    }
+    if (!isSoftFailSuppression(again.suppression)) {
+      await finish("kept", { deleted, remaining_id: again.suppression.id, remaining_reason: again.suppression.reason ?? null });
+      return { action: "kept", reason: again.suppression.reason ?? null, suppressionId: again.suppression.id };
+    }
+    current = again.suppression;
+  }
+  await finish("error", { deleted, error: "still suppressed after 3 rounds" });
+  return { action: "error", error: "still suppressed after 3 rounds" };
+}

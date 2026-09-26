@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26] — `emailit`: clear a SOFT-FAIL suppression before a self-requested send; new `ccNotify` module
+
+### Added
+- **`emailit.ts` suppression functions** — `getEmailitSuppression()` (by-address lookup; the list
+  endpoint ignores every filter parameter), `deleteEmailitSuppression()`, `listEmailitSuppressions()`
+  (full walk with a `complete` flag — the provider returns no total, so a truncated walk must never
+  pass as the whole list), `isSoftFailSuppression()`, and
+  **`clearSelfRequestedSoftFailSuppression()`**: before a send the recipient just asked for (receipt,
+  sign-in code, sign-up confirmation, reset), a "too many soft fails" suppression on that one address
+  is deleted. Hard fails, bounces, complaints, unsubscribes and unrecognised reasons are never
+  touched; an address holding a second record underneath is re-checked and the hard one kept. Audit
+  and throttle go through a caller-supplied store (`claim_suppression_clear` /
+  `finish_suppression_clear` RPCs) and are **fail-closed** — no store, or a failing claim, clears
+  nothing. Never throws and never blocks the send. 10 tests in `emailitSuppressions.test.ts`.
+- **`ccNotify.ts`** — `raiseCcNotification()`: one server-side call to raise a notification on a
+  central notification centre's token-gated ingest from another app. Base URL and token come from the
+  consumer's env; never throws; reports whether it landed. Registered in `shared-modules.json`
+  (consumers importing it must register the `/api/notifications` resource).
+
 ## [2026-09-25e] — Landing gate: `wrapper:` manifest lines
 
 ### Added
