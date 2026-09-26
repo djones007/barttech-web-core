@@ -278,6 +278,16 @@
       ],
       "why": "sends one aggregate, no-identifier funnel event (`landing` / `reserve_click` / `lead_submit`) to a shared ingest endpoint so consent-gated client analytics is not the only measurement of paid traffic. `site` is a caller parameter, never a constant. Deliberately reuses requestSignals' isAutomatedRequest and device.ts rather than re-checking either locally — see both modules' own why. Optionally carries a split-test assignment (`experiment` / `variant` / `experiment_forced`, from experiments.ts); a variant id is shared by many visitors, so the row stays aggregate-only."
     },
+    "consentEvents": {
+      "owner": "@/web-core/consentEvents",
+      "resources": [],
+      "why": "browser-side trigger (`trackConsentEvent`) for the consent banner's `consent_shown`/`consent_accept`/`consent_reject` events (pageEvents.ts vocabulary) — added 2026-09-26 so the consent accept rate is a tracked metric instead of a one-off estimate. Owns no table or secret itself: it POSTs to whatever same-origin URL the caller gives it (the consumer's own route handler, which holds PAGE_EVENTS_TOKEN and calls trackServerEvent()). No resource match — the re-implementation risk is a hand-rolled fetch/sendBeacon call at the banner's Accept/Reject handlers instead of importing this module, which has no reliable textual signature distinct from an unrelated fetch call; enforced by review."
+    },
+    "formEvents": {
+      "owner": "@/web-core/formEvents",
+      "resources": [],
+      "why": "the one contract for form-stage telemetry (`form_start`/`form_field_error`/`form_abandon`/`form_submit`, pageEvents.ts vocabulary) — added 2026-09-26 so every public form is diagnosable by construction, not just the one consumer that had it hand-built. `trackFormEvent` POSTs to the consumer's own same-origin route handler; `attachFormLifecycle` is the optional DOM-listener half for a plain form element. Owns no table or secret. No resource match — same reasoning as consentEvents: the risk is a hand-rolled per-form stage-event scheme, which is exactly what this module replaces and has no distinct textual signature; enforced by review."
+    },
     "posthogSessionRecording": {
       "owner": "@/web-core/posthogSessionRecording",
       "resources": [],

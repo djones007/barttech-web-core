@@ -57,6 +57,34 @@ import { device } from "./device";
  *                        variant). Never fire this without a live experiment on
  *                        the page: there is nothing to exclude if no test is
  *                        running.
+ *   - `consent_shown`  — the cookie banner was about to render (no stored
+ *                        choice existed). Denominator for the accept rate.
+ *   - `consent_accept` — the visitor granted analytics and/or marketing.
+ *   - `consent_reject` — the visitor explicitly rejected (a written refusal,
+ *                        not merely leaving the banner unanswered).
+ *                        `consent_shown`/`consent_accept`/`consent_reject` are
+ *                        posted by the CONSUMER'S OWN route handler answering
+ *                        a client fetch from the banner (see
+ *                        `consentEvents.ts`'s `trackConsentEvent`), never from
+ *                        a page navigation — same reasoning as `lead_submit`
+ *                        below. See feedback_consent_independent_measurement.md.
+ *   - `form_start`      — a visitor began interacting with a tracked form
+ *                        (first focus/change on any field).
+ *   - `form_field_error`— a tracked form's client-side or server-side
+ *                        validation rejected a field. Pass the field name in
+ *                        `field`.
+ *   - `form_abandon`    — a visitor who triggered `form_start` left the page
+ *                        (or the tab was hidden) without `form_submit`.
+ *                        Best-effort — a `sendBeacon`/fetch-keepalive call from
+ *                        `formEvents.ts`, so it can race the unload and lose.
+ *   - `form_submit`     — a tracked form's submission succeeded server-side.
+ *                        `form_start`/`form_field_error`/`form_abandon`/
+ *                        `form_submit` all carry the form's identifier in
+ *                        `game` (the same generic "brand-specific context"
+ *                        slot documented below — a form name is exactly the
+ *                        kind of caller-supplied context that field exists
+ *                        for) and, where relevant, the field name in `field`.
+ *                        See `formEvents.ts`.
  *
  * SPLIT TESTS: pass `experiment` (from `experiments.ts`) on a tested page's
  * `landing`, its buy click's `reserve_click`, and any `landing_owner`
@@ -65,7 +93,18 @@ import { device } from "./device";
  */
 const TIMEOUT_MS = 2000;
 
-export type PageEventName = "landing" | "reserve_click" | "lead_submit" | "landing_owner";
+export type PageEventName =
+  | "landing"
+  | "reserve_click"
+  | "lead_submit"
+  | "landing_owner"
+  | "consent_shown"
+  | "consent_accept"
+  | "consent_reject"
+  | "form_start"
+  | "form_field_error"
+  | "form_abandon"
+  | "form_submit";
 
 /**
  * Loose on purpose: a Next.js page's `searchParams` gives
@@ -83,9 +122,15 @@ type TrackServerEventArgs = {
   path: string;
   headers: Headers;
   searchParams?: SearchParamsLike;
-  /** Brand-specific context (e.g. a product/game slug). Optional, passed through as-is. */
+  /**
+   * Brand-specific context (e.g. a product/game slug, OR a tracked form's
+   * identifier for a `form_*` event — see `formEvents.ts`). Optional, passed
+   * through as-is.
+   */
   game?: string | null;
   currency?: string | null;
+  /** The field name for a `form_field_error` event. Ignored for other events. */
+  field?: string | null;
   /**
    * The split-test assignment this event belongs to (see `experiments.ts`).
    * A variant id is not an identifier: many visitors share it, so the row
@@ -125,6 +170,7 @@ export async function trackServerEvent({
   searchParams = {},
   game = null,
   currency = null,
+  field = null,
   experiment = null,
 }: TrackServerEventArgs): Promise<void> {
   const url = process.env.PAGE_EVENTS_URL;
@@ -137,14 +183,24 @@ export async function trackServerEvent({
   // what let a server-side ViewContent run at 300+/hour before this gate
   // existed. See requestSignals.ts.
   //
-  // `lead_submit` and `landing_owner` are posted from a route handler answering
-  // the CALLER'S OWN `fetch()` (a form submit; a client-side ownership check),
-  // never a page navigation, so both are gated as a "form submit": a real
-  // browser fetch is `sec-fetch-mode: cors`, which the page-visit rule would
-  // read as automated and drop — which is exactly what happened to every
-  // `lead_submit` until 2026-09-25. Bots are still caught by the user-agent/
-  // prefetch rules regardless.
-  const isRouteHandlerFetch = event === "lead_submit" || event === "landing_owner";
+  // `lead_submit`, `landing_owner`, every `consent_*` and every `form_*` event
+  // are posted from a route handler answering the CALLER'S OWN `fetch()` (a
+  // form submit; a client-side ownership check; a banner click; a form-stage
+  // signal), never a page navigation, so all are gated as a "form submit": a
+  // real browser fetch is `sec-fetch-mode: cors`, which the page-visit rule
+  // would read as automated and drop — which is exactly what happened to
+  // every `lead_submit` until 2026-09-25. Bots are still caught by the
+  // user-agent/prefetch rules regardless.
+  const isRouteHandlerFetch =
+    event === "lead_submit" ||
+    event === "landing_owner" ||
+    event === "consent_shown" ||
+    event === "consent_accept" ||
+    event === "consent_reject" ||
+    event === "form_start" ||
+    event === "form_field_error" ||
+    event === "form_abandon" ||
+    event === "form_submit";
   if (isAutomatedRequest(headers, { formSubmit: isRouteHandlerFetch })) return;
 
   try {
@@ -160,6 +216,7 @@ export async function trackServerEvent({
         event,
         game,
         currency,
+        field,
         utm_source: first(searchParams.utm_source),
         utm_medium: first(searchParams.utm_medium),
         utm_campaign: first(searchParams.utm_campaign),

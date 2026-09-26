@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26i] — Consent accept-rate + form-stage event contracts: `consentEvents.ts`, `formEvents.ts`, widened `pageEvents` vocabulary
+
+### Added
+- New `PageEventName` values: `consent_shown` / `consent_accept` / `consent_reject` (the cookie
+  banner's own accept rate — the denominator on every consent-gated analytics number, and nothing
+  anywhere measured it as a first-class metric until now) and `form_start` / `form_field_error` /
+  `form_abandon` / `form_submit` (the form-stage vocabulary one consumer's own bespoke quote-form
+  events proved out; now a reusable contract so every public form is diagnosable by construction).
+  All seven are posted by a consumer's own route handler answering a client fetch, same as
+  `lead_submit`/`landing_owner` — gated as a form submit, not a page navigation.
+- `trackServerEvent` gained an optional `field` param (the field name for `form_field_error`); the
+  existing `game` param doubles as the form identifier for `form_*` events, same "brand-specific
+  context" slot it already documented for a product/game slug.
+- New module `consentEvents.ts` — `trackConsentEvent(url, choice)`, a browser-only (no Node
+  imports), sendBeacon-preferring POST to the consumer's own same-origin route, never to
+  `PAGE_EVENTS_URL`/`PAGE_EVENTS_TOKEN` directly (that stays server-side).
+- New module `formEvents.ts` — `trackFormEvent(url, payload)` plus `attachFormLifecycle(form, url,
+  formName)`, a DOM-listener helper for a plain `<form>` element that fires `form_start` on first
+  interaction and a best-effort `form_abandon` on tab-hide/unload; `form_submit`/`form_field_error`
+  stay explicit calls, since a controlled React form knows its own success/validation moments better
+  than a DOM listener can guess.
+- Both new modules registered in `shared-modules.json` (no resource match — the re-implementation
+  risk is a hand-rolled fetch/telemetry call with no distinct textual signature; enforced by review,
+  same as `motion`/`posthogSessionRecording`).
+
 ## [2026-09-26h] — `pageEvents.ts`: `landing_owner`, the owner-exclusion marker for a split test
 
 ### Added
