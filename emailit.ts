@@ -74,6 +74,14 @@ export interface EmailitSendMessage {
    * default it has always used.
    */
   tracking?: boolean | { loads?: boolean; clicks?: boolean };
+  /**
+   * Additional raw email headers — e.g. `In-Reply-To`/`References` so a reply
+   * threads against an earlier message in the same conversation (Emailit has
+   * no first-class "reply to this message id" param; the RFC headers are the
+   * only mechanism). Merged into the request as-is; the caller is responsible
+   * for correct header names/values (e.g. wrapping a message id in `<...>`).
+   */
+  headers?: Record<string, string>;
 }
 
 export interface EmailitSendOptions {
@@ -95,6 +103,16 @@ export interface EmailitSendResult {
   body?: string;
   /** Set when the final failure was a thrown fetch rather than an HTTP error. */
   transportError?: string;
+  /**
+   * Emailit's own message id (`em_...`), present on success only.
+   *
+   * A caller that threads replies (In-Reply-To/References on a later message
+   * in the same conversation) needs this — without it, a reply to what this
+   * function just sent has nothing to match against. Parsed best-effort: a
+   * malformed success body must not turn a delivered send into a reported
+   * failure, so a parse error here is swallowed and `id` is simply absent.
+   */
+  id?: string;
 }
 
 function backoffMs(attempt: number, retryAfterSec: number | undefined): number {
@@ -218,7 +236,18 @@ export async function sendEmailitEmail(
       continue;
     }
 
-    if (res.ok) return { ok: true, attempts: attempt, status: res.status };
+    if (res.ok) {
+      let id: string | undefined;
+      try {
+        const parsed = (await res.clone().json()) as { id?: string; data?: { id?: string } };
+        id = parsed?.id ?? parsed?.data?.id;
+      } catch {
+        // Non-JSON or unexpected success body — the send still happened; id
+        // just stays absent rather than turning a delivered send into a
+        // reported failure.
+      }
+      return { ok: true, attempts: attempt, status: res.status, id };
+    }
 
     const body = (await res.text().catch(() => "")).slice(0, 300);
     last = { ok: false, attempts: attempt, status: res.status, body };

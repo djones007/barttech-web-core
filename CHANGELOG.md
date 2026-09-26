@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26j] — `emailit`: `sendEmailitEmail` returns the provider message id on success; `EmailitSendMessage` gains `headers`
+
+### Added
+- `EmailitSendResult.id` — the Emailit message id (`em_...`), parsed best-effort from the success
+  response body. A caller that needs to thread a later reply against this message (In-Reply-To /
+  References) had no way to get it back; a malformed/unexpected success body simply leaves `id`
+  absent rather than turning a delivered send into a reported failure.
+- `EmailitSendMessage.headers` — arbitrary extra headers merged into the send request, for the same
+  threading need (Emailit has no first-class "reply to this message id" param).
+- Needed by a consumer's helpdesk outbound sender, which threads replies the same way a
+  transactional 1:1 mail sender elsewhere in the estate always has, and this module was missing
+  both pieces to do it.
+
 ## [2026-09-26i] — Consent accept-rate + form-stage event contracts: `consentEvents.ts`, `formEvents.ts`, widened `pageEvents` vocabulary
 
 ### Added
