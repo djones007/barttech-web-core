@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26k] — `pageEvents.ts`: form identifier gets its own `form` field, not the `game` slot
+
+### Changed
+- `trackServerEvent` gains an explicit `form` param for `form_start`/`form_field_error`/
+  `form_abandon`/`form_submit` events, sent as `form` in the POST body alongside the existing
+  `game`/`field`. Until now the form identifier rode in `game` (documented as generic
+  "brand-specific context") because that was the only free slot when the form-stage vocabulary
+  shipped earlier today — but it overloaded a column meant for a product/game slug and made the
+  receiving dashboard unreadable without knowing the overload. A form's own field is the correct
+  shape; `game` keeps its original meaning.
+- The receiving ingest endpoint is backward compatible: a caller still sending the form name as
+  `game` (an unbumped consumer) is still accepted and lands correctly.
+
+### Why
+Found the same day the form-stage contract shipped, while wiring the first real consumer.
+
 ## [2026-09-26j] — `emailit`: `sendEmailitEmail` returns the provider message id on success; `EmailitSendMessage` gains `headers`
 
 ### Added

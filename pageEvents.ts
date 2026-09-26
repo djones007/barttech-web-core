@@ -80,11 +80,15 @@ import { device } from "./device";
  *   - `form_submit`     — a tracked form's submission succeeded server-side.
  *                        `form_start`/`form_field_error`/`form_abandon`/
  *                        `form_submit` all carry the form's identifier in
- *                        `game` (the same generic "brand-specific context"
- *                        slot documented below — a form name is exactly the
- *                        kind of caller-supplied context that field exists
- *                        for) and, where relevant, the field name in `field`.
- *                        See `formEvents.ts`.
+ *                        `form` and, where relevant, the field name in
+ *                        `field`. See `formEvents.ts`. (Until 2026-09-26 the
+ *                        form identifier rode in `game`, the generic
+ *                        "brand-specific context" slot — that overloaded a
+ *                        column meant for a product/game slug and made
+ *                        `/form-diagnostics` unreadable without knowing the
+ *                        overload. `form` is now its own field; the receiving
+ *                        endpoint still accepts a caller sending it as `game`,
+ *                        for a site on an older web-core pin.)
  *
  * SPLIT TESTS: pass `experiment` (from `experiments.ts`) on a tested page's
  * `landing`, its buy click's `reserve_click`, and any `landing_owner`
@@ -123,14 +127,15 @@ type TrackServerEventArgs = {
   headers: Headers;
   searchParams?: SearchParamsLike;
   /**
-   * Brand-specific context (e.g. a product/game slug, OR a tracked form's
-   * identifier for a `form_*` event — see `formEvents.ts`). Optional, passed
-   * through as-is.
+   * Brand-specific context — e.g. a product/game slug. Optional, passed
+   * through as-is. NOT the form identifier for a `form_*` event; use `form`.
    */
   game?: string | null;
   currency?: string | null;
   /** The field name for a `form_field_error` event. Ignored for other events. */
   field?: string | null;
+  /** The tracked form's identifier for a `form_*` event (see `formEvents.ts`). Ignored for other events. */
+  form?: string | null;
   /**
    * The split-test assignment this event belongs to (see `experiments.ts`).
    * A variant id is not an identifier: many visitors share it, so the row
@@ -171,6 +176,7 @@ export async function trackServerEvent({
   game = null,
   currency = null,
   field = null,
+  form = null,
   experiment = null,
 }: TrackServerEventArgs): Promise<void> {
   const url = process.env.PAGE_EVENTS_URL;
@@ -217,6 +223,7 @@ export async function trackServerEvent({
         game,
         currency,
         field,
+        form,
         utm_source: first(searchParams.utm_source),
         utm_medium: first(searchParams.utm_medium),
         utm_campaign: first(searchParams.utm_campaign),
