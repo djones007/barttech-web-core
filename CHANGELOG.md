@@ -2,12 +2,21 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26c] — Public hygiene: describe the affected consumer by role, not by name
+
+### Fixed
+- The 2026-09-26b entry named a private consuming repo to explain where the false positive was
+  observed. This repo is public, so that is a hygiene violation and the `Public Hygiene` workflow
+  correctly failed the push. Reworded to "one consuming app's contact-form view" — the estate
+  context belongs in private memory, never here. Same tell as every previous recurrence: the name
+  arrived because explaining the fix seemed to need it. No code change.
+
 ## [2026-09-26b] — `check-post-submit-notice.mjs`: fix a false positive on "check your email address" validation copy
 
 ### Fixed
 - The new trigger/success-copy invariant (2026-09-26a) matched "Check your email address" —
   form-validation copy asking a visitor to re-type what they entered, not a post-submit
-  deliverability notice — as a finding. Found live in `cloud-plus-v2`'s `src/views/Contact.tsx`,
+  deliverability notice — as a finding. Found live in one consuming app's contact-form view,
   which failed CI at the pinned `917513b` even though it never triggers a send on that code path
   (its only match is a 400-response toast title). `SUCCESS_COPY`'s "check your email/inbox" pattern
   now excludes a trailing "address"/"is correct"/"and try again". New test:
