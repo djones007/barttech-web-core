@@ -320,6 +320,11 @@
         }
       ],
       "why": "server-side producer for the central notification centre's token-gated ingest, for apps other than the receiver. The receiver owns rendering and whether a notification also emails or pushes; this module only raises it and reports whether it landed."
+    },
+    "problemReport": {
+      "owner": "@/web-core/problemReport",
+      "resources": [],
+      "why": "the generic half of an in-app 'Report a problem': plain-text cleaning, coarse browser family (never the UA string), size-capped JSON snapshot fitting and the allow-listed client context (viewport, recent errors, Sentry id). Extracted 2026-09-26 from the first consumer's in-app report form so a second report form in any app never grows its own copy. Pure functions, no imports: it owns no table, bucket or endpoint (the consumer passes its own storage client, rate limits live in the consumer's DB trigger, replies go through supportTicket.ts, screenshots are validated with uploads.ts), so there is nothing a resource match could see. Enforced by its committed tests (problemReport.test.ts)."
     }
   }
 }

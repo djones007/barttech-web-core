@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26g] — New `problemReport` module: the generic half of an in-app "Report a problem"
+
+### Added
+- `problemReport.ts`: `cleanPlainText` (control chars, tags and angle brackets out, whitespace
+  collapsed, capped), `browserFamily` (coarse family + major version; the UA string is never
+  stored), `fitJsonSnapshot` (trim then drop named keys to fit a size cap; null rather than refuse
+  the report) and `cleanClientBasics` (allow-listed, bounded viewport / recent errors / Sentry id /
+  elapsed time; unknown keys dropped, because a report route is a public endpoint). Pure, no
+  imports. Extracted from the first consumer's in-app report so a second report form reuses it.
+  Storage, image re-encoding (EXIF strip), rate limiting and replies stay with the consumer, using
+  `uploads.ts` and `supportTicket.ts`.
+- `problemReport.test.ts` (4 tests, wired into `npm test`); registered in `shared-modules.json`
+  (owns no resource, with the why).
+
 ## [2026-09-26f] — `experiments.ts`: the whole split-testing flow is now shared (page assignment, price tests, the buy click)
 
 ### Added
