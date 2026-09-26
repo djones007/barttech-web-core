@@ -243,3 +243,158 @@ test("a clean repo with no matching files reports zero findings", () => {
   assert.equal(r.status, 0);
   assert.match(r.stdout, /0 annotated exception/);
 });
+
+// ---------------------------------------------------------------------------
+// Second invariant (2026-09-26): a screen that TRIGGERS an email must show a
+// notice at all, regardless of whether it also writes hand-written copy the
+// first invariant would catch. A live consumer's sign-in, sign-up and reset
+// screens shipped with no notice whatsoever — the phrase-based gate above
+// cannot flag copy that was never written.
+// ---------------------------------------------------------------------------
+
+test("signInWithOtp with no notice and no recovery copy is a trigger finding", () => {
+  const r = runAgainst({
+    "components/LoginForm.tsx": `
+      "use client";
+      export default function LoginForm() {
+        const auth = () => supabaseBrowser().auth;
+        const send = async () => {
+          await auth().signInWithOtp({ email: "a@b.com" });
+        };
+        return <div>Link sent.</div>;
+      }
+    `,
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /components\/LoginForm\.tsx\s+\[trigger\]/);
+});
+
+test("signInWithOtp is clean once the file renders PostSubmitNotice", () => {
+  const r = runAgainst({
+    "components/LoginForm.tsx": `
+      "use client";
+      import PostSubmitNotice from "./PostSubmitNotice";
+      export default function LoginForm() {
+        const auth = () => supabaseBrowser().auth;
+        const send = async () => {
+          await auth().signInWithOtp({ email: "a@b.com" });
+        };
+        return <PostSubmitNotice provider="gmail" sender="a@b.com" mode="link" />;
+      }
+    `,
+  });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /OK/);
+});
+
+test("'check your email' success copy with no notice is a finding even with no visible trigger call", () => {
+  const r = runAgainst({
+    "components/OptinThanks.tsx": `
+      export default function OptinThanks() {
+        return <p>Check your email for the download link.</p>;
+      }
+    `,
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /components\/OptinThanks\.tsx\s+\[success-copy\]/);
+});
+
+test("signUp and resetPasswordForEmail are also triggers", () => {
+  const rSignUp = runAgainst({
+    "components/SignUp.tsx": `
+      export default function SignUp() {
+        const go = async () => { await auth().signUp({ email: "a@b.com", password: "x" }); };
+        return <div>Almost there.</div>;
+      }
+    `,
+  });
+  assert.equal(rSignUp.status, 1);
+
+  const rReset = runAgainst({
+    "components/Reset.tsx": `
+      export default function Reset() {
+        const go = async () => { await auth().resetPasswordForEmail("a@b.com"); };
+        return <div>Almost there.</div>;
+      }
+    `,
+  });
+  assert.equal(rReset.status, 1);
+});
+
+test("bartmailOptin with no notice is a trigger finding", () => {
+  const r = runAgainst({
+    "components/LeadForm.tsx": `
+      export default function LeadForm() {
+        const go = async () => { await bartmailOptin({ email: "a@b.com" }); };
+        return <div>Almost there.</div>;
+      }
+    `,
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /components\/LeadForm\.tsx\s+\[trigger\]/);
+});
+
+test("updateUser({ data }) with no email change is not a trigger", () => {
+  const r = runAgainst({
+    "components/Profile.tsx": `
+      export default function Profile() {
+        const save = async () => { await auth().updateUser({ data: { name: "x" } }); };
+        return <div>Saved.</div>;
+      }
+    `,
+  });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /OK/);
+});
+
+test("updateUser({ email }) with no notice is a trigger finding", () => {
+  const r = runAgainst({
+    "components/Profile.tsx": `
+      export default function Profile() {
+        const save = async () => { await auth().updateUser({ email: "new@b.com" }); };
+        return <div>Saved.</div>;
+      }
+    `,
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /components\/Profile\.tsx\s+\[trigger\]/);
+});
+
+test("a trigger-baselined path with a reason is suppressed", () => {
+  const r = runAgainst({
+    "components/LoginForm.tsx": `
+      export default function LoginForm() {
+        const go = async () => { await auth().signInWithOtp({ email: "a@b.com" }); };
+        return <div>Link sent.</div>;
+      }
+    `,
+    ".post-submit-trigger-baseline": "components/LoginForm.tsx # background reconciliation, never shown to a user\n",
+  });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /1 trigger-baselined exception/);
+});
+
+test("a trigger-baseline entry with no reason is not honoured", () => {
+  const r = runAgainst({
+    "components/LoginForm.tsx": `
+      export default function LoginForm() {
+        const go = async () => { await auth().signInWithOtp({ email: "a@b.com" }); };
+        return <div>Link sent.</div>;
+      }
+    `,
+    ".post-submit-trigger-baseline": "components/LoginForm.tsx\n",
+  });
+  assert.equal(r.status, 1);
+});
+
+test("a plain success page with no trigger and no email copy stays clean", () => {
+  const r = runAgainst({
+    "components/OrderConfirmed.tsx": `
+      export default function OrderConfirmed() {
+        return <div>Your order is confirmed.</div>;
+      }
+    `,
+  });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /OK/);
+});

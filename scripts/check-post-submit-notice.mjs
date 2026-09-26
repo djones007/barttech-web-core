@@ -75,13 +75,53 @@
 // gate here: the alternative is a much noisier multi-line window that starts
 // double-reporting boundary lines.
 //
+// SECOND INVARIANT (added 2026-09-26) — a screen that TRIGGERS an email must
+// show a notice at all, not just show it correctly if it bothers to
+// hand-write one.
+//
+// The invariant above only fires on hand-written junk-folder COPY — it says
+// nothing about a screen that sends an email and shows no recovery guidance
+// whatsoever. a live consumer's sign-in/sign-up/reset screens shipped
+// exactly that way: they call Supabase's email-sending auth methods and land
+// on a "check your email" success state with zero notice, hand-written or
+// otherwise, and a real user (Hotmail) never saw junk-folder guidance because
+// there was nothing there to see. A gate that only inspects copy that exists
+// cannot catch copy that was never written.
+//
+// So a `.tsx`/`.jsx` file is ALSO a finding if it calls one of the known
+// email-triggering methods, or shows "check your email/inbox"-style success
+// copy, and does not import/render the shared notice — regardless of whether
+// it also contains any of the PHRASE matches above. Known triggers:
+//
+//   supabase auth: signInWithOtp, signUp, resetPasswordForEmail, resend,
+//                  updateUser({ email: ... })
+//   optin/lead routes: fetch(...".../api/optin"...), bartmailOptin(...)
+//   success copy: "check your email/inbox", "we've emailed you", "we sent
+//                 you an email" — the tell that a screen believes it just
+//                 triggered a send, whether or not the actual API call is
+//                 visible in this file (it may be server-side).
+//
+// Same exceptions apply: a server action / API route file that returns a
+// provider and leaves rendering to a client file which itself renders the
+// notice is not a finding on its own (this gate is `.tsx`/`.jsx`-scoped, so a
+// plain `.ts` route handler is out of scope by construction). A genuine false
+// positive — a trigger call whose result is deliberately never surfaced to
+// this user (e.g. a background reconciliation job) — is allowlisted per path
+// in `.post-submit-trigger-baseline` (repo root), one path per line with a
+// mandatory `# reason`; an entry with no reason after the `#` is not honoured
+// and the file is still flagged, same principle as every other annotation
+// gate here (a waiver you cannot see the reason for is not a waiver, it is
+// silence).
+//
 // Exit codes: 0 = no hand-written notice copy found (or the repo has none).
-//             1 = at least one file has hand-written copy with no import.
+//             1 = at least one file has hand-written copy with no import, or
+//                 triggers an email / shows "check your email" success copy
+//                 with no notice rendered.
 //
 // Usage: node check-post-submit-notice.mjs [rootDir]   (default: cwd)
 // ---------------------------------------------------------------------------
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
 const ROOT = process.argv[2] || process.cwd();
@@ -154,6 +194,78 @@ const ANNOTATION = /post-submit-notice-ok\s*:\s*(\S.*)/;
 // before deciding whether a reason was actually given, or every bare
 // `{/* post-submit-notice-ok: */}` silently captures "*/}" as its reason.
 const COMMENT_CLOSER = /\*\/\s*\}?\s*$/;
+
+// --- Second invariant: trigger-without-notice ------------------------------
+
+// Matched against the WHOLE cleaned source (not per-line) — a trigger call
+// and its success-state copy routinely sit dozens of lines apart in the same
+// component (e.g. LoginForm.tsx: the `signInWithOtp` call in one handler, the
+// "sent" mode's JSX far below it), so a per-line scan the way PHRASE works
+// would miss the exact shape this invariant exists to catch.
+const TRIGGER = new RegExp(
+  [
+    // Supabase Auth methods that send mail — matched as a bare `.<method>(`
+    // member call so it fires whether the receiver is a chained client
+    // (`supabase.auth.signInWithOtp(...)`) or a local helper commonly named
+    // `auth()` (`const auth = () => supabaseBrowser().auth;` then
+    // `auth().signInWithOtp(...)`, as seen in a real consumer's
+    // LoginForm.tsx) — requiring a literal preceding `auth` token would miss
+    // the second, very common shape.
+    "\\.\\s*signInWithOtp\\s*\\(",
+    "\\.\\s*signUp\\s*\\(",
+    "\\.\\s*resetPasswordForEmail\\s*\\(",
+    "\\.\\s*resend\\s*\\(",
+    // updateUser sends a confirmation email only when the payload changes
+    // the email address — narrowed to require "email" within the same call
+    // via UPDATE_USER_EMAIL below, not this alternation alone.
+    "\\.\\s*updateUser\\s*\\(",
+    // Optin / lead-capture routes.
+    "bartmailOptin\\s*\\(",
+    "fetch\\s*\\(\\s*[`'\"][^`'\"]*/api/optin",
+  ].join("|"),
+  "i"
+);
+
+// updateUser(...) only sends mail when the call touches `email` — narrow
+// separately so `updateUser({ data: { name } })` (no mail sent) isn't flagged.
+// Scans up to 200 chars after the call opens for an `email` key, generous
+// enough for a multi-field payload without running into the next statement.
+const UPDATE_USER_EMAIL = /updateUser\s*\(\s*\{[^{}]{0,200}\bemail\b/i;
+
+// A screen that believes it just triggered a send says so in its success
+// copy, whether or not the actual trigger call is visible in THIS file (the
+// call is routinely server-side, e.g. a form POST to an API route).
+const SUCCESS_COPY = new RegExp(
+  [
+    "check\\s+your\\s+(email|inbox)",
+    "we\\W?(ve|have)\\s+emailed",
+    "we\\s+emailed\\s+you",
+    "we\\W?(ve|have)\\s+sent\\s+(you\\s+)?an?\\s+email",
+    "we\\s+sent\\s+(you\\s+)?an?\\s+email",
+    "an\\s+email\\s+(is|has\\s+been)\\s+on\\s+its\\s+way",
+  ].join("|"),
+  "i"
+);
+
+function loadBaseline(root, filename) {
+  const p = join(root, filename);
+  if (!existsSync(p)) return new Map();
+  const map = new Map();
+  for (const raw of readFileSync(p, "utf8").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const hashIdx = line.indexOf("#");
+    const path = (hashIdx === -1 ? line : line.slice(0, hashIdx)).trim();
+    const reason = hashIdx === -1 ? "" : line.slice(hashIdx + 1).trim();
+    if (!path) continue;
+    // A mandatory reason: an entry with nothing after the `#` (or no `#` at
+    // all) is not honoured — same principle as every inline annotation in
+    // this repo. Recorded but marked unreasoned so it still fails, loudly,
+    // rather than silently matching nothing.
+    map.set(path, reason || null);
+  }
+  return map;
+}
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -230,32 +342,67 @@ function annotatedReason(rawLines, i) {
   return extract(rawLines[i]) ?? (i > 0 ? extract(rawLines[i - 1]) : null);
 }
 
+const triggerBaseline = loadBaseline(ROOT, ".post-submit-trigger-baseline");
+
 const findings = [];
+const triggerFindings = [];
 let checked = 0;
 let annotated = 0;
+let triggerBaselined = 0;
 
 for (const file of walk(ROOT)) {
   let src;
   try { src = readWithinRoot(ROOT, file); } catch { continue; }
   checked++;
+  const rel = relative(ROOT, file);
 
-  if (IMPORTS_OR_RENDERS_SHARED_NOTICE.some((re) => re.test(src))) continue;
+  const hasSharedNotice = IMPORTS_OR_RENDERS_SHARED_NOTICE.some((re) => re.test(src));
 
-  const rawLines = src.split("\n");
-  const lines = blankComments(src).split("\n");
+  if (!hasSharedNotice) {
+    const rawLines = src.split("\n");
+    const lines = blankComments(src).split("\n");
 
-  lines.forEach((line, i) => {
-    const m = line.match(PHRASE);
-    if (!m) return;
+    lines.forEach((line, i) => {
+      const m = line.match(PHRASE);
+      if (!m) return;
 
-    const reason = annotatedReason(rawLines, i);
+      const reason = annotatedReason(rawLines, i);
+      if (reason) {
+        annotated++;
+        return;
+      }
+
+      findings.push({ file: rel, line: i + 1, text: m[0].trim() });
+    });
+  }
+
+  // Second invariant — independent of the first: a trigger call or "check
+  // your email" success copy with no shared notice anywhere in the file,
+  // regardless of whether hand-written junk-folder phrasing is also present
+  // (that case is already caught above; this catches the file that shows NO
+  // notice at all, which the phrase-only scan cannot see).
+  if (hasSharedNotice) continue;
+  const cleaned = blankComments(src);
+  // TRIGGER's updateUser(...) alternative matches any updateUser call; narrow
+  // it down to the email-changing shape so `updateUser({ data: { name } })`
+  // (no mail sent) isn't flagged on its own.
+  const matchedUpdateUserOnly = /\.\s*updateUser\s*\(/i.test(cleaned)
+    && !/\.\s*signInWithOtp\s*\(|\.\s*signUp\s*\(|\.\s*resetPasswordForEmail\s*\(|\.\s*resend\s*\(|bartmailOptin\s*\(|\/api\/optin/i.test(cleaned);
+  const isTrigger = matchedUpdateUserOnly ? UPDATE_USER_EMAIL.test(cleaned) : TRIGGER.test(cleaned);
+  const isSuccessCopy = SUCCESS_COPY.test(cleaned);
+
+  if (!isTrigger && !isSuccessCopy) continue;
+
+  const reason = triggerBaseline.get(rel);
+  if (triggerBaseline.has(rel)) {
     if (reason) {
-      annotated++;
-      return;
+      triggerBaselined++;
+      continue;
     }
+    // Present but no reason after the `#` — not honoured, falls through to a finding.
+  }
 
-    findings.push({ file: relative(ROOT, file), line: i + 1, text: m[0].trim() });
-  });
+  triggerFindings.push({ file: rel, kind: isTrigger ? "trigger" : "success-copy" });
 }
 
 if (findings.length) {
@@ -271,7 +418,26 @@ if (findings.length) {
       ' <reason>".'
   );
   for (const f of findings) console.log(`  ${f.file}:${f.line}  ${f.text}`);
-  process.exit(1);
 }
 
-console.log(`Post-submit notice gate OK — ${checked} file(s) checked, ${annotated} annotated exception(s).`);
+if (triggerFindings.length) {
+  console.log(
+    "::error::A screen triggers an email (or shows \"check your email\" success copy)" +
+      " with no post-submit notice rendered at all. a live consumer's sign-in, sign-up and" +
+      " reset screens shipped exactly this way and a real user (Hotmail) never saw" +
+      " junk-folder guidance because none was ever shown — a hand-written-copy gate cannot" +
+      " catch copy that was never written. Render PostSubmitNotice (or call" +
+      " mailProviderNotice from @/web-core/mailProviderNotice) on this screen's success" +
+      " state. If this call's result is genuinely never surfaced to a user (e.g. a" +
+      " background job), add the path to .post-submit-trigger-baseline with a mandatory" +
+      " `# reason` — an entry with no reason is not honoured."
+  );
+  for (const f of triggerFindings) console.log(`  ${f.file}  [${f.kind}]`);
+}
+
+if (findings.length || triggerFindings.length) process.exit(1);
+
+console.log(
+  `Post-submit notice gate OK — ${checked} file(s) checked, ${annotated} annotated exception(s),` +
+    ` ${triggerBaselined} trigger-baselined exception(s).`
+);

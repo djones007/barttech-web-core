@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26a] — `check-post-submit-notice.mjs`: gate a screen that triggers an email and shows no notice at all
+
+### Added
+- Second invariant on the post-submit-notice gate: a `.tsx`/`.jsx` file calling a known
+  email-triggering method (`signInWithOtp`, `signUp`, `resetPasswordForEmail`, `resend`,
+  `updateUser({ email })`, `bartmailOptin`, a `fetch(".../api/optin")`) or showing "check your
+  email/inbox" / "we've emailed" success copy, with no shared notice (`PostSubmitNotice` or
+  `mailProviderNotice`) rendered anywhere in the file, is now a finding — independent of whether the
+  original phrase-only scan also fires. `.post-submit-trigger-baseline` (repo root, one path per
+  line, mandatory `# reason`) is the allowlist for genuine exceptions. 10 new tests in
+  `check-post-submit-notice.test.ts` (26 total, all passing).
+
+### Why
+The original gate only fires on hand-written junk-folder COPY, so it cannot see a screen that sends
+mail and shows no notice whatsoever. a live consumer's sign-in, sign-up and reset screens shipped
+exactly that way and a real user (Hotmail) never saw junk-folder guidance because there was nothing
+to see — approved by Dom 2026-09-26 to make the estate's post-submit notice mandatory by gate, not
+convention.
+
 ## [2026-09-26] — `emailit`: clear a SOFT-FAIL suppression before a self-requested send; new `ccNotify` module
 
 ### Added

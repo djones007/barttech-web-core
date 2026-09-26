@@ -306,7 +306,20 @@ a CI step that fetches the raw file.
   same reasoning as `check-unsanitised-html.mjs`: the files most likely to
   TALK about this in prose are the ones that got it right. Waivers are
   `// post-submit-notice-ok: <reason>` on the line or the line above; a bare
-  annotation with no reason does not suppress the finding. Plain Node, no
+  annotation with no reason does not suppress the finding.
+  **Second invariant (added 2026-09-26):** the copy-only check above cannot
+  catch a screen that shows NO notice at all — a live consumer's sign-in,
+  sign-up and reset screens triggered a Supabase auth email and showed zero
+  recovery guidance, hand-written or otherwise, so a Hotmail user never saw
+  where to look. This gate also flags any `.tsx`/`.jsx` file calling a known
+  email-triggering method (`signInWithOtp`, `signUp`,
+  `resetPasswordForEmail`, `resend`, `updateUser({ email })`, `bartmailOptin`,
+  a `fetch(...".../api/optin"...)`) or showing "check your email/inbox" /
+  "we've emailed" success copy, with no shared notice rendered anywhere in
+  the file — independent of whether the first invariant's phrase scan also
+  fires. Waivers for this half go in `.post-submit-trigger-baseline` (repo
+  root), one path per line with a mandatory `# reason`; an entry with no
+  reason is not honoured and the file still fails. Plain Node, no
   dependencies.
 
 - `check-migration-prefixes.mjs` — flags two files under `supabase/migrations/`
