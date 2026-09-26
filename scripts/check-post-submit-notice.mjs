@@ -237,7 +237,13 @@ const UPDATE_USER_EMAIL = /updateUser\s*\(\s*\{[^{}]{0,200}\bemail\b/i;
 // call is routinely server-side, e.g. a form POST to an API route).
 const SUCCESS_COPY = new RegExp(
   [
-    "check\\s+your\\s+(email|inbox)",
+    // Negative lookahead on "address"/"is correct"/"and try again" — "Check
+    // your email address" (and its siblings) is validation-error copy asking
+    // the visitor to re-type what they entered, not a post-submit
+    // deliverability notice telling them where a sent email might have
+    // landed. Found as a real false positive in a contact form's 400-response
+    // toast, which never triggers a send at all on that code path.
+    "check\\s+your\\s+(email|inbox)(?!\\s+(address|is\\s+correct|and\\s+try\\s+again))",
     "we\\W?(ve|have)\\s+emailed",
     "we\\s+emailed\\s+you",
     "we\\W?(ve|have)\\s+sent\\s+(you\\s+)?an?\\s+email",

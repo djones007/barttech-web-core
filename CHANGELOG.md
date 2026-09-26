@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26b] — `check-post-submit-notice.mjs`: fix a false positive on "check your email address" validation copy
+
+### Fixed
+- The new trigger/success-copy invariant (2026-09-26a) matched "Check your email address" —
+  form-validation copy asking a visitor to re-type what they entered, not a post-submit
+  deliverability notice — as a finding. Found live in `cloud-plus-v2`'s `src/views/Contact.tsx`,
+  which failed CI at the pinned `917513b` even though it never triggers a send on that code path
+  (its only match is a 400-response toast title). `SUCCESS_COPY`'s "check your email/inbox" pattern
+  now excludes a trailing "address"/"is correct"/"and try again". New test:
+  "'Check your email address' validation-error copy is not a success notice" (27 tests total, all
+  passing).
+
 ## [2026-09-26a] — `check-post-submit-notice.mjs`: gate a screen that triggers an email and shows no notice at all
 
 ### Added

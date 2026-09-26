@@ -387,6 +387,18 @@ test("a trigger-baseline entry with no reason is not honoured", () => {
   assert.equal(r.status, 1);
 });
 
+test("'Check your email address' validation-error copy is not a success notice", () => {
+  const r = runAgainst({
+    "components/ContactForm.tsx": `
+      export function ContactForm() {
+        return <p>Check your email address and try again.</p>;
+      }
+    `,
+  });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /OK/);
+});
+
 test("a plain success page with no trigger and no email copy stays clean", () => {
   const r = runAgainst({
     "components/OrderConfirmed.tsx": `
