@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26h] — `pageEvents.ts`: `landing_owner`, the owner-exclusion marker for a split test
+
+### Added
+- `PageEventName` widens to include `landing_owner`: a companion event a route handler fires once
+  the CLIENT learns a visitor already owns the thing a tested page sells, so a split-test report
+  can exclude that landing (an owner never generates a fresh order for the test). Same
+  `experiment`/`variant`/`experiment_forced` fields as `landing`/`reserve_click`.
+- `trackServerEvent`'s automated-request gate now treats `landing_owner` the same as `lead_submit`:
+  both are a route handler answering its OWN `fetch()` (real `sec-fetch-mode: cors`), not a page
+  navigation, so both are gated as a form submit rather than dropped as automated.
+
+### Why
+- A split test counted a returning OWNER (a buyer on another device or network, swapped to an
+  "you own this" view client-side by an owner-gate component) as a plain visitor in the test's
+  denominator, because the server-side `landing` fires before the browser can check ownership.
+  The fix is this vocabulary, plus an exclusion in the consuming split-test report, plus a thin
+  per-site shim that fires the marker when the client learns `owns: true`.
+- Receiving side: a consumer that validates event names (a CHECK constraint or an allowlist) must
+  widen it in the same change — additive only, `landing` and `reserve_click` rows are unchanged.
+
 ## [2026-09-26g] — New `problemReport` module: the generic half of an in-app "Report a problem"
 
 ### Added

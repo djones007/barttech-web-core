@@ -40,15 +40,32 @@ import { device } from "./device";
  *   - `reserve_click` — a mid-funnel reservation/intent click. Ignore if your
  *                        funnel has no such step.
  *   - `lead_submit`    — a lead-capture form POST succeeded server-side.
+ *   - `landing_owner`  — a companion marker for a `landing` already recorded on
+ *                        this same page view, sent once the CLIENT learns the
+ *                        visitor already owns/holds the thing the page is
+ *                        selling (a game licence, a paid product). Fired from
+ *                        `after()` a beat later than the `landing` it pairs
+ *                        with, because ownership needs a signed-in session
+ *                        check the server can't make at initial render. A
+ *                        split-test report subtracts `landing_owner` rows from
+ *                        `landing` for the same variant, since an owner never
+ *                        generates a fresh order for that test. Tag it with the
+ *                        SAME `experiment`/`variant` as the landing it pairs
+ *                        with (re-derive the sticky assignment for the same
+ *                        visitor key — same experiment key, same request
+ *                        address/UA — rather than trusting a client-supplied
+ *                        variant). Never fire this without a live experiment on
+ *                        the page: there is nothing to exclude if no test is
+ *                        running.
  *
  * SPLIT TESTS: pass `experiment` (from `experiments.ts`) on a tested page's
- * `landing` and on its buy click's `reserve_click`. The receiving endpoint
- * stores experiment / variant / experiment_forced; the vocabulary above does
- * not change.
+ * `landing`, its buy click's `reserve_click`, and any `landing_owner`
+ * companion. The receiving endpoint stores experiment / variant /
+ * experiment_forced; the vocabulary above does not change.
  */
 const TIMEOUT_MS = 2000;
 
-export type PageEventName = "landing" | "reserve_click" | "lead_submit";
+export type PageEventName = "landing" | "reserve_click" | "lead_submit" | "landing_owner";
 
 /**
  * Loose on purpose: a Next.js page's `searchParams` gives
@@ -120,12 +137,15 @@ export async function trackServerEvent({
   // what let a server-side ViewContent run at 300+/hour before this gate
   // existed. See requestSignals.ts.
   //
-  // `lead_submit` is posted from a route handler answering the form's own
-  // fetch(), so it is gated as a form submit: a real browser fetch is
-  // `sec-fetch-mode: cors`, which the page-visit rule would read as automated
-  // and drop — which is exactly what happened to every lead_submit until
-  // 2026-09-25. Bots are still caught by the user-agent/prefetch rules.
-  if (isAutomatedRequest(headers, { formSubmit: event === "lead_submit" })) return;
+  // `lead_submit` and `landing_owner` are posted from a route handler answering
+  // the CALLER'S OWN `fetch()` (a form submit; a client-side ownership check),
+  // never a page navigation, so both are gated as a "form submit": a real
+  // browser fetch is `sec-fetch-mode: cors`, which the page-visit rule would
+  // read as automated and drop — which is exactly what happened to every
+  // `lead_submit` until 2026-09-25. Bots are still caught by the user-agent/
+  // prefetch rules regardless.
+  const isRouteHandlerFetch = event === "lead_submit" || event === "landing_owner";
+  if (isAutomatedRequest(headers, { formSubmit: isRouteHandlerFetch })) return;
 
   try {
     await fetch(url, {
