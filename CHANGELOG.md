@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-26e] — Docs: `experiments.ts` points at the estate split-testing hub
+
+### Changed
+- `experiments.ts`'s header comment now points at `memory/reference_split_testing.md` (barttech-os)
+  — the new estate-wide runbook for split testing (recipes, CC `/split-tests`, price tests,
+  auto-conclude, traps), which consolidates what was previously scattered across this file's own
+  comments, the game repo, the template README and the Command Centre folder docs.
+
 ## [2026-09-26d] — `experiments.ts`: sticky assignment across visits, per-variant checkout URL
 
 ### Added

@@ -36,6 +36,9 @@
  *
  * Framework-free, no React, no `server-only` (golden rules 5 and 6): the
  * consumer's own shim adds `import "server-only"` and bakes in its site.
+ *
+ * Estate-wide runbook (recipes, CC /split-tests, price tests, auto-conclude, traps):
+ * memory/reference_split_testing.md in barttech-os.
  */
 
 export type ExperimentStatus = "running" | "paused" | "concluded";
