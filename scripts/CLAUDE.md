@@ -381,5 +381,38 @@ a CI step that fetches the raw file.
   It proves the call is PRESENT, never that the env vars are set: code without
   env is the common real failure, so pair it with a runtime monitor on the event
   store. `--self-test` proves it both ways (18 cases, run in this repo's CI).
+
+- `check-selfrequested-suppression.mjs` — a **self-requested transactional send**
+  (a receipt, sign-in code, sign-up confirmation, password reset, magic link)
+  must clear a soft-fail suppression on that exact address first, or it is
+  silently dropped for every address a prior bounce soft-suppressed (~6,300
+  Microsoft addresses estate-wide at last count). The established pattern (a
+  consumer's own `lib/email.ts` plus an auth-mail route) is a `sendEmail()`
+  wrapper around the raw `sendEmailitEmail()` transport that takes an optional
+  `selfRequested` argument and clears suppression only when it is passed; the
+  rule that a NEW self-requested path must pass it was documented in four
+  places and enforced by none of them. Two checks: (A) a direct
+  `sendEmailitEmail()` call whose nearby context (subject/comment/keyword,
+  captured by paren-balancing the call rather than a fixed line window — a
+  fixed window read a correctly-guarded multi-line call as unguarded when the
+  guard sat one line past the cutoff) looks self-requested must have
+  `clearSelfRequestedSoftFailSuppression` reachable somewhere in the same file;
+  (B) a call to the repo's `sendEmail()` wrapper that looks self-requested must
+  pass `selfRequested`. Deliberately does NOT fire on a transport call with no
+  self-requested-looking neighbour — a repo whose direct transport use is
+  purely marketing/ops mail has nothing to clear, and a gate that fires anyway
+  teaches people to ignore it (the first version fired on an ops test-send
+  route because "confirmation" appeared in an unrelated comment elsewhere in
+  the file — keyword matching is now scoped to a window around the call, not
+  the whole file). Verified live across the estate's consumer repos on
+  2026-09-28: found two real gaps (a checkout-flow quote-accept confirmation
+  calling the transport directly with no clear mechanism at all; a
+  competitions app's double-opt-in confirm email going out via `sendEmail()`
+  with no `selfRequested`) and stayed silent on every repo already wired
+  correctly. Waivers are
+  `// selfrequested-suppression-ok: <reason>` on the line or up to 3 lines
+  above it; a bare annotation with no reason does not suppress the finding.
+  Repos override call/argument names and keywords via
+  `.selfrequested-suppression.json`. Plain Node, no dependencies.
   Consumers fetch it pinned by `WEB_CORE_REF`, like the other gates. Plain Node,
   no dependencies.

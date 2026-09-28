@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-28] — `check-selfrequested-suppression.mjs`: gate for self-requested sends that skip the soft-fail suppression clear
+
+### Added
+- New deterministic CI gate, `scripts/check-selfrequested-suppression.mjs`. `clearSelfRequestedSoftFailSuppression()`
+  (`emailit.ts`) exists so a self-requested transactional send (receipt, sign-in code, sign-up confirmation,
+  password reset, magic link) clears a soft-fail suppression on that exact address before sending — documented
+  in four places (template, website-build, brand-email, project_nutty_orange_ms_deliverability) but enforced
+  nowhere, so a new route could silently drop mail to any of the ~6,300 soft-suppressed Microsoft addresses.
+  Checks (A) a direct `sendEmailitEmail()` call whose nearby context looks self-requested has the clear
+  function reachable in the same file, and (B) a call to a repo's `sendEmail()` wrapper that looks
+  self-requested passes `selfRequested`. Call windows are captured by paren-balancing, not a fixed line
+  count, so a multi-line call is read in full. Waivers: `// selfrequested-suppression-ok: <reason>`.
+
+### Why
+Estate issue `b59ccd03` — no gate stopped a new transactional path shipping without the suppression clear.
+Verified live against ~20 estate repos: silent on every repo already wired correctly, found two real gaps
+(logged separately as new estate issues).
+
+---
+
 ## [2026-09-26k] — `pageEvents.ts`: form identifier gets its own `form` field, not the `game` slot
 
 ### Changed
