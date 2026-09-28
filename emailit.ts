@@ -142,6 +142,24 @@ function backoffMs(attempt: number, retryAfterSec: number | undefined): number {
 export function htmlToText(html: string): string {
   return html
     .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, "")
+    // Hidden preheader span/div (the canonical wrapper's real preview-text
+    // carrier — send.ts injects no separate preview_text, so this element is
+    // required in every template). Its style always carries display:none PLUS
+    // max-height:0 and overflow:hidden together — the recognised email-client
+    // preheader idiom, distinct from an ordinary display:none element that
+    // might legitimately have no max-height rule. Stripped so the plain-text
+    // fallback and the conversion reviewer both see it as what it is (the
+    // preview text, already shown to the reviewer separately as PREVIEW: …),
+    // not as a duplicated first line of the body. Estate issue 1231371e.
+    .replace(
+      /<(span|div)\b([^>]*)style=["']([^"']*)["']([^>]*)>([\s\S]*?)<\/\1>/gi,
+      (whole, _tag, _before, style, _after, _inner) => {
+        const s = String(style).toLowerCase();
+        const isPreheader =
+          /display:\s*none/.test(s) && /max-height:\s*0/.test(s) && /overflow:\s*hidden/.test(s);
+        return isPreheader ? "" : whole;
+      }
+    )
     .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href, label) => {
       const text = String(label).replace(/<[^>]+>/g, "").trim();
       if (!text) return String(href);

@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-28b] — `htmlToText` now strips the hidden preheader span/div
+
+### Fixed
+- `htmlToText()` treated a template's hidden preheader (`display:none` + `max-height:0` +
+  `overflow:hidden` span/div — the real preview-text carrier when a send path injects no separate
+  preview text) as ordinary visible content: it showed up as a duplicated first line of both the
+  plain-text multipart alternative and anything scored off the extracted text (a downstream
+  conversion reviewer was docking points for "preview repeated verbatim as the first line of the
+  body" on correctly-built templates). Elements whose style carries all three of those rules
+  together are now stripped before the rest of the extraction runs; an ordinary `display:none`
+  element with no `max-height:0` is untouched, so this only targets the recognised preheader idiom.
+
 ## [2026-09-28] — `check-selfrequested-suppression.mjs`: gate for self-requested sends that skip the soft-fail suppression clear
 
 ### Added
