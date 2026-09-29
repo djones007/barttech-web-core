@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-29e] — `bartmailOptin()` no longer reports success when a tag write failed
+
+### Fixed
+- **`bartmailOptin()` discarded every `contact_tags` upsert result and the suppression-lift result.** A failed tag write resolved like a successful optin: the contact existed but the tag that enrols its sequence (or gates a paid download) did not, and every caller's failure path — Sentry reports, "answer non-2xx so the payment processor retries" — could never fire. All tags are still attempted, then any failure throws `BartMail tag write failed: <tags>` (`assertTagWrites`, exported and unit-tested). A failed suppression lift on a consenting re-optin now throws too. Callers already treat a throw from `bartmailOptin` as a failed optin. Estate webhook silent-200 audit. **Consumers pick this up on their next web-core pointer bump.**
+
 ## [2026-09-29d] — Sanitiser: media element sources restricted to http(s)
 
 ### Fixed

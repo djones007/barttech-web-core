@@ -206,6 +206,23 @@ export function withMailProvider(
   return { ...(customFields ?? {}), mail_provider: detectMailProviderFromDomain(email) };
 }
 
+export interface TagWriteResult {
+  name: string;
+  error: { message?: string; code?: string | null } | null;
+}
+
+/**
+ * Throws if any tag write failed, naming every failed tag. Pure — exported for
+ * tests. A discarded tag-write error is a silent success: the optin "worked"
+ * while the tag that drives enrolment or access was never written.
+ */
+export function assertTagWrites(results: TagWriteResult[]): void {
+  const failed = results.filter((r) => r.error);
+  if (!failed.length) return;
+  const detail = failed.map((r) => `${r.name} (${r.error?.message ?? r.error?.code ?? "unknown"})`).join(", ");
+  throw new Error(`BartMail tag write failed: ${detail}`);
+}
+
 export async function bartmailOptin(params: BartmailOptinParams): Promise<void> {
   const {
     email,
@@ -362,12 +379,16 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   if (applyOptinTags) {
     // Remove any brand-level suppression (resubscribe). Skipped when consent
     // wasn't given — an unticked opt-in must not silently un-suppress a contact.
-    await supabase
+    // Checked (2026-09-29): a failed lift left a consenting re-optin
+    // suppressed — they would never receive what they just asked for — while
+    // the optin reported success.
+    const { error: liftError } = await supabase
       .from("contact_suppressions")
       .delete()
       .eq("contact_id", contactId)
       .eq("tenant_id", tenantId)
       .eq("brand_id", brandId);
+    if (liftError) throw new Error(`BartMail suppression lift failed: ${liftError.message}`);
   }
 
   // Build tag list — skip the default optin tags when consent wasn't given.
@@ -381,13 +402,21 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   }
   const uniqueTags = Array.from(new Set(tagsToInsert));
 
-  // Upsert tags
+  // Upsert tags. Every result is CHECKED (2026-09-29). These were awaited and
+  // discarded, so a failed tag write resolved like a successful optin: the
+  // contact existed, the tag that enrols its sequence (or gates a paid
+  // download) did not, and every caller's "optin failed" alert/retry path —
+  // including payment webhooks that answer non-2xx so the sender retries —
+  // could never fire. All tags are attempted, then any failure throws.
+  const tagResults: TagWriteResult[] = [];
   for (const tagName of uniqueTags) {
-    await supabase.from("contact_tags").upsert(
+    const { error: tagError } = await supabase.from("contact_tags").upsert(
       { contact_id: contactId, tenant_id: tenantId, brand_id: brandId, name: tagName },
       { onConflict: "contact_id,name", ignoreDuplicates: true }
     );
+    tagResults.push({ name: tagName, error: tagError });
   }
+  assertTagWrites(tagResults);
 
   // Sequence enrolment: NOT triggered here. The AFTER INSERT trigger on
   // contact_tags feeds tag_enrolment_outbox, drained every 2 min by

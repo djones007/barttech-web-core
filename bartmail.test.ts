@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { withMailProvider } from "./bartmail";
+import { withMailProvider, assertTagWrites } from "./bartmail";
 
 // ---------------------------------------------------------------------------
 // bartmail.ts as a whole imports @supabase/supabase-js and every exported
@@ -40,4 +40,16 @@ test("other keys in custom_fields are preserved alongside a caller-supplied mail
 test("an empty custom_fields object still gets mail_provider filled in", () => {
   const result = withMailProvider({}, "person@icloud.com");
   assert.deepEqual(result, { mail_provider: "apple" });
+});
+
+test("assertTagWrites: all ok does not throw", () => {
+  assert.doesNotThrow(() => assertTagWrites([{ name: "a", error: null }, { name: "b", error: null }]));
+  assert.doesNotThrow(() => assertTagWrites([]));
+});
+
+test("assertTagWrites: any failed tag throws and names it (no silent success)", () => {
+  assert.throws(
+    () => assertTagWrites([{ name: "brand-optin", error: null }, { name: "brand-buyer", error: { message: "permission denied" } }]),
+    /BartMail tag write failed: brand-buyer \(permission denied\)/,
+  );
 });
