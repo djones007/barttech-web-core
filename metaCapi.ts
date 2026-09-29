@@ -1,6 +1,7 @@
 import "server-only";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { isAutomatedRequest } from "./requestSignals";
+import { hashedCapiIdentity } from "./metaCapiUserData";
 
 // Re-exported so the existing import surface is unchanged (golden rule 4) and so
 // the gate below and its tests name the same function.
@@ -22,7 +23,8 @@ export { isAutomatedRequest };
  * touches the browser. It sends `client_ip_address`, `client_user_agent`, `fbc`
  * (derived from the `fbclid` on an ad click, or the `_fbc` cookie), `fbp` when the
  * `_fbp` cookie exists, and — for purchase/lead events only — SHA-256 hashes of
- * email and first name. IP + UA is personal data; the consuming site owns the
+ * whatever identity the caller passes (email, first/last name, phone, country,
+ * external id), normalised per Meta's spec in `metaCapiUserData.ts`. IP + UA is personal data; the consuming site owns the
  * lawful basis for sending it, and the events carry no cookie and no identifier
  * the visitor did not already send.
  *
@@ -91,10 +93,6 @@ export function isCapiConfigured(creds?: CAPICredentials): boolean {
   return Boolean(pixelId() && capiToken());
 }
 
-function sha256(value: string): string {
-  return createHash("sha256").update(value.toLowerCase().trim()).digest("hex");
-}
-
 export interface CAPIEventData {
   eventName: string;
   /** Share this with the browser pixel for the same event to dedupe. */
@@ -113,6 +111,15 @@ export interface CAPIEventData {
   sourceUrl: string;
   email?: string;
   firstName?: string;
+  lastName?: string;
+  /** Any format; normalised to digits-with-country-code before hashing. */
+  phone?: string;
+  /** Country-code digits applied to a national-format `phone` (leading trunk 0). */
+  phoneCountryCode?: string;
+  /** ISO 3166-1 alpha-2 of the person, e.g. the site's own country. */
+  country?: string;
+  /** The person's id in the caller's own system (lead/customer id). Hashed. */
+  externalId?: string;
   /** Meta click id — `fb.1.<ts>.<fbclid>`; use `fbcFromRequest()` to derive it. */
   fbc?: string;
   /** Meta browser id from the `_fbp` cookie — absent for consent decliners. */
@@ -179,13 +186,43 @@ export async function sendCAPIEvent(
   data: CAPIEventData,
   creds?: CAPICredentials
 ): Promise<boolean> {
+  return (await sendCAPIEventResult(data, creds)).ok;
+}
+
+/** What Meta said about one send. `status` is 0 when no request was made. */
+export interface CAPISendResult {
+  ok: boolean;
+  status: number;
+  /** Meta's `events_received` on success — the proof it took the event. */
+  eventsReceived?: number;
+  /** Meta's `fbtrace_id`, for quoting to Meta support. Not sensitive. */
+  fbtraceId?: string;
+  /** Status + numeric code/type only, never Meta's message (see module note). */
+  error?: string;
+}
+
+/**
+ * `sendCAPIEvent` with Meta's answer, for a caller that records the outcome
+ * (an audit row, a verification script). Same payload, same logging rule, and
+ * it never throws either.
+ */
+export async function sendCAPIEventResult(
+  data: CAPIEventData,
+  creds?: CAPICredentials
+): Promise<CAPISendResult> {
   const id = creds ? creds.pixelId : pixelId();
   const token = creds ? creds.accessToken : capiToken();
-  if (!token || !id) return false;
+  if (!token || !id) return { ok: false, status: 0, error: "not configured" };
 
-  const userData: Record<string, string> = {};
-  if (data.email) userData.em = sha256(data.email);
-  if (data.firstName) userData.fn = sha256(data.firstName);
+  const userData: Record<string, string> = hashedCapiIdentity({
+    email: data.email,
+    firstName: data.firstName,
+    lastName: data.lastName,
+    phone: data.phone,
+    phoneCountryCode: data.phoneCountryCode,
+    country: data.country,
+    externalId: data.externalId,
+  });
   if (data.fbc) userData.fbc = data.fbc;
   if (data.fbp) userData.fbp = data.fbp;
   if (data.clientIp) userData.client_ip_address = data.clientIp;
@@ -232,12 +269,22 @@ export async function sendCAPIEvent(
         /* a body we cannot parse is one we must not print */
       }
       console.error(`[CAPI] ${data.eventName} rejected: HTTP ${res.status} ${detail}`);
-      return false;
+      return { ok: false, status: res.status, error: `HTTP ${res.status} ${detail}` };
     }
-    return true;
+    let eventsReceived: number | undefined;
+    let fbtraceId: string | undefined;
+    try {
+      const b = (await res.json()) as { events_received?: number; fbtrace_id?: string };
+      eventsReceived = typeof b.events_received === "number" ? b.events_received : undefined;
+      fbtraceId = typeof b.fbtrace_id === "string" ? b.fbtrace_id : undefined;
+    } catch {
+      /* a 2xx with an unreadable body is still an accepted send */
+    }
+    return { ok: true, status: res.status, eventsReceived, fbtraceId };
   } catch (err) {
-    console.error("[CAPI] send failed:", err instanceof Error ? err.message : String(err));
-    return false;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[CAPI] send failed:", msg);
+    return { ok: false, status: 0, error: `network: ${msg.slice(0, 120)}` };
   }
 }
 

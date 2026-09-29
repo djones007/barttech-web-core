@@ -152,6 +152,11 @@
         }
       ]
     },
+    "metaCapiUserData": {
+      "owner": "@/web-core/metaCapiUserData",
+      "resources": [],
+      "why": "the pure half of metaCapi: Meta's customer-information normalisation and SHA-256 hashing (em, fn, ln, ph with country code, country, external_id) plus fbc rebuilt from a stored click id at its click time. Owns no external system — the events edge it feeds is matched under metaCapi above, which is where a hand-rolled send would be caught. Split out so the hashing rules can be unit-tested; metaCapi imports server-only, which cannot resolve in the node:test build."
+    },
     "nextRedirects": {
       "owner": "@/web-core/nextRedirects",
       "resources": [],

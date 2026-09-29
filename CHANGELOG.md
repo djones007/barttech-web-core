@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-29g] — CAPI: full hashed identity (ln, ph, country, external_id) and a result-returning send
+
+### Added
+- **`metaCapiUserData.ts`** — the pure half of `metaCapi`: Meta's customer-information normalisation and SHA-256 hashing for `em`, `fn`, `ln`, `ph` (digits with country code; a national number's trunk `0` is replaced by a caller-supplied country code), `country` (ISO alpha-2) and `external_id`, plus `fbcFromStoredClick()` for an event sent long after the click (the `fbc` creation time must be the click time, not now). Empty values are dropped rather than hashed. 10 tests.
+- **`CAPIEventData` gains `lastName`, `phone`, `phoneCountryCode`, `country`, `externalId`** — for a lead-to-sale event, where the click cookie is long gone and match quality depends on the identity fields.
+- **`sendCAPIEventResult()`** — same send, returns `{ ok, status, eventsReceived, fbtraceId, error }` so a caller can record Meta's answer (`events_received` is the proof it took the event). `sendCAPIEvent()` now wraps it; its boolean contract and error-logging rule are unchanged.
+
+### Changed
+- Email/first-name hashing moved into `metaCapiUserData.ts` (same trim + lower-case + SHA-256). A whitespace-only value is now dropped instead of hashed as an empty string. **Consumers pick this up on their next web-core pointer bump.**
 ## [2026-09-29f] — `bartmailOptin()` post-save failures are typed and routable (`onPartialFailure`)
 
 ### Changed
