@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-29f] — `bartmailOptin()` post-save failures are typed and routable (`onPartialFailure`)
+
+### Changed
+- **A failure after the contact row is saved is now a `BartmailPartialOptinError`** (`code: "BARTMAIL_PARTIAL_OPTIN"`, `contactSaved: true`, `contactId`, `failedTags`, `suppressionLiftFailed`), not a plain `Error`. Every other throw from `bartmailOptin()` still means the lead was NOT stored. `isBartmailPartialOptinError()` tells them apart (duck-typed on `code`). Message text is unchanged apart from a `[brand=…; contact saved]` suffix.
+- **New optional `onPartialFailure` param.** Omitted (default): the typed error is thrown — right for webhooks whose sender retries on non-2xx, and for callers whose own catch already reports. Set: the error goes to the handler and `bartmailOptin()` resolves — for visitor-facing form routes whose outer catch would otherwise show an error for a signup that landed. The handler is awaited; if it throws, that is logged and swallowed. A non-function value is ignored, so a value spread in from JSON cannot suppress the throw.
+- A failed suppression lift no longer throws before the tag writes run. Both are attempted and reported together.
+- The routing is a pure exported helper, `settlePartialOptin()`, with 8 new unit tests. There is no in-process retry: re-writing enrolment-capable tags is left to senders that redeliver.
+
 ## [2026-09-29e] — `bartmailOptin()` no longer reports success when a tag write failed
 
 ### Fixed

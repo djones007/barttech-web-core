@@ -176,6 +176,23 @@ export interface BartmailOptinParams {
    * (existing behaviour for every other caller).
    */
   applyOptinTags?: boolean;
+  /**
+   * What happens when the contact row WAS saved but a tag write or the
+   * suppression lift failed — see
+   * `BartmailPartialOptinError`.
+   *
+   * - Omitted (default): `bartmailOptin()` THROWS the typed error. Right for a
+   *   webhook whose sender retries on non-2xx, and for any caller whose own
+   *   catch already reports and carries on.
+   * - Set: the error is handed to this callback and `bartmailOptin()`
+   *   RESOLVES. Right for a visitor-facing form route whose outer catch would
+   *   turn a throw into an error response for a signup that landed. The
+   *   callback must make the failure loud (Sentry / the app's alert path).
+   *   It is awaited; anything it throws is logged and swallowed.
+   *
+   * A failure BEFORE the contact row is saved always throws, whatever this is.
+   */
+  onPartialFailure?: (err: BartmailPartialOptinError) => void | Promise<void>;
 }
 
 /**
@@ -212,15 +229,97 @@ export interface TagWriteResult {
 }
 
 /**
+ * Thrown by `bartmailOptin()` when the CONTACT ROW WAS SAVED but a later step
+ * failed: a tag write and/or the suppression lift on
+ * a consenting re-optin. The lead is stored; what is missing is the tag that
+ * enrols its sequence / gates access, or its un-suppression.
+ *
+ * Distinct from every other throw in `bartmailOptin()` (brand lookup, contact
+ * lookup/insert/update), which means the lead was NOT stored. A caller can
+ * therefore tell "tell the visitor it failed" from "the visitor is signed up,
+ * alert us" — use `isBartmailPartialOptinError()` (duck-typed on `code`, so it
+ * survives two copies of this module in one bundle), or pass
+ * `onPartialFailure` to `bartmailOptin()` and never see the throw at all.
+ */
+export class BartmailPartialOptinError extends Error {
+  readonly code = "BARTMAIL_PARTIAL_OPTIN" as const;
+  readonly contactSaved = true as const;
+  constructor(
+    message: string,
+    readonly contactId: string | null,
+    readonly failedTags: string[],
+    readonly suppressionLiftFailed: boolean,
+  ) {
+    super(message);
+    this.name = "BartmailPartialOptinError";
+  }
+}
+
+export function isBartmailPartialOptinError(err: unknown): err is BartmailPartialOptinError {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "BARTMAIL_PARTIAL_OPTIN"
+  );
+}
+
+function describeTagFailures(results: TagWriteResult[]): string {
+  return results
+    .filter((r) => r.error)
+    .map((r) => `${r.name} (${r.error?.message ?? r.error?.code ?? "unknown"})`)
+    .join(", ");
+}
+
+/**
  * Throws if any tag write failed, naming every failed tag. Pure — exported for
  * tests. A discarded tag-write error is a silent success: the optin "worked"
- * while the tag that drives enrolment or access was never written.
+ * while the tag that drives enrolment or access was never written. Throws a
+ * `BartmailPartialOptinError` (the contact row precedes every tag write).
  */
-export function assertTagWrites(results: TagWriteResult[]): void {
+export function assertTagWrites(results: TagWriteResult[], contactId: string | null = null): void {
   const failed = results.filter((r) => r.error);
   if (!failed.length) return;
-  const detail = failed.map((r) => `${r.name} (${r.error?.message ?? r.error?.code ?? "unknown"})`).join(", ");
-  throw new Error(`BartMail tag write failed: ${detail}`);
+  throw new BartmailPartialOptinError(
+    `BartMail tag write failed: ${describeTagFailures(results)}`,
+    contactId,
+    failed.map((r) => r.name),
+    false,
+  );
+}
+
+/**
+ * Decide what a post-save failure does: nothing (all landed), throw the typed
+ * error (no handler), or hand it to the handler and resolve. Exported for
+ * tests — this is the whole contract, and it must not need a database to pin.
+ */
+export async function settlePartialOptin(
+  tagResults: TagWriteResult[],
+  liftFailure: string | null,
+  ctx: { brand: string; contactId: string | null },
+  onPartialFailure?: BartmailOptinParams["onPartialFailure"],
+): Promise<void> {
+  const failedTags = tagResults.filter((r) => r.error).map((r) => r.name);
+  if (!failedTags.length && !liftFailure) return;
+  const parts: string[] = [];
+  if (failedTags.length) parts.push(`BartMail tag write failed: ${describeTagFailures(tagResults)}`);
+  if (liftFailure) parts.push(`BartMail suppression lift failed: ${liftFailure}`);
+  const partial = new BartmailPartialOptinError(
+    `${parts.join("; ")} [brand=${ctx.brand}; contact saved]`,
+    ctx.contactId,
+    failedTags,
+    liftFailure !== null,
+  );
+  if (typeof onPartialFailure !== "function") throw partial;
+  try {
+    await onPartialFailure(partial);
+  } catch (cbErr) {
+    console.error(
+      "[bartmailOptin] onPartialFailure handler threw:",
+      cbErr instanceof Error ? cbErr.message : String(cbErr),
+      "— original:",
+      partial.message,
+    );
+  }
 }
 
 export async function bartmailOptin(params: BartmailOptinParams): Promise<void> {
@@ -244,6 +343,7 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     tags: extraTags,
     custom_fields,
     applyOptinTags = true,
+    onPartialFailure,
   } = params;
 
   const supabase = getBartmailSupabase();
@@ -376,19 +476,26 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     contactId = ex.id;
   }
 
+  // ---- The contact row is saved from here on. ----
+  // Every failure below is a PARTIAL optin (BartmailPartialOptinError): the
+  // lead exists, something attached to it did not land. Both steps are
+  // attempted regardless of the other, then reported together. Nothing below
+  // may `throw` directly — route it through the partial-failure block at the end.
+  let liftFailure: string | null = null;
   if (applyOptinTags) {
     // Remove any brand-level suppression (resubscribe). Skipped when consent
     // wasn't given — an unticked opt-in must not silently un-suppress a contact.
     // Checked (2026-09-29): a failed lift left a consenting re-optin
     // suppressed — they would never receive what they just asked for — while
-    // the optin reported success.
+    // the optin reported success. Recorded, not thrown on the spot, so the tag
+    // writes below are still attempted; both are reported together.
     const { error: liftError } = await supabase
       .from("contact_suppressions")
       .delete()
       .eq("contact_id", contactId)
       .eq("tenant_id", tenantId)
       .eq("brand_id", brandId);
-    if (liftError) throw new Error(`BartMail suppression lift failed: ${liftError.message}`);
+    if (liftError) liftFailure = liftError.message ?? liftError.code ?? "unknown";
   }
 
   // Build tag list — skip the default optin tags when consent wasn't given.
@@ -416,7 +523,13 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     );
     tagResults.push({ name: tagName, error: tagError });
   }
-  assertTagWrites(tagResults);
+  // 2026-09-29b: the failure is now TYPED and ROUTABLE (BartmailPartialOptinError,
+  // thrown or handed to onPartialFailure — see BartmailOptinParams), so a form
+  // route can keep the visitor's success response for a signup that DID land
+  // while still alerting on the missing tag. No in-process retry: the retry
+  // belongs to a sender that redelivers (payment/order webhooks, which get the
+  // throw by default).
+  await settlePartialOptin(tagResults, liftFailure, { brand, contactId }, onPartialFailure);
 
   // Sequence enrolment: NOT triggered here. The AFTER INSERT trigger on
   // contact_tags feeds tag_enrolment_outbox, drained every 2 min by
