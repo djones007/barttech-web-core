@@ -145,7 +145,9 @@ export interface SendMailOptions {
 }
 
 /**
- * Send an HTML email, saved to Sent Items. Throws on failure **after** retries
+ * Send an HTML email. Saved to Sent Items only when the recipient is someone
+ * other than GRAPH_MAILBOX itself — a notification to the ops mailbox already
+ * lands in its Inbox, and the Sent copy doubled every alert (2026-09-29). Throws on failure **after** retries
  * — callers decide whether that is fatal. For a public form it should not be:
  * capture the lead first, then notify, and let a notification failure be logged
  * rather than 500 the visitor.
@@ -166,10 +168,12 @@ export async function sendMail(opts: SendMailOptions): Promise<void> {
   // escaping it produces reply addresses containing &amp;.
   if (opts.replyTo) message.replyTo = [{ emailAddress: { address: opts.replyTo } }];
 
+  const saveToSentItems = (opts.to ?? GRAPH_MAILBOX).trim().toLowerCase() !== GRAPH_MAILBOX.toLowerCase();
+
   const res = await fetchWithRetry(`https://graph.microsoft.com/v1.0/users/${GRAPH_MAILBOX}/sendMail`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ message, saveToSentItems: true }),
+    body: JSON.stringify({ message, saveToSentItems }),
   });
 
   if (!res.ok) throw new Error(`sendMail failed: ${res.status} — ${(await res.text()).slice(0, 300)}`);

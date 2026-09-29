@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-29b] — `sendMail()` stops saving self-addressed mail to Sent Items
+
+### Changed
+- `sendMail()` in `graph.ts` now sets `saveToSentItems` only when the recipient is someone other than `GRAPH_MAILBOX`. Every app notification to the ops mailbox was producing an Inbox copy and a Sent Items copy, and Dom's mailbox was filling with the Sent duplicates. Mail to anyone else still keeps its Sent record. Consumers pick this up on their next submodule bump.
+
 ## [2026-09-29] — Suppression walk survives Emailit's broken `sort` in `next_page_url`
 
 ### Fixed
