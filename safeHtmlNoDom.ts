@@ -127,7 +127,15 @@ export function renderSafeHtmlNoDom(
     // Scheme checking is the main thing an allowlist buys over "allow all, then
     // subtract": it is what stops `href="javascript:…"`.
     allowedSchemes: ["http", "https", "mailto", "tel", "ftp"],
-    allowedSchemesByTag: { img: ["http", "https", "data"] },
+    // Media elements take http(s) only: the global list also admits ftp/mailto/tel,
+    // which have no business in a <video>/<audio> src. (Triage of security issue #5.)
+    allowedSchemesByTag: {
+      img: ["http", "https", "data"],
+      video: ["http", "https"],
+      audio: ["http", "https"],
+      source: ["http", "https"],
+      track: ["http", "https"],
+    },
     allowProtocolRelative: true,
     // Drop the CONTENTS of these, not just the tags — otherwise stripping
     // `<script>alert(1)</script>` would leave `alert(1)` as visible text.

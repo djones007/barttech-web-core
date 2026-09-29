@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-29d] — Sanitiser: media element sources restricted to http(s)
+
+### Fixed
+- `renderSafeHtmlNoDom` allowed ftp/mailto/tel schemes on `<video>`/`<audio>`/`<source>`/`<track>` (only `img` had a per-tag override). Now http(s) only. Triage of weekly security issue #5: of its 5 "criticals" this was the one real narrowing; the LD_JSON and data:-on-anchor findings do not reproduce (JSON is re-serialised via jsonLd(), leftovers are dropped by the allowlist, and a test pins data: on links). Inline `style` is still passed verbatim by design (byte-stability); tightening it needs a corpus diff first.
+
 ## [2026-09-29c] — Security review CI: structured outputs, Claude Sonnet 5.5
 
 ### Changed

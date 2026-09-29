@@ -226,3 +226,9 @@ test("renderSafeHtml IS renderSafeHtmlNoDom — one engine, two names", () => {
     );
   }
 });
+
+test("media elements accept http(s) sources only", () => {
+  assert.match(renderSafeHtmlNoDom('<video src="https://x.test/a.mp4" controls></video>'), /src="https:\/\/x\.test\/a\.mp4"/);
+  assert.doesNotMatch(renderSafeHtmlNoDom('<video src="ftp://x.test/a.mp4"></video>'), /ftp:/i);
+  assert.doesNotMatch(renderSafeHtmlNoDom('<audio src="javascript:alert(1)"></audio>'), /javascript:/i);
+});
