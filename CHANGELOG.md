@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-29c] — Security review CI: structured outputs, Claude Sonnet 5.5
+
+### Changed
+- **`.github/workflows/security-review.yml` now uses structured outputs (`output_config.format`) instead of forced `tool_choice`, and runs on `claude-sonnet-5-5` (was `claude-sonnet-5`).** Sonnet 5.5 rejects forced tool choice with a 400. A refusal or `max_tokens` cut-off now fails the job instead of reading as a clean review; `max_tokens` raised 4000 → 16000 so adaptive thinking cannot truncate the JSON. Verified live on a real 7-day diff (end_turn, schema-valid findings).
+
 ## [2026-09-29b] — `sendMail()` stops saving self-addressed mail to Sent Items
 
 ### Changed
