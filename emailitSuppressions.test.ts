@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clearSelfRequestedSoftFailSuppression, isSoftFailSuppression, listEmailitSuppressions } from "./emailit";
+import { clearSelfRequestedSoftFailSuppression, isSoftFailSuppression, listEmailitSuppressions, sanitizeSuppressionNextUrl } from "./emailit";
 
 // ---------------------------------------------------------------------------
 // The harm this module can do is clearing the WRONG suppression — a hard
@@ -203,4 +203,28 @@ test("list walk with a dead page is incomplete, not short", async () => {
   } finally {
     restore();
   }
+});
+
+test("list walk strips Emailit's broken sort=[object Object] from next_page_url", async () => {
+  const seen: string[] = [];
+  stubFetch((url) => {
+    seen.push(url);
+    return seen.length === 1
+      ? json({ data: [{ id: "a", email: "a@b.com" }], next_page_url: "/v2/suppressions?sort=%5Bobject+Object%5D&limit=100&page=2" })
+      : json({ data: [{ id: "b", email: "c@d.com" }], next_page_url: null });
+  });
+  try {
+    const r = await listEmailitSuppressions("k");
+    assert.equal(r.complete, true);
+    const u = new URL(seen[1]);
+    assert.equal(u.searchParams.get("sort"), null);
+    assert.equal(u.searchParams.get("page"), "2");
+    assert.equal(u.searchParams.get("limit"), "100");
+  } finally {
+    restore();
+  }
+});
+
+test("sanitizeSuppressionNextUrl keeps a valid sort field", () => {
+  assert.equal(sanitizeSuppressionNextUrl("/v2/suppressions?sort=created_at&page=3"), "/v2/suppressions?sort=created_at&page=3");
 });

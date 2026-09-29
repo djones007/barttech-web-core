@@ -607,6 +607,21 @@ export interface SuppressionListResult {
 }
 
 /**
+ * Emailit's `next_page_url` has carried `sort=[object Object]` since the
+ * 25–28 Sept 2026 migration (a serialisation bug on their side), and the next
+ * page then 400s on the sort enum. Every suppression walk failed at page 2 and
+ * BartMail's broadcast cron stopped activating anything (2026-09-29). Drop a
+ * `sort` value that is not a plain field name; keep everything else as given.
+ * Returns a relative path, like the provider does.
+ */
+export function sanitizeSuppressionNextUrl(nextUrl: string): string {
+  const u = new URL(nextUrl, "https://api.emailit.com");
+  const sort = u.searchParams.get("sort");
+  if (sort !== null && !/^[a-z_]+$/.test(sort)) u.searchParams.delete("sort");
+  return u.pathname + u.search;
+}
+
+/**
  * Walk the whole suppression list (100 per page — the provider rejects more).
  * Retries a 429/5xx page with backoff. Never throws.
  */
@@ -645,7 +660,7 @@ export async function listEmailitSuppressions(
       return { ok: false, records, requests, complete: false, error: `page ${requests}: malformed body` };
     }
     records.push(...body.data);
-    next = body.next_page_url || null;
+    next = body.next_page_url ? sanitizeSuppressionNextUrl(body.next_page_url) : null;
   }
   return { ok: true, records, requests, complete: true };
 }

@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-29] — Suppression walk survives Emailit's broken `sort` in `next_page_url`
+
+### Fixed
+- `listEmailitSuppressions()` failed at page 2 on every workspace: since Emailit's migration their `next_page_url` carries `sort=[object Object]`, which their own API then rejects (400, sort enum). New exported `sanitizeSuppressionNextUrl()` drops a `sort` value that is not a plain field name and keeps `page`/`limit`; the walker applies it to every page. This is what stopped BartMail broadcasts on 2026-09-29. Two tests added.
+
 ## [2026-09-28b] — `htmlToText` now strips the hidden preheader span/div
 
 ### Fixed
