@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-30c] — npm audit fix: brace-expansion (dev dependency) advisories
+
+### Fixed
+- Lockfile-only bump of the dev-only `brace-expansion` that failed CI's `npm audit --audit-level=high` on main (advisories published today). No shipped code affected.
+
 ## [2026-09-30b] — check-webhook-swallowed-errors: catch-then-2xx gate (warn-only)
 
 ### Added
