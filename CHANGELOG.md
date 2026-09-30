@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-30f] — check-design-standard: ratcheted design-standard gate
+
+### Added
+- `scripts/check-design-standard.mjs`: flags stock slate/zinc/gray palette classes, indigo/purple `from-` gradients, `rounded-xl/2xl/3xl`, stock `shadow-sm/md/lg` and hex literals in components. Per-repo `.design-standard-baseline.json` ratchet (`--write-baseline`): fails only when a file exceeds its baselined count, so existing debt is ratcheted down rather than blocking builds. `--self-test` wired into this repo's CI. Not yet fetched by any consumer.
+
 ## [2026-09-30e] — Dependency updates (Dependabot #10)
 
 ### Changed

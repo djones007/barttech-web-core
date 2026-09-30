@@ -430,3 +430,19 @@ a CI step that fetches the raw file.
   `NOT CHECKED (this is not a pass)` and exits 0. Waiver:
   `// webhook-200-ok: <why 2xx is right and what raises>`; a bare annotation is a
   finding. Tested in `check-webhook-swallowed-errors.test.ts`.
+
+- `check-design-standard.mjs` — the greppable half of the website **design
+  standard**, as a **ratchet**: stock `slate/zinc/gray` palette classes, an
+  `indigo/purple` `from-` gradient, `rounded(-side)-xl/2xl/3xl`, stock
+  `shadow-sm/md/lg`, and hex colour literals in `.tsx/.jsx` components (OG/icon
+  image routes and any path containing `email` are exempt — neither can use a
+  stylesheet). The live sites already carried hundreds of hits, so a ban would
+  have arrived red everywhere and been switched off; instead each repo commits
+  `.design-standard-baseline.json` (`--write-baseline`, per rule per file) and the
+  gate fails only when a file goes ABOVE its count. Fewer hits prints a notice to
+  re-write the baseline, which lowers the ceiling for good. The `(?<![\w-])`
+  lookbehind is the word boundary the standard warns about (`translate-x-4` is
+  not `slate-`). Skips the web-core and app-ui mounts and test files. Cannot see
+  computed styles or class names built by concatenation; the screenshot checks
+  stay manual. `--self-test` runs in this repo's CI. Consumers fetch it pinned
+  by `WEB_CORE_REF`. Plain Node, no dependencies.

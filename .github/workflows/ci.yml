@@ -59,6 +59,9 @@ jobs:
       - name: Landing-page server-event gate proves itself both ways
         if: always()
         run: node scripts/check-landing-page-events.mjs --self-test
+      - name: Design-standard ratchet gate proves itself both ways
+        if: always()
+        run: node scripts/check-design-standard.mjs --self-test
 
       # This is this repo's OWN tree, checked directly against the local script —
       # not the same thing as `check-third-party-fonts.test.ts` above (`npm test`),
