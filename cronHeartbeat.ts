@@ -22,7 +22,31 @@ import { isSafeOutboundUrl } from "./security";
  * Exported so a caller can type its own variable without restating the union
  * (and so adding a fifth state later is one edit, not a sweep).
  */
-export type HeartbeatStatus = "ok" | "degraded" | "error" | "pending";
+export type HeartbeatStatus = "ok" | "degraded" | "error" | "pending" | "idle" | "paused";
+
+/**
+ * `idle`   — the run was correct and found nothing to do (a queue drainer on an
+ *            empty queue). Healthy; proves the job is alive.
+ * `paused` — the job started on schedule, found its pause switch off
+ *            (cronPause.ts, the estate's `cron_controls` row) and did not run.
+ *            Healthy AND intentional: never an error, never a notification. It
+ *            still heartbeats every scheduled run, so a watcher's staleness check
+ *            keeps working. Both need the consumer's `cron_runs` CHECK to allow
+ *            them, or the history row is rejected (the heartbeat still lands).
+ */
+
+// A survivable note raised earlier in THIS request (e.g. cronPause.ts could not
+// read the switch and let the job run anyway). The next heartbeat for the same
+// job picks it up, so a route does not have to thread it into its own detail:
+// an ok/idle run becomes `degraded`, visible but never alarming.
+const pendingCaveats = new Map<string, string[]>();
+
+/** Attach a caveat to this job's next heartbeat write in this process. */
+export function noteCronCaveat(jobName: string, caveat: string): void {
+  const list = pendingCaveats.get(jobName) ?? [];
+  list.push(caveat);
+  pendingCaveats.set(jobName, list);
+}
 
 export interface HeartbeatOptions {
   /** REST endpoint of the project holding the table, e.g. https://<ref>.supabase.co */
@@ -90,12 +114,18 @@ export async function writeCronHeartbeat(opts: HeartbeatOptions): Promise<boolea
     url,
     key,
     jobName,
-    status,
-    detail,
     table = "cron_heartbeats",
     startedAt,
     historyTable = "cron_runs",
   } = opts;
+  let { status, detail } = opts;
+
+  const caveats = pendingCaveats.get(jobName);
+  if (caveats && caveats.length) {
+    pendingCaveats.delete(jobName);
+    if (status === "ok" || status === "idle") status = "degraded";
+    detail = { ...(detail ?? {}), caveats: caveats.join("; ").slice(0, 900) };
+  }
 
   // A missing URL or key is a configuration mistake, not a runtime error. Say
   // so on the console — silently skipping would make an unmonitored job look

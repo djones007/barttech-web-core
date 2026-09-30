@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-30] — cronPause: the scheduled-job pause switch; heartbeat gains `idle` and `paused`
+
+### Added
+- **`cronPause.ts`** — `checkCronPause()` / `cronPauseResponse()`: read a job's pause switch (the `cron_control_check` RPC over a `cron_controls` table) right after a cron route's auth check. Paused → writes the job's heartbeat as `paused` and returns a 200 without running. FAILS OPEN on every unknown (missing config, timeout, HTTP error, unknown mode, auto mode) and attaches a caveat to that job's next heartbeat. 7 tests.
+- **`noteCronCaveat(jobName, text)`** in `cronHeartbeat.ts` — a survivable note picked up by the job's next `writeCronHeartbeat` in the same process: `ok`/`idle` becomes `degraded`, the text lands in `detail.caveats`. Consumed once.
+
+### Changed
+- `HeartbeatStatus` now includes `idle` (correct run, nothing to do) and `paused` (switched off on purpose). Both healthy. A consumer's `cron_runs` CHECK must allow them for the history row to land.
+
 ## [2026-09-29g] — CAPI: full hashed identity (ln, ph, country, external_id) and a result-returning send
 
 ### Added
