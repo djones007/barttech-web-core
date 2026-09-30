@@ -416,3 +416,17 @@ a CI step that fetches the raw file.
   `.selfrequested-suppression.json`. Plain Node, no dependencies.
   Consumers fetch it pinned by `WEB_CORE_REF`, like the other gates. Plain Node,
   no dependencies.
+
+- `check-webhook-swallowed-errors.mjs` — a webhook receiver `catch` that answers
+  2xx (or falls through to a later 2xx) without throwing or reporting the error.
+  The provider stops retrying and the failure exists nowhere a monitor sees. Only
+  this shape is checked: a calibration over every receiver in the estate showed
+  that flagging discarded database-mutation results was 100% false positives
+  (best-effort log/cleanup writes), so that check was dropped. **Warn-only**
+  (exit 0) unless `--strict`, so hits can be counted and annotated before anyone
+  flips it; not wired into any CI. Uses the TypeScript compiler API, resolved
+  from the repo under test or from this repo, so it is the one script here that
+  is NOT dependency-free: when `typescript` cannot be resolved it prints
+  `NOT CHECKED (this is not a pass)` and exits 0. Waiver:
+  `// webhook-200-ok: <why 2xx is right and what raises>`; a bare annotation is a
+  finding. Tested in `check-webhook-swallowed-errors.test.ts`.

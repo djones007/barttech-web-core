@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-30b] — check-webhook-swallowed-errors: catch-then-2xx gate (warn-only)
+
+### Added
+- New `scripts/check-webhook-swallowed-errors.mjs`: flags a webhook receiver catch block that answers 2xx, or falls through to one, without throwing or reporting. Warn-only unless `--strict`; not wired into any CI. Uses the TypeScript compiler API (skips loudly when unavailable). Discarded-mutation-result check deliberately dropped (100% false positives in calibration). Run over all receivers: 2 hits, both best-effort by design. Tests added to `npm test`.
+
 ## [2026-09-30] — cronPause: the scheduled-job pause switch; heartbeat gains `idle` and `paused`
 
 ### Added
@@ -30,12 +35,12 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [2026-09-29e] — `bartmailOptin()` no longer reports success when a tag write failed
 
-### Fixed
+### Added
 - **`bartmailOptin()` discarded every `contact_tags` upsert result and the suppression-lift result.** A failed tag write resolved like a successful optin: the contact existed but the tag that enrols its sequence (or gates a paid download) did not, and every caller's failure path — Sentry reports, "answer non-2xx so the payment processor retries" — could never fire. All tags are still attempted, then any failure throws `BartMail tag write failed: <tags>` (`assertTagWrites`, exported and unit-tested). A failed suppression lift on a consenting re-optin now throws too. Callers already treat a throw from `bartmailOptin` as a failed optin. Estate webhook silent-200 audit. **Consumers pick this up on their next web-core pointer bump.**
 
 ## [2026-09-29d] — Sanitiser: media element sources restricted to http(s)
 
-### Fixed
+### Added
 - `renderSafeHtmlNoDom` allowed ftp/mailto/tel schemes on `<video>`/`<audio>`/`<source>`/`<track>` (only `img` had a per-tag override). Now http(s) only. Triage of weekly security issue #5: of its 5 "criticals" this was the one real narrowing; the LD_JSON and data:-on-anchor findings do not reproduce (JSON is re-serialised via jsonLd(), leftovers are dropped by the allowlist, and a test pins data: on links). Inline `style` is still passed verbatim by design (byte-stability); tightening it needs a corpus diff first.
 
 ## [2026-09-29c] — Security review CI: structured outputs, Claude Sonnet 5.5
@@ -50,12 +55,12 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [2026-09-29] — Suppression walk survives Emailit's broken `sort` in `next_page_url`
 
-### Fixed
+### Added
 - `listEmailitSuppressions()` failed at page 2 on every workspace: since Emailit's migration their `next_page_url` carries `sort=[object Object]`, which their own API then rejects (400, sort enum). New exported `sanitizeSuppressionNextUrl()` drops a `sort` value that is not a plain field name and keeps `page`/`limit`; the walker applies it to every page. This is what stopped BartMail broadcasts on 2026-09-29. Two tests added.
 
 ## [2026-09-28b] — `htmlToText` now strips the hidden preheader span/div
 
-### Fixed
+### Added
 - `htmlToText()` treated a template's hidden preheader (`display:none` + `max-height:0` +
   `overflow:hidden` span/div — the real preview-text carrier when a send path injects no separate
   preview text) as ordinary visible content: it showed up as a duplicated first line of both the
@@ -226,7 +231,7 @@ existing was renamed or removed.
 
 ## [2026-09-26c] — Public hygiene: describe the affected consumer by role, not by name
 
-### Fixed
+### Added
 - The 2026-09-26b entry named a private consuming repo to explain where the false positive was
   observed. This repo is public, so that is a hygiene violation and the `Public Hygiene` workflow
   correctly failed the push. Reworded to "one consuming app's contact-form view" — the estate
@@ -235,7 +240,7 @@ existing was renamed or removed.
 
 ## [2026-09-26b] — `check-post-submit-notice.mjs`: fix a false positive on "check your email address" validation copy
 
-### Fixed
+### Added
 - The new trigger/success-copy invariant (2026-09-26a) matched "Check your email address" —
   form-validation copy asking a visitor to re-type what they entered, not a post-submit
   deliverability notice — as a finding. Found live in one consuming app's contact-form view,
@@ -302,7 +307,7 @@ convention.
 
 ## [2026-09-25c] — `lead_submit` page events were silently dropped; form submits now pass the bot gate
 
-### Fixed
+### Added
 - **`trackServerEvent({ event: "lead_submit" })` never sent anything.** It ran the page-visit bot
   gate, which requires `sec-fetch-mode: navigate` + `sec-fetch-dest: document`. A lead is posted by
   the form's own `fetch()` (`cors` / `empty`), so every real submit read as automated and was
@@ -357,7 +362,7 @@ convention.
 
 ## [2026-09-24b] — `sentryNoise`: drop Safari extension `runtime.sendMessage` rejections
 
-### Fixed
+### Added
 - **`isNoiseEvent()`** now drops `Invalid call to runtime.sendMessage(). Tab not found.` — Safari's
   WebExtension runtime rejecting a content-script message after its tab closed or navigated. It
   arrives via `onunhandledrejection` with no application frame, and page code has no `runtime` API,
@@ -528,12 +533,12 @@ convention.
 
 ## [2026-09-21c] — Path-traversal defense-in-depth for three more scripts/ gates
 
-### Fixed
+### Added
 - **`check-classifier-tests.mjs`, `check-id-list-filters.mjs`, `check-webhook-verification.mjs` — added the same `readWithinRoot` guard the rest of `scripts/` already uses.** Each script reads only files it discovered itself (`git ls-files` or its own directory walk), never external input, but a SAST scanner cannot see that provenance and flags the raw `readFileSync` as a potential file-inclusion sink — Aikido grouped-issue finding, medium severity, three files. Resolves and prefix-checks the target against the script's own root before reading, same idiom as `check-post-submit-notice.mjs`'s existing `readWithinRoot`. Behaviour is unchanged (`--self-test` and a direct run against this repo both stay green); this is belt-and-braces plus closing a scanner finding, not a fix for an exploitable path.
 
 ## [2026-09-21b] — Google Ads CSP: allow the conversion beacon's new host
 
-### Fixed
+### Added
 - **`adPlatforms.ts` — added `https://pagead2.googlesyndication.com` to the `google_ads`
   `connectSrc` allowlist.** gtag now reaches its `/measurement/conversion` endpoint on that host by
   `fetch`, so it needs `connect-src`, not the `img-src` the older conversion pings use. Google moved
@@ -671,7 +676,7 @@ validation; this module passes the value through as given.
 
 ## [2026-09-10g] — Duplicate changelog labels resolved (5 headings)
 
-### Fixed
+### Added
 - **5 labels in this file named two entries each.** A changelog label is a reference
   handle — memory files, agent daily logs and other entries cite them — so one label resolving to two
   entries is a broken reference. Renamed:
@@ -749,7 +754,7 @@ its own per-brand thresholds and voice map.
 
 ## [2026-09-10d] — A server-side page view now refuses bots, prefetches and crawlers
 
-### Fixed
+### Added
 - **`sendLandingPageView()` refuses automated requests.** It is called from a
   server render, so it fired for crawlers, link-scrapers and prefetches as well
   as people. On a live campaign that inflated the event about **twentyfold**:
@@ -833,7 +838,7 @@ here and in the private estate notes.
 
 ## [2026-09-10b] — Patch the high-severity js-yaml advisory blocking every push
 
-### Fixed
+### Added
 - **`js-yaml` 4.3.1 → 4.3.2** (lockfile only). Clears **GHSA-2883-xcg3-v3hh** —
   high severity, `maxTotalMergeKeys` does not limit CPU use for empty merge
   sources. Reached transitively through `eslint > @eslint/eslintrc`.
@@ -961,7 +966,7 @@ next one being written the same way.
 
 ## [2026-09-08h] — metaCapi: declare the module in shared-modules.json (CI red since 10:39)
 
-### Fixed
+### Added
 - **`metaCapi` now has a `shared-modules.json` entry.** It was added in
   `78a276b` (10:39) without one, and the manifest gate — which fails on any
   root module that is not declared — has failed every CI run on `main` since:
@@ -1043,7 +1048,7 @@ next one being written the same way.
 
 ## [2026-09-08e] — check-post-submit-notice: skip dot-directories in the walker
 
-### Fixed
+### Added
 - **`scripts/check-post-submit-notice.mjs` reported the same file twice in a
   real consumer** — once for `app/quiz-thank-you/page.tsx`, once for a stale
   `.claude/worktrees/<name>/app/quiz-thank-you/page.tsx` checkout left inside
@@ -1059,7 +1064,7 @@ next one being written the same way.
 
 ## [2026-09-08d] — check-post-submit-notice: widen for "where it goes" phrasing
 
-### Fixed
+### Added
 - **Gate calibration miss in `scripts/check-post-submit-notice.mjs`.** Running
   the gate against a real consumer surfaced a false clean: "Sometimes they
   land in Junk, so keep an eye out." named no folder, tab, or contacts
@@ -1180,7 +1185,7 @@ next one being written the same way.
 
 ## [2026-09-01c] — fk-index gate survives an expression index
 
-### Fixed
+### Added
 
 - **`scripts/check-fk-covering-indexes.mjs` no longer crashes on a partial index whose
   body is an expression rather than a bare column.** The sparse-FK exception
@@ -1320,7 +1325,7 @@ and golden rule 1b makes an import of a package some consumer lacks a build
 failure in a repo that never uses the module.
 ## [2026-08-30c] — The hygiene gate now tells you whether the repo or the denylist is wrong
 
-### Fixed
+### Added
 
 **An over-broad denylist term reported as a repo leak.** The term list is a repo SECRET, edited
 outside CI and only exercised on the next push — so a bad entry (a substring of the org name, a
@@ -1358,7 +1363,7 @@ separately in one run.
 
 ## [2026-08-30d] — Genericise a personal email domain in a doc comment
 
-### Fixed
+### Added
 
 - **`validation.ts`** — the optin-health sentinel doc comment named a real
   personal email domain. This repo is public and carries mechanism only, so the
@@ -1583,7 +1588,7 @@ implementation over another paragraph of prose.
 
 ## [2026-08-24] — CI gate scripts: containment check on every path built from an enumerated file list
 
-### Fixed
+### Added
 
 A SAST scan flagged a "potential file inclusion" pattern (Medium) across several of this repo's
 own CI gate scripts (`scripts/*.mjs`): a file path built by joining a scan root with a value that
@@ -1599,7 +1604,7 @@ into each one rather than factored into a shared module that consumers can't see
 
 ## [2026-08-24] — Storage path-traversal: single sanitiser reused, new CI gate
 
-### Fixed
+### Added
 
 A SAST scan flagged a grouped path-traversal finding (High, "path traversal in Supabase Storage"),
 7 subissues across two consumer apps: user- or DB-controlled strings reaching a storage key
@@ -1624,7 +1629,7 @@ worse regex that didn't strip directory components. Both are now `safeUploadFile
 
 ## [2026-08-17] — Security review findings survive a failed issue create
 
-### Fixed
+### Added
 
 The weekly security review filed its critical findings through a single
 `gh issue create --label security`. If that one call failed, the step aborted and no issue was
@@ -1724,13 +1729,13 @@ Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one ha
 
 ## [2026-08-11] — Security hardening (Aikido audit)
 
-### Fixed
+### Added
 - `scripts/check-heartbeat-status.mjs`: import `resolve` from `node:path` and wrap the `process.argv[2]` root in `path.resolve()`. The script only runs in trusted CI/dev environments, but using an explicit absolute path eliminates the ambiguity a static analyser reads as a file-inclusion risk (Aikido issue 1).
 - Added `persist-credentials: false` to all `actions/checkout` steps in CI, public-hygiene, and security-review workflows (Aikido issue 11).
 
 ## [2026-08-10] — Fix security-review CI: validate array types, not just key presence
 
-### Fixed
+### Added
 - **`security-review.yml`** validation check used `has("critical") and has("warnings")`, which passes when the model returns string-encoded arrays instead of actual arrays. The "Open issue" step then failed on `.critical[]` with "Cannot iterate over string". Validation now checks `(.critical | type) == "array" and (.warnings | type) == "array"` — if either is a string, the review step exits 1 with a clear diagnostic rather than letting the issue step fail cryptically.
 
 ## [2026-08-09] — Added `telegram.ts`: a second alert channel that reports whether it delivered
@@ -1752,7 +1757,7 @@ Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one ha
 
 ## [2026-08-09] — Declare `alerting` in shared-modules.json (CI fix)
 
-### Fixed
+### Added
 - `alerting.ts` shipped without a `shared-modules.json` entry, so the manifest gate failed the build — correctly: the gate exists so that "owns nothing" is a stated decision rather than an oversight, and the two must not look the same. Added with empty `resources` and a `why`. No resource match: the thing worth forbidding is hand-rolled alert suppression, which has no reliable textual signature, and a regex broad enough to catch it would fire on every ordinary timestamp comparison.
 
 ## [2026-08-09] — Added `alerting.ts`: decide which failures are worth notifying about
@@ -1766,12 +1771,12 @@ Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one ha
 
 ## [2026-08-09] — Public hygiene: strip consumer-specific names from comments
 
-### Fixed
+### Added
 - `scripts/check-unsanitised-html.mjs` and `CHANGELOG.md` referred to specific internal project and template names, tripping the public-hygiene denylist gate. Replaced with generic descriptions — mechanism only, no consumer detail.
 
 ## [2026-08-09] — unsanitised-html gate: three fixes found by running it estate-wide
 
-### Fixed
+### Added
 - **Filename regex truncated `.tsx` to `.ts`.** `(?:ts|tsx|…)` is ordered alternation, so `ts` matched first and the gate reported "named file not found" against `LessonPlayer.tsx`, which was right there. Longest-first now.
 - **`sanitize: true` counts as a sanitiser.** `remark-html`'s own sanitiser is a legitimate implementation — the LMS engine uses it — and the verification only looked for `renderSafeHtml`/`DOMPurify`/`sanitize-html`. Matching on the **value** rather than the key is the whole point of this gate, so `sanitize:\s*true` passes and `sanitize: false` still does not.
 - **Skips `out/`, `.output/`, `storybook-static/`.** A static-export directory is untracked build output; per this repo's own rule, scope by what is committed. One repo's committed-looking `out/` produced two findings inside minified chunks.
@@ -1785,7 +1790,7 @@ Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one ha
 - **`safeHtml.test.ts` — this repo's first tests, and `npm test` in CI.** 27 assertions covering every attribute the module must preserve and every tag/handler it must strip. It exists because `safeHtml` shipped a content regression (`target` dropped from every anchor, 34 live links) that lint and typecheck cannot see and that a tag-and-text comparison passed. This repo is vendored into ~19 consumers: a behaviour change here is a behaviour change everywhere, so it needs assertions, not a clean compile.
 - **`scripts/check-unsanitised-html.mjs`** — requires every `dangerouslySetInnerHTML` in a consumer to have a visible reason to be safe: a `renderSafeHtml`/`jsonLd` call, a SCREAMING_CASE constant, a local variable assigned from one of those, or an inline `// safe-html-ok: <where it is sanitised>` annotation. An annotation naming a file is **verified**, not trusted.
 
-### Fixed
+### Added
 - The "every module is declared" CI gate globbed `*.ts`, so the first test file added here would have failed it on its own name. `*.test.ts` is now excluded — a test is not a module and owns no resources.
 - ESLint now ignores `.testbuild/`, the CommonJS output `npm test` compiles so `node --test` runs against real module resolution.
 
@@ -1804,7 +1809,7 @@ Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one ha
 
 ## [2026-08-08c] — safeHtml: stop stripping `target` from links
 
-### Fixed
+### Added
 - `renderSafeHtml` silently removed `target` from every anchor, so `<a target="_blank">` became a same-tab link. DOMPurify's standard HTML profile drops the attribute; `ADD_ATTR: ["target"]` restores it.
 - **Caught only after it shipped.** A consumer deployed this across 20 editorial posts (34 links) whose authors had deliberately opened external references in a new tab. It is invisible to any check that counts tags or compares visible text — both were identical — which is why the verification that missed it looked green.
 
@@ -1857,14 +1862,14 @@ Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one ha
   `node_modules/`, `.DS_Store`, `*.log`, `.vercel`) — no env file was ever committed, but the guard
   itself was missing, so a future `.env.local` had nothing stopping it from being staged.
 
-### Fixed
+### Added
 - Bumped the transitive `js-yaml` devDependency (pulled in via eslint) off the 4.0.0–4.3.0 range
   affected by a high-severity quadratic-CPU-consumption advisory. Lint-only dependency, not part of
   the shipped module — `npm audit fix`, lint and typecheck all verified clean afterward.
 
 ## [2026-08-08z] — CI gate hardening
 
-### Fixed
+### Added
 - **Security Review crashed instead of reviewing, on any repo younger than a week.**
   `git rev-parse "$OLDEST~1" 2>/dev/null` echoes the *unresolved argument* to stdout as well as
   exiting non-zero, so the `||` fallback ran too and appended its answer — `BEFORE_SHA` came out two
@@ -1899,7 +1904,7 @@ Per golden rule 1b. Checked across all 19 consumers on 2026-08-12: **only one ha
 
 ## [2026-08-08f] — Fixed: the hygiene gate was failing on this repo
 
-### Fixed
+### Added
 - `nextRedirects.ts` and `supportTicket.ts` carried content this repo must not publish, and the
   Public Hygiene gate had been red on every push since they landed.
 
@@ -2123,7 +2128,7 @@ No product or business specifics, which is what makes it appropriate here.
   can, and ignoring it is the common case. A missing url/key logs loudly rather than skipping
   silently — an unmonitored job must never look identical to a monitored one.
 
-### Fixed
+### Added
 - **`updated_at` is now written explicitly** (found while reviewing the file before its first commit).
   It was absent, and the column's `default now()` fires on INSERT only — so every run after the first,
   being the UPDATE half of the upsert, would have left `updated_at` frozen at row-creation time while
@@ -2140,7 +2145,7 @@ No product or business specifics, which is what makes it appropriate here.
 
 ## [2026-08-06c] — lint: the scripts had no environment declared
 
-### Fixed
+### Added
 - **CI has been red since the CLI scripts landed.** The eslint config declares globals for
   `files: ["*.ts"]`, and in flat config that matches top-level `.ts` files only — not
   `scripts/*.mjs`. So those files were linted with NO environment, and every `process`, `console`,
@@ -2243,7 +2248,7 @@ No product or business specifics, which is what makes it appropriate here.
 Found while auditing every consumer for one class of bug: a notification path that fails and
 tells nobody. Three instances lived in this module, so every consuming app inherited them.
 
-### Fixed
+### Added
 - **`bartmailPurchase()` never checked the response and swallowed everything in a bare
   `catch {}`.** A 401 from a drifted signing secret, a 404 from an unknown brand, a 429 or a 500
   were all indistinguishable from success, and produced no output anywhere — not even a log line.
@@ -2298,7 +2303,7 @@ tells nobody. Three instances lived in this module, so every consuming app inher
 
 ## [2026-08-01c] — Fix `safeRedirectPath()` backslash open-redirect
 
-### Fixed
+### Added
 - **`safeRedirectPath()` in `security.ts` was prefix-based (`startsWith("/") && !startsWith("//")`)
   and missed backslash normalisation** — browsers turn a leading `\` into `/` before navigating, so
   `/\evil.com` "starts with /" but resolves to the third-party origin `https://evil.com`. Live
@@ -2373,7 +2378,7 @@ existed and were what the sweep's downstream fixes consumed.
 
 ## [2026-07-31z] — Dependency security: brace-expansion DoS patched
 
-### Fixed
+### Added
 - **`brace-expansion` bumped to the patched 1.1.18 / 5.0.9 lines** (GHSA-mh99-v99m-4gvg,
   GHSA-3jxr-9vmj-r5cp — DoS via unbounded/exponential expansion). Reached transitively through the
   ESLint and build toolchain, so not reachable from a web request, but it was the largest single
@@ -2390,7 +2395,7 @@ Found in a routine estate security sweep. This repo now reports 0 critical and 0
 
 ## [2026-07-31d] — Docs: internal consumer registry reconciled
 
-### Fixed
+### Added
 - Internal documentation of which repos consume this module (kept outside this public repo) had
   drifted from the actual propagation tooling in both directions — a real consumer had been picked
   up by the propagation run before being recorded in the docs, and vice versa on an earlier
@@ -2429,7 +2434,7 @@ route that passes arbitrary caller-supplied filters through.
 
 ## [2026-07-31b] — `htmlToText`: table cells and more entities
 
-### Fixed
+### Added
 - **Table cells no longer run together.** `</td>`/`</th>` become `" | "`, so a data table (quote
   line items, order summaries) reads as `Managed IT support | 2 | £299.00` instead of
   `Managed IT support2£299.00`. Reported from a quote-email template, but it affects every
@@ -2451,7 +2456,7 @@ route that passes arbitrary caller-supplied filters through.
 
 ## [2026-07-31] — Every Emailit send is now multipart/alternative
 
-### Fixed
+### Added
 - **`sendEmailitEmail` now always sends a plain-text part.** `text` stays optional on
   `EmailitSendMessage` for callers' convenience, but omitting it no longer produces an HTML-only
   email — the module derives one from the HTML. HTML-only mail scores worse with every major
@@ -2661,7 +2666,7 @@ Until now web-core was linted only as a **side effect** of being vendored into c
 - Cookie attributes: `SameSite=Lax` (must survive a top-level navigation from an ad click or an email — `Strict` would break exactly the visitor we care about), `Secure` off-localhost, `Path=/`, 12-month `Max-Age`, and deliberately **not** `HttpOnly` — the banner and the head snippet are client-side and must read it, and nothing secret is stored (it is the visitor's own choice).
 - `CONSENT_MODE_HEAD_SNIPPET` now reads the **cookie first**, falling back to the mirror. This is the point of the change: on a checkout subdomain the cookie is the only place the grant exists, and replaying it before `wait_for_update` expires is what stops the first checkout pageview — the conversion event itself — being *modelled* instead of *measured*.
 
-### Fixed
+### Added
 - `clearConsent()` now calls `deleteConsentCookieEverywhere()` **before** touching the mirror. It previously cleared `localStorage` only, which — once the cookie became the source of truth — would have left a visitor who clicked **Reject all** still consented, on every sibling subdomain, invisibly from the host that "cleared" it. The module's own comments already called this out as the worst failure it could have; the deletion helper existed but was never wired up.
 
 ### Notes
@@ -2671,7 +2676,7 @@ Until now web-core was linted only as a **side effect** of being vendored into c
 
 ## [2026-07-25d] — adPlatforms.ts: add ad.doubleclick.net to the Google Ads CSP hosts
 
-### Fixed
+### Added
 - `AD_PLATFORMS.google_ads.csp` now allowlists `https://ad.doubleclick.net` in **both** `connectSrc` and `imgSrc`. The Google Ads tag posts cross-domain conversion measurement to `https://ad.doubleclick.net/ccm/s/collect`, which is a different host from `googleads.g.doubleclick.net` and appears in no vendor doc. Caught in a real browser while wiring the first consumer, a local production build: `Refused to connect to 'https://ad.doubleclick.net/ccm/s/collect…'`.
 - **Why it survives a casual test:** the call only fires once the `_gcl_au` linker cookie exists, so a clean-profile first load passes and a returning visitor gets the violation. `tsc`, the build and `curl -I` all stay green either way — this is only ever visible in a browser console, which is exactly the failure mode the `imgSrc` comment in this file warns about.
 - Confirmed working in the same session with the host added: `googleads.g.doubleclick.net/pagead/viewthroughconversion`, `www.google.com/ccm/collect`, `www.google.com/rmkt/collect` and the `pagead/1p-user-list` remarketing beacon on **both** `www.google.com` and `www.google.co.uk` all fire un-blocked, as does Meta's `facebook.com/tr` PageView.
