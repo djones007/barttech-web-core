@@ -341,6 +341,16 @@
       "resources": [],
       "why": "the generic half of an in-app 'Report a problem': plain-text cleaning, coarse browser family (never the UA string), size-capped JSON snapshot fitting and the allow-listed client context (viewport, recent errors, Sentry id). Extracted 2026-09-26 from the first consumer's in-app report form so a second report form in any app never grows its own copy. Pure functions, no imports: it owns no table, bucket or endpoint (the consumer passes its own storage client, rate limits live in the consumer's DB trigger, replies go through supportTicket.ts, screenshots are validated with uploads.ts), so there is nothing a resource match could see. Enforced by its committed tests (problemReport.test.ts)."
     },
+    "bugReport": {
+      "owner": "@/web-core/bugReport",
+      "resources": [
+        {
+          "match": "/api/bug-reports/ingest['\"`]",
+          "reason": "the issue tracker's bug-report ingest. A hand-rolled POST skips the allow-list cleaning (query strings and unknown client keys would reach the issue row), the never-throws contract and the base-URL safety check, and files issues whose steps and context read differently from every other app's."
+        }
+      ],
+      "why": "the server half of the staff 'Report a bug' button: cleans what the browser sent, maps it to issue-tracker fields (numbered steps to reproduce from the click/navigation trail, a context block) and forwards it with its pictures to the tracker's token-gated ingest. The React button lives in the shared app-shell UI repo (no React here)."
+    },
     "cronPause": {
       "owner": "@/web-core/cronPause",
       "resources": [],

@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-30d] — bugReport: server half of the staff "Report a bug" button
+
+### Added
+- **`bugReport.ts`**: `cleanBugReport` (allow-lists and bounds what the browser sent; query strings dropped from the URL), `bugReportToIssue` (one mapping to issue-tracker fields: title, actual/expected, numbered steps to reproduce from the click/navigation trail, a context block) and `forwardBugReport` (multipart POST with pictures to the tracker's token-gated `/api/bug-reports/ingest`; never throws). Imports only `problemReport.ts` and `security.ts`, so no new dependency for any consumer. Tests in `bugReport.test.ts`; registered in `shared-modules.json`. The React button is in the shared app-shell UI repo.
+
 ## [2026-09-30c] — npm audit fix: brace-expansion (dev dependency) advisories
 
 ### Fixed
