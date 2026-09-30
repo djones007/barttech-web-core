@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-09-30e] — Dependency updates (Dependabot #10)
+
+### Changed
+- Dependabot group bump (#10): `@supabase/supabase-js` 2.117.2, `@types/node` 26.6.3, `globals` 17.12.0, `typescript-eslint` 8.70.1 (all minor/patch). Typecheck and CI pass; `npm audit` 0 vulnerabilities.
+
 ## [2026-09-30d] — bugReport: server half of the staff "Report a bug" button
 
 ### Added
