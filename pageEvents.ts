@@ -1,6 +1,7 @@
 import "server-only";
 import { isAutomatedRequest } from "./requestSignals";
 import { device } from "./device";
+import { isSafeOutboundUrl } from "./security";
 
 /**
  * Consent-independent funnel logging for campaign/marketing pages.
@@ -183,6 +184,13 @@ export async function trackServerEvent({
   const token = process.env.PAGE_EVENTS_TOKEN;
   // Unconfigured (local dev, preview) is simply off — never an error.
   if (!url || !token) return;
+  // The URL is config-sourced and every request carries the estate-shared
+  // bearer token, so a poisoned PAGE_EVENTS_URL must not be able to receive
+  // it. Fail closed: no fetch, no token sent, no throw into the caller.
+  if (!isSafeOutboundUrl(url)) {
+    console.error("[page-events] PAGE_EVENTS_URL failed host safety check — event NOT sent");
+    return;
+  }
 
   // Crawlers, link scrapers and prefetches are not visits. Uses the SAME gate
   // Meta CAPI sends already use — never a second copy of that rule, which is

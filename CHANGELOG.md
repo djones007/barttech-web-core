@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-01a] — pageEvents: host-safety guard on PAGE_EVENTS_URL
+
+### Fixed
+- `trackServerEvent` fetched the config-sourced `PAGE_EVENTS_URL` carrying the estate-shared `PAGE_EVENTS_TOKEN` with no `isSafeOutboundUrl` check, unlike every sibling module. It now fails closed: an unsafe URL (non-https, userinfo, localhost/private/metadata host, unparseable) is not fetched, no token is sent, nothing throws into the caller. `pageEvents.test.ts` covers unsafe URLs and a still-working safe URL (estate issue a43ad0e1). Consumers pick it up when their pin is bumped.
+
 ## [2026-09-30f] — check-design-standard: ratcheted design-standard gate
 
 ### Added
