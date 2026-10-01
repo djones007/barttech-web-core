@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-01b] — safeRedirectPath: result can no longer start with `//`
+
+### Fixed
+- `safeRedirectPath('/.//evil.com')` returned `//evil.com` (dot-segment normalisation collapsed `/./`), a protocol-relative URL browsers follow off-site. It now rejects raw input containing backslash, control characters or whitespace, re-checks the normalised RESULT (must start with a single `/`, no backslash or control chars), and rejects percent-encoded (including double/triple-encoded) `//`, backslash and control forms. Anything suspicious returns `/`. Legitimate paths with query and hash are unchanged. New `security.test.ts` covers 40 hostile inputs and asserts each result resolves to the same origin (estate issue 8068a059 follow-up). Consumers pick it up when their pin is bumped.
+
 ## [2026-10-01a] — pageEvents: host-safety guard on PAGE_EVENTS_URL
 
 ### Fixed

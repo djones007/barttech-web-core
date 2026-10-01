@@ -155,15 +155,57 @@ export function isSafeOutboundUrl(url: string | null | undefined): boolean {
  * "does the string match a pattern of known-bad inputs".
  */
 export function safeRedirectPath(next: string | null): string {
-  if (!next) return "/";
+  if (!next || typeof next !== "string") return "/";
+  // Raw input must be a plain same-site path: starts with a single "/", no
+  // backslash, no control characters or whitespace (the URL parser silently
+  // strips tab/CR/LF and trims, which is how `/\t/evil.com` becomes `//evil.com`).
+  if (!next.startsWith("/") || next.startsWith("//")) return "/";
+  if (SUSPICIOUS_REDIRECT_CHARS.test(next)) return "/";
+  if (decodedFormIsSuspicious(next)) return "/";
   const FAKE_ORIGIN = "https://safe-redirect.invalid";
   try {
     const resolved = new URL(next, FAKE_ORIGIN);
     if (resolved.origin !== FAKE_ORIGIN) return "/";
-    return resolved.pathname + resolved.search + resolved.hash;
+    // Re-check the RESULT: dot-segment normalisation can collapse `/.//evil.com`
+    // to `//evil.com`, which browsers treat as protocol-relative.
+    const result = resolved.pathname + resolved.search + resolved.hash;
+    if (!result.startsWith("/") || result.startsWith("//")) return "/";
+    if (SUSPICIOUS_REDIRECT_CHARS.test(result)) return "/";
+    if (decodedFormIsSuspicious(result)) return "/";
+    return result;
   } catch {
     return "/";
   }
+}
+
+// Backslash, C0/C1 controls, DEL, any Unicode whitespace.
+// eslint-disable-next-line no-control-regex
+const SUSPICIOUS_REDIRECT_CHARS = /[\\\u0000-\u001f\u007f-\u009f\s\u200b-\u200f\u2028\u2029\ufeff]/;
+
+// Decoded layers may legitimately contain spaces (`q=a%20b`), so plain space is allowed there.
+// eslint-disable-next-line no-control-regex
+const SUSPICIOUS_DECODED_CHARS = /[\\\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\ufeff]/;
+
+/**
+ * Percent-decode up to 4 times (covers double/triple encoding) and report
+ * whether any layer has a backslash, control/whitespace char, or a leading
+ * `//`. A malformed raw escape is treated as suspicious.
+ */
+function decodedFormIsSuspicious(value: string): boolean {
+  let current = value;
+  for (let i = 0; i < 4; i++) {
+    if (!current.includes("%")) return false;
+    try {
+      current = decodeURIComponent(current);
+    } catch {
+      // Malformed raw escape is suspicious; a literal "%" that only appears
+      // after a decode layer (e.g. `50%25`) is just an encoded percent sign.
+      return i === 0;
+    }
+    if (current.startsWith("//") || SUSPICIOUS_DECODED_CHARS.test(current)) return true;
+  }
+  // Still encoded after 4 layers: nobody legitimate does this.
+  return current.includes("%");
 }
 
 /**
