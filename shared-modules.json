@@ -262,7 +262,7 @@
     "prepaidRedeem": {
       "owner": "@/web-core/prepaidRedeem",
       "resources": [],
-      "why": "the thin server-side client a site uses to add a 'Redeem a code' box: tidy/plausibility helpers, the same-for-every-refusal wording, and one function that asks the checkout app (hostname, shared service token and the end user's IP all passed in by the caller) to redeem a code and returns where to send the buyer. Every rule (existence, single use, expiry, rate limit, fulfilment) lives in the checkout app that owns the codes, never here. No resource is registered because the endpoint belongs to the checkout app, whose own handler is the single implementation; a consumer re-implementing the call would still have to hold the shared service token, which only the sites meant to call it do.",
+      "why": "the thin server-side client a site uses to add a 'Redeem a code' box: tidy/plausibility helpers, the same-for-every-refusal wording, and one function that asks the checkout app (hostname, shared service token and the end user's IP all passed in by the caller) to redeem a code and returns where to send the buyer. Every rule (existence, single use, expiry, rate limit, fulfilment) lives in the checkout app that owns the codes, never here. No resource is registered because the endpoint belongs to the checkout app, whose own handler is the single implementation; a consumer re-implementing the call would still have to hold the shared service token, which only the sites meant to call it do."
     },
     "ticketPdf": {
       "owner": "@/web-core/ticketPdf",

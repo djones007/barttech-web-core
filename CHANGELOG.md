@@ -7,6 +7,9 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ### Added
 - **`giftAvailability.ts`** (+ test): `giftAvailabilityUrl`, `giftCheckoutUrl`, `fetchGiftAvailable`, `normaliseCheckoutOrigin`, `isValidOfferSlug`. Mechanism only: validates an https origin and a plain offer slug, calls the checkout service's public `/api/gift/available?offer=` endpoint server-side (4s timeout, 60s revalidate hint, injectable fetch), and resolves `false` on any failure; never throws. Registered in `shared-modules.json` (owns the endpoint path) and the `test` script. No React, no new dependency.
 
+### Fixed
+- **`shared-modules.json` is valid JSON again**: the `prepaidRedeem` entry ended its `why` string with a trailing comma, so `check-resource-registration.mjs` could not load the file ("this check did NOT run") in every consumer's CI.
+
 ## [2026-10-02c] — prepaidRedeem: the generic "Redeem a code" client
 
 ### Added
