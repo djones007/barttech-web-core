@@ -33,7 +33,7 @@ test("without a code the draft points at the account sign-in instead", () => {
   assert.match(d.text, /https:\/\/x\.test\/account/);
   assert.ok(!/game pass code is/.test(d.text));
   assert.match(d.text, /Your order is safe\./);
-  assert.ok(!/Your game pass is safe/.test(d.text));
+  assert.ok(!/Your Game Pass is safe/.test(d.text));
 });
 
 test("the bounce task body lists the order and every other contact detail, and skips blanks", () => {

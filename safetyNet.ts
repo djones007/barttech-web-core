@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // The "safety net" for a sale: everything a buyer needs to get what they paid for
 // WITHOUT the delivery email. Pure and product-neutral: the CONTENT of the block
-// shown on a success / thank-you page, the downloadable game pass PDF (see ticketPdf.ts)
+// shown on a success / thank-you page, the downloadable Game Pass PDF (see ticketPdf.ts)
 // and the "copy details" text, all built from one model so they can never disagree.
 //
 // Why: a delivery email can be blocked (a hard bounce, a spam complaint) or sent to
@@ -72,7 +72,7 @@ export interface SafetyNetModel {
 }
 
 export const KEEP_NOTE = "If for any reason the email doesn't arrive, keep these details: they get you in.";
-export const PRIVATE_NOTE = "Keep this private: anyone with this code or link can claim your game pass.";
+export const PRIVATE_NOTE = "Keep this private: anyone with this code or link can claim your Game Pass.";
 
 const clean = (s: string | null | undefined, max = 300): string => {
   let out = "";
@@ -95,7 +95,7 @@ export function maskEmail(email: string | null | undefined): string {
 function title(kind: SafetyNetKind): string {
   switch (kind) {
     case "game_licence":
-      return "Your game pass";
+      return "Your Game Pass";
     case "lms_enrol":
       return "Your course access";
     case "r2_download":
@@ -125,15 +125,15 @@ export function buildSafetyNet(input: SafetyNetInput): SafetyNetModel {
   rows.push({ label: "Order ref", value: ref });
   if (input.purchasedOn) rows.push({ label: "Bought", value: clean(input.purchasedOn, 60) });
   if (email) rows.push({ label: kind === "lms_enrol" ? "Login email" : "Sent to", value: email });
-  if (code) rows.push({ label: "Game pass code", value: code, style: "code" });
+  if (code) rows.push({ label: "Game Pass code", value: code, style: "code" });
   if (claimUrl) rows.push({ label: "Claim link", value: claimUrl, style: "link" });
   else if (access && kind !== "r2_download") rows.push({ label: kind === "lms_enrol" ? "Where to learn" : "Sign in at", value: access, style: "link" });
 
   const steps: string[] = [];
   switch (kind) {
     case "game_licence":
-      steps.push(claimUrl ? "Open your claim link, or go to the sign-in page and enter your game pass code." : access ? `Go to ${access} and sign in.` : "Sign in to your account.");
-      steps.push(code ? "Sign in with any email address you can read. The game pass moves to that address." : `Sign in with ${email || "the email you used at checkout"}.`);
+      steps.push(claimUrl ? "Open your claim link, or go to the sign-in page and enter your Game Pass code." : access ? `Go to ${access} and sign in.` : "Sign in to your account.");
+      steps.push(code ? "Sign in with any email address you can read. The Game Pass moves to that address." : `Sign in with ${email || "the email you used at checkout"}.`);
       steps.push(opens ? `When it opens (${opens}), sign in and start a game from your account.` : "Start a game from your account and invite your players.");
       break;
     case "lms_enrol":

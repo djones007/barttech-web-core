@@ -33,11 +33,11 @@ test("banner: ok, soft-fail and unknown show nothing; a hard bounce warns; a com
   assert.equal(ownAddressBanner({ state: "ok" }, "a@b.com"), null);
   assert.equal(ownAddressBanner({ state: "unknown" }, "a@b.com"), null);
   const hb = ownAddressBanner({ state: "hard_bounce" }, "a@b.com")!;
-  assert.match(hb.message, /Our emails to a@b\.com have bounced before, so this address may not receive your game pass\. Check for a typo, or use "Wrong address\? Fix it here"/);
+  assert.match(hb.message, /Our emails to a@b\.com have bounced before, so this address may not receive your Game Pass\. Check for a typo, or use "Wrong address\? Fix it here"/);
   assert.equal(hb.optIn, null);
   const c = ownAddressBanner({ state: "complaint" }, "a@b.com")!;
   assert.match(c.message, /This address once marked one of our emails as spam, so we're blocked from emailing it\./);
-  assert.equal(c.optIn?.label, "Yes, send my game pass and game emails to this address");
+  assert.equal(c.optIn?.label, "Yes, send my Game Pass and game emails to this address");
   assert.match(c.optIn!.hint, /not spam/i);
 });
 

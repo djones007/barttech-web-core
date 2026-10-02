@@ -2,10 +2,10 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
-## [2026-10-02e] — Buyer-facing "ticket" is now "game pass"
+## [2026-10-02e] — Buyer-facing "ticket" is now "Game Pass"
 
 ### Changed
-- Dom's standing rule (2026-10-02): what a buyer gets from an online game is a game pass, never a ticket. Copy only; identifiers (`buildTicketPdf`, `TicketPalette`) and file names are unchanged. `safetyNet.ts`: the game title is always "Your game pass" (the pre-sale "Your ticket" title is gone), the code row reads "Game pass code", the private note and the steps say game pass, and the non-game steps say "Keep this as your proof of purchase". `ownAddress.ts` (own-address banner, opt-in label, outcome messages) and `buyerContact.ts` (complaint draft subject and body, bounce task body) say game pass. Tests updated.
+- Dom's standing rule (2026-10-02): what a buyer gets from an online game is a Game Pass, never a ticket. Always capitalised, "Game Pass" (Dom's correction, same day). Copy only; identifiers (`buildTicketPdf`, `TicketPalette`) and file names are unchanged. `safetyNet.ts`: the game title is always "Your Game Pass" (the pre-sale "Your ticket" title is gone), the code row reads "Game Pass code", the private note and the steps say Game Pass, and the non-game steps say "Keep this as your proof of purchase". `ownAddress.ts` (own-address banner, opt-in label, outcome messages) and `buyerContact.ts` (complaint draft subject and body, bounce task body) say Game Pass. Tests updated.
 
 ## [2026-10-02d] — giftAvailability: server-side gift availability client
 
