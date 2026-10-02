@@ -31,9 +31,9 @@ test("the complaint draft is personal, carries the code and link, and escapes th
 test("without a code the draft points at the account sign-in instead", () => {
   const d = renderComplaintDraft({ senderName: "Jess", brandName: "Acme", productName: "The Thing", accessUrl: "https://x.test/account", orderRef: "AB12" });
   assert.match(d.text, /https:\/\/x\.test\/account/);
-  assert.ok(!/ticket code is/.test(d.text));
+  assert.ok(!/game pass code is/.test(d.text));
   assert.match(d.text, /Your order is safe\./);
-  assert.ok(!/Your ticket is safe/.test(d.text));
+  assert.ok(!/Your game pass is safe/.test(d.text));
 });
 
 test("the bounce task body lists the order and every other contact detail, and skips blanks", () => {

@@ -5,7 +5,7 @@
 //
 //   complaint    the mailbox exists and the person marked a message as spam. A short, personal
 //                note from a named person goes into an Outlook DRAFT for a human to review and
-//                send: never auto-sent. It carries their ticket code and claim link.
+//                send: never auto-sent. It carries their game pass code and claim link.
 //   hard_bounce  the address is dead, so no email can reach them. A Command Centre task and bell
 //                carry the order and every other contact detail we hold.
 //
@@ -44,15 +44,15 @@ export interface ComplaintDraftInput {
 export function renderComplaintDraft(i: ComplaintDraftInput): { subject: string; html: string; text: string } {
   const hello = i.firstName && i.firstName.trim() ? `Hi ${i.firstName.trim()},` : "Hi,";
   const when = i.opensWhen ? ` It opens ${i.opensWhen}.` : "";
-  const subject = `Your ${i.productName} ticket`;
+  const subject = `Your ${i.productName} game pass`;
   const lines: string[] = [
     hello,
     `I'm writing myself because our automatic emails to you are being blocked, probably because one was marked as spam at some point (it happens, no harm done). I didn't want you to pay for ${i.productName} and not be able to get in.`,
-    `${i.claimCode || i.opensWhen ? "Your ticket is safe." : "Your order is safe."}${when}`,
+    `${i.claimCode || i.opensWhen ? "Your game pass is safe." : "Your order is safe."}${when}`,
   ];
-  if (i.claimCode) lines.push(`Your ticket code is ${i.claimCode}.${i.claimUrl ? ` Or open this link: ${i.claimUrl}` : ""}`);
+  if (i.claimCode) lines.push(`Your game pass code is ${i.claimCode}.${i.claimUrl ? ` Or open this link: ${i.claimUrl}` : ""}`);
   else if (i.accessUrl) lines.push(`You can sign in here with the email you used at checkout: ${i.accessUrl}`);
-  if (i.claimCode) lines.push("Sign in with any email address you can read and the ticket moves to it. Please keep the code to yourself.");
+  if (i.claimCode) lines.push("Sign in with any email address you can read and the game pass moves to it. Please keep the code to yourself.");
   lines.push(`If you would like our emails to reach you again, check your spam folder and mark us "not spam". If anything is stuck, just reply to this email and quote ${i.orderRef}.`, `${i.senderName}`);
   const text = lines.join("\n\n");
   const html = lines.map((l) => `<p>${esc(l).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')}</p>`).join("");
@@ -76,7 +76,7 @@ export interface BounceTaskInput {
 /** The body of the Command Centre task and bell for a dead address. Facts as lines, nothing pre-rendered. */
 export function renderBounceTaskBody(i: BounceTaskInput): string {
   const lines = [
-    `Why: ${i.brandName} buyer paid for ${i.productName} but their email cannot receive our mail${i.reason ? ` (${i.reason})` : ""}, so the ticket email never arrived.`,
+    `Why: ${i.brandName} buyer paid for ${i.productName} but their email cannot receive our mail${i.reason ? ` (${i.reason})` : ""}, so the game pass email never arrived.`,
     ` • Order ref: ${i.orderRef}`,
     ` • Email on the order: ${i.email}`,
   ];
@@ -84,6 +84,6 @@ export function renderBounceTaskBody(i: BounceTaskInput): string {
   if (i.amountLabel) lines.push(` • Paid: ${i.amountLabel}`);
   for (const c of i.otherContacts) if (c.value) lines.push(` • ${c.label}: ${c.value}`);
   if (i.whereToLook) lines.push(` • Order: ${i.whereToLook}`);
-  lines.push("Do: reach them by phone or post, or fix the address and resend (their ticket code also works from their success page and account).");
+  lines.push("Do: reach them by phone or post, or fix the address and resend (their game pass code also works from their success page and account).");
   return lines.join("\n");
 }

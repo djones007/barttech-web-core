@@ -3,7 +3,7 @@
 // copy and the safety rules live ONCE and every app's success page behaves the same.
 //
 //   ownAddressBanner()      the calm plain-English banner for a deliverability state (emailit.ts)
-//   runComplaintOptIn()     what a click on "Yes, send my ticket and game emails to this address" does
+//   runComplaintOptIn()     what a click on "Yes, send my game pass and game emails to this address" does
 //
 // The safety rules, each pinned by ownAddress.test.ts:
 //   * Nothing is looked up or cleared for an address the caller did not take from the buyer's own
@@ -39,16 +39,16 @@ export function ownAddressBanner(d: BuyerDeliverability, email: string): OwnAddr
   if (d.state === "hard_bounce") {
     return {
       kind: "hard_bounce",
-      message: `Our emails to ${email} have bounced before, so this address may not receive your ticket. Check for a typo, or use "Wrong address? Fix it here". You can still download your ticket below.`,
+      message: `Our emails to ${email} have bounced before, so this address may not receive your game pass. Check for a typo, or use "Wrong address? Fix it here". You can still download your game pass below.`,
       optIn: null,
     };
   }
   if (d.state === "complaint") {
     return {
       kind: "complaint",
-      message: "This address once marked one of our emails as spam, so we're blocked from emailing it. You can still download your ticket below.",
+      message: "This address once marked one of our emails as spam, so we're blocked from emailing it. You can still download your game pass below.",
       optIn: {
-        label: "Yes, send my ticket and game emails to this address",
+        label: "Yes, send my game pass and game emails to this address",
         hint: "Check your spam folder and mark us as \"not spam\" so they reach your inbox. This is only for emails about this order. It does not sign you up to anything.",
       },
     };
@@ -63,7 +63,7 @@ export interface OwnAddressDeps {
   claimOnce(): Promise<boolean>;
   /** The audited provider clear (clearComplaintSuppressionOnConsent bound to this address and order). */
   clear(): Promise<ClearSelfRequestedResult>;
-  /** Re-send the ticket / delivery email to the same address. Resolves whether it was sent. */
+  /** Re-send the game pass / delivery email to the same address. Resolves whether it was sent. */
   resend(): Promise<boolean>;
   /** An audit row for the outcome. Must not throw. */
   audit(outcome: string, detail?: Record<string, unknown>): Promise<void>;
@@ -79,13 +79,13 @@ export interface OptInResult {
 }
 
 const MSG: Record<OptInOutcome, string> = {
-  cleared_and_resent: "Done. We've sent your ticket again. Check your spam folder too and mark us as \"not spam\".",
-  cleared_resend_failed: "Done, you can receive our emails again. We could not send the ticket just now, so please download it below.",
+  cleared_and_resent: "Done. We've sent your game pass again. Check your spam folder too and mark us as \"not spam\".",
+  cleared_resend_failed: "Done, you can receive our emails again. We could not send the game pass just now, so please download it below.",
   not_a_complaint: "There is nothing to change for this address.",
-  already_used: "We've already done this once for this order. Please download your ticket below.",
-  kept: "We could not change this for this address. Please download your ticket below, or use \"Wrong address? Fix it here\".",
-  throttled: "Please try again a little later. You can download your ticket below in the meantime.",
-  error: "We could not do that just now. Please download your ticket below.",
+  already_used: "We've already done this once for this order. Please download your game pass below.",
+  kept: "We could not change this for this address. Please download your game pass below, or use \"Wrong address? Fix it here\".",
+  throttled: "Please try again a little later. You can download your game pass below in the meantime.",
+  error: "We could not do that just now. Please download your game pass below.",
 };
 
 /**

@@ -27,9 +27,9 @@ test("a claim code or link makes the private note appear, and nothing else does"
   assert.equal(m.hasClaim, true);
 });
 
-test("pre-sale: the opening time is a row and a step, and the title is a ticket", () => {
+test("pre-sale: the opening time is a row and a step, and the title is a game pass", () => {
   const m = buildSafetyNet({ ...base, kind: "game_licence", opensWhen: "Saturday 10 October at 6pm UK time", claimCode: "C" });
-  assert.equal(m.title, "Your ticket");
+  assert.equal(m.title, "Your game pass");
   assert.ok(m.rows.some((r) => r.label === "Opens" && /Saturday 10 October/.test(r.value)));
   assert.ok(m.steps.some((s) => /Saturday 10 October/.test(s)));
   assert.equal(buildSafetyNet({ ...base, kind: "game_licence" }).title, "Your game pass");
