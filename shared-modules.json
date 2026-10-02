@@ -249,6 +249,11 @@
       "resources": [],
       "why": "pure copy and classification for the human hand-off when a buyer's email is blocked: a complaint becomes a personal Outlook DRAFT (never auto-sent) carrying their ticket code, a hard bounce becomes a Command Centre task and bell with every other contact detail. Does no I/O; the apps own the Graph draft and the bell call."
     },
+    "ownAddress": {
+      "owner": "@/web-core/ownAddress",
+      "resources": [],
+      "why": "the buyer's own-address banner copy and the one-click complaint opt-in, as pure logic over injected I/O. The order of its steps is the safety (re-check that it is still a complaint, claim the single per-order use, clear, only then resend) and its deps have no marketing member at all, so a tag, list or suppression write is not expressible. Every app's success page calls this so the wording and the rules cannot drift."
+    },
     "safetyNet": {
       "owner": "@/web-core/safetyNet",
       "resources": [],
