@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-02c] — prepaidRedeem: the generic "Redeem a code" client
+
+### Added
+- **`prepaidRedeem.ts`**: the thin server-side client a site uses to accept prepaid codes (a partner sells a code, the buyer redeems it later). `redeemPrepaidCode()` asks the checkout app (hostname, shared service token and the end user's IP passed in by the caller) to redeem a code and returns where to send the buyer (`accessUrl` / `successUrl`), or a message that is identical for every refusal so a response never reveals whether a code exists; rate limiting and outages are told apart. Hostname-only, `redirect: "error"`, never throws, no brand data, host or credential in this repo. Also `tidyPrepaidInput()` and `isPlausiblePrepaidCode()`. Tests in `prepaidRedeem.test.ts`; `shared-modules.json` entry added. No new external import, so no consumer breaks on a bump.
+
 ## [2026-10-02b] — Registration gate reads the pinned manifest; Node 22 test fix
 
 ### Fixed

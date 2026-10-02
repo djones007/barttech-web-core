@@ -259,6 +259,11 @@
       "resources": [],
       "why": "pure content for the 'everything you need without the email' block on a success page: the order ref, a code or link where the product has one, the steps, the support line, and the copy-details text, for every product type (game licence, course, download, physical, none, unknown). One model feeds the page, the PDF ticket and the copy text so they cannot disagree. Product- and brand-neutral: names, URLs and the support address are passed in. The page component stays per-repo (no React here); scripts/check-success-safety-net.mjs gates that a payment-confirming success page renders it."
     },
+    "prepaidRedeem": {
+      "owner": "@/web-core/prepaidRedeem",
+      "resources": [],
+      "why": "the thin server-side client a site uses to add a 'Redeem a code' box: tidy/plausibility helpers, the same-for-every-refusal wording, and one function that asks the checkout app (hostname, shared service token and the end user's IP all passed in by the caller) to redeem a code and returns where to send the buyer. Every rule (existence, single use, expiry, rate limit, fulfilment) lives in the checkout app that owns the codes, never here. No resource is registered because the endpoint belongs to the checkout app, whose own handler is the single implementation; a consumer re-implementing the call would still have to hold the shared service token, which only the sites meant to call it do.",
+    },
     "ticketPdf": {
       "owner": "@/web-core/ticketPdf",
       "resources": [],
