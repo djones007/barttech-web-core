@@ -269,6 +269,15 @@
       "resources": [],
       "why": "a hand-written one-page PDF (standard fonts, WinAnsi, optional QR matrix passed in) for the safety-net ticket. No library and no network, so it adds no dependency to any consumer. The route that serves it holds a bearer code and must send Cache-Control private, no-store after authorising the caller."
     },
+    "giftAvailability": {
+      "owner": "@/web-core/giftAvailability",
+      "resources": [
+        {
+          "match": "/api/gift/available",
+          "reason": "the checkout service's public gift-availability endpoint. It sends no CORS headers, so it must be called server-side with a short timeout and a safe false on any failure; hand-rolling the call re-implements the https/slug validation and the never-throw contract. The gift checkout link (?gift=1) is built by giftCheckoutUrl for the same reason."
+        }
+      ]
+    },
     "uploads": {
       "owner": "@/web-core/uploads",
       "resources": [],

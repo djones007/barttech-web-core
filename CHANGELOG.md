@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-02d] — giftAvailability: server-side gift availability client
+
+### Added
+- **`giftAvailability.ts`** (+ test): `giftAvailabilityUrl`, `giftCheckoutUrl`, `fetchGiftAvailable`, `normaliseCheckoutOrigin`, `isValidOfferSlug`. Mechanism only: validates an https origin and a plain offer slug, calls the checkout service's public `/api/gift/available?offer=` endpoint server-side (4s timeout, 60s revalidate hint, injectable fetch), and resolves `false` on any failure; never throws. Registered in `shared-modules.json` (owns the endpoint path) and the `test` script. No React, no new dependency.
+
 ## [2026-10-02c] — prepaidRedeem: the generic "Redeem a code" client
 
 ### Added
