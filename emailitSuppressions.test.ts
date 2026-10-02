@@ -312,12 +312,16 @@ test("checkBuyerDeliverability: a lookup slower than the budget is unknown, not 
     new Promise((_res, rej) => {
       init.signal?.addEventListener("abort", () => rej(new Error("aborted")));
     })) as typeof fetch;
+  // AbortSignal.timeout's timer is unref'd, and this fake fetch holds no handle of its own, so on Node 22 the loop
+  // empties before the abort fires and node:test cancels the file. A real server always has live handles.
+  const keepAlive = setInterval(() => {}, 1000);
   try {
     const t0 = Date.now();
     const r = await checkBuyerDeliverability({ apiKey: "k", email: "a@b.com", timeoutMs: 30 });
     assert.equal(r.state, "unknown");
     assert.ok(Date.now() - t0 < 1000);
   } finally {
+    clearInterval(keepAlive);
     restore();
   }
 });

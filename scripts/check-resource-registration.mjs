@@ -29,7 +29,15 @@
 //             1 = an unregistered resource, or an unreadable manifest.
 //
 // Usage: node check-resource-registration.mjs [rootDir] [--manifest <path>]
-//        Without --manifest it fetches the canonical one from the public repo.
+//        Without --manifest it fetches the canonical one from the public repo,
+//        at the consumer's pinned WEB_CORE_REF (env) — `main` only when unset.
+//
+// WHY THE PIN (2026-10-02, estate issue 0dfe1c6b): this read `main`, while the
+// script itself was fetched at the consumer's WEB_CORE_REF. One web-core commit
+// adding a resource (7b1ec2a, the mistyped-domain map) therefore turned ~20
+// consumer CIs red at once, none of which had changed. Pinned, a new resource
+// reaches a consumer on its deliberate pin bump — the same trap the inlining
+// gate fixed on 2026-08-09.
 // ---------------------------------------------------------------------------
 
 import fs from "node:fs";
@@ -41,8 +49,11 @@ const mIdx = args.indexOf("--manifest");
 const manifestPath = mIdx >= 0 ? args[mIdx + 1] : null;
 const ROOT = args.find((a, i) => !a.startsWith("--") && i !== mIdx + 1) || process.cwd();
 
+const MANIFEST_REF = /^[0-9a-f]{7,40}$|^[\w.\-\/]+$/.test(process.env.WEB_CORE_REF ?? "")
+  ? process.env.WEB_CORE_REF
+  : "main";
 const MANIFEST_URL =
-  "https://raw.githubusercontent.com/djones007/barttech-web-core/main/shared-modules.json";
+  `https://raw.githubusercontent.com/djones007/barttech-web-core/${MANIFEST_REF}/shared-modules.json`;
 
 /**
  * Defense-in-depth: `rel` is always enumerated from `git ls-files`, never
@@ -150,6 +161,6 @@ if (missing.length) {
 
 const owning = [...consumed].filter((n) => (modules[n].resources ?? []).length);
 console.log(
-  `Resource-registration gate OK — ${consumed.size} web-core module(s) consumed, ` +
+  `Resource-registration gate OK (manifest @ ${manifestPath ? manifestPath : MANIFEST_REF}) — ${consumed.size} web-core module(s) consumed, ` +
     `${owning.length} own resources, all registered.`
 );

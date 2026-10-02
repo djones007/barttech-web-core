@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-02b] — Registration gate reads the pinned manifest; Node 22 test fix
+
+### Fixed
+- **`scripts/check-resource-registration.mjs`** now reads `shared-modules.json` at the consumer's `WEB_CORE_REF` (falls back to `main` only when unset), not always `main`. The script was already fetched at the pin, but its manifest was not, so 7b1ec2a's new `validation` resource turned ~20 consumer CIs red at once without any of them changing. A new resource now reaches a consumer on its deliberate pin bump. The OK line names the manifest ref it checked. Estate issue 0dfe1c6b.
+- **`emailitSuppressions.test.ts`**: "a lookup slower than the budget is unknown, not a hang" holds a ref'd timer while its fake fetch hangs. `AbortSignal.timeout`'s timer is unref'd, so on Node 22 (CI) the event loop emptied before the abort and node:test cancelled the file, failing 7 tests (CI run 37000585448). Passes 23/23 on Node 22 and 441/441 on Node 26. Test-only; `checkBuyerDeliverability` unchanged.
+
 ## [2026-10-02a] — The buyer safety net: typo check, success-page block, own-address check, ticket PDF
 
 ### Added
