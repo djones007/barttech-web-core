@@ -48,7 +48,7 @@ export function renderComplaintDraft(i: ComplaintDraftInput): { subject: string;
   const lines: string[] = [
     hello,
     `I'm writing myself because our automatic emails to you are being blocked, probably because one was marked as spam at some point (it happens, no harm done). I didn't want you to pay for ${i.productName} and not be able to get in.`,
-    `Your ticket is safe.${when}`,
+    `${i.claimCode || i.opensWhen ? "Your ticket is safe." : "Your order is safe."}${when}`,
   ];
   if (i.claimCode) lines.push(`Your ticket code is ${i.claimCode}.${i.claimUrl ? ` Or open this link: ${i.claimUrl}` : ""}`);
   else if (i.accessUrl) lines.push(`You can sign in here with the email you used at checkout: ${i.accessUrl}`);
