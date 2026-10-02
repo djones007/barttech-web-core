@@ -49,7 +49,7 @@ const mIdx = args.indexOf("--manifest");
 const manifestPath = mIdx >= 0 ? args[mIdx + 1] : null;
 const ROOT = args.find((a, i) => !a.startsWith("--") && i !== mIdx + 1) || process.cwd();
 
-const MANIFEST_REF = /^[0-9a-f]{7,40}$|^[\w.\-\/]+$/.test(process.env.WEB_CORE_REF ?? "")
+const MANIFEST_REF = /^[\w./-]+$/.test(process.env.WEB_CORE_REF ?? "")
   ? process.env.WEB_CORE_REF
   : "main";
 const MANIFEST_URL =
