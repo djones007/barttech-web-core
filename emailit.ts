@@ -895,14 +895,18 @@ export function deliverabilityState(
 export async function checkBuyerDeliverability(opts: {
   apiKey: string;
   email: string;
-  bartmailReasons?: readonly string[];
+  /** The marketing system's reasons for the same address, or a promise of them (getBartmailSuppressionReasons): awaited in parallel with the provider lookup. */
+  bartmailReasons?: readonly string[] | Promise<readonly string[]>;
   timeoutMs?: number;
 }): Promise<BuyerDeliverability> {
   const timeoutMs = opts.timeoutMs ?? 1500;
   try {
-    const lookup = await getEmailitSuppression(opts.apiKey, opts.email, { timeoutMs });
+    const [lookup, reasons] = await Promise.all([
+      getEmailitSuppression(opts.apiKey, opts.email, { timeoutMs }),
+      Promise.resolve(opts.bartmailReasons ?? []).catch(() => [] as readonly string[]),
+    ]);
     if (!lookup.ok) return { state: "unknown", reason: lookup.error ?? null };
-    return deliverabilityState(lookup.suppression, opts.bartmailReasons ?? []);
+    return deliverabilityState(lookup.suppression, reasons);
   } catch (err) {
     return { state: "unknown", reason: err instanceof Error ? err.message : String(err) };
   }

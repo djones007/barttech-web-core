@@ -297,6 +297,16 @@ test("checkBuyerDeliverability: looks up only the one address, and fails soft", 
   }
 });
 
+test("checkBuyerDeliverability: marketing reasons may be a promise, awaited alongside the lookup; a rejecting promise is ignored", async () => {
+  stubFetch(() => json({ error: "nf" }, 404));
+  try {
+    assert.equal((await checkBuyerDeliverability({ apiKey: "k", email: "a@b.com", bartmailReasons: Promise.resolve(["bounce"]) })).state, "hard_bounce");
+    assert.equal((await checkBuyerDeliverability({ apiKey: "k", email: "a@b.com", bartmailReasons: Promise.reject(new Error("x")) })).state, "ok");
+  } finally {
+    restore();
+  }
+});
+
 test("checkBuyerDeliverability: a lookup slower than the budget is unknown, not a hang", async () => {
   globalThis.fetch = ((_u: string | URL, init: RequestInit) =>
     new Promise((_res, rej) => {
