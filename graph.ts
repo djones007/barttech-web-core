@@ -183,16 +183,25 @@ export async function sendMail(opts: SendMailOptions): Promise<void> {
  * Create an Outlook **draft** (`POST /messages`). Never sends. Used for
  * hand-off flows a human reviews and sends themself — do not "improve" this
  * into a sendMail call.
+ *
+ * `mailbox` creates the draft in another mailbox of the tenant (a person's own
+ * outbox, so it goes out from their address) instead of GRAPH_MAILBOX; the
+ * application permission must cover it, and a 403/404 throws like any failure,
+ * so a caller can fall back to the default mailbox. Returns the draft's id and
+ * web link (Graph's response) so a caller can record where the draft is.
  */
 export async function createDraft(opts: {
   subject: string;
   html: string;
   to: string[];
   token?: string;
-}): Promise<void> {
+  mailbox?: string;
+}): Promise<{ id?: string; webLink?: string }> {
   if (!GRAPH_MAILBOX) throw new Error("GRAPH_MAILBOX env var is not set — cannot create Graph draft");
+  const mailbox = (opts.mailbox ?? GRAPH_MAILBOX).trim();
+  if (!/^[^\s@/\\]+@[^\s@/\\]+\.[^\s@/\\]+$/.test(mailbox)) throw new Error("createDraft: mailbox is not an email address");
   const token = opts.token ?? (await getGraphToken());
-  const res = await fetchWithRetry(`https://graph.microsoft.com/v1.0/users/${GRAPH_MAILBOX}/messages`, {
+  const res = await fetchWithRetry(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -203,4 +212,10 @@ export async function createDraft(opts: {
   });
 
   if (!res.ok) throw new Error(`draft creation failed: ${res.status} — ${(await res.text()).slice(0, 300)}`);
+  try {
+    const d = (await res.json()) as { id?: string; webLink?: string };
+    return { id: d.id, webLink: d.webLink };
+  } catch {
+    return {};
+  }
 }

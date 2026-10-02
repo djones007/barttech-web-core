@@ -111,6 +111,50 @@ export function getBartmailSupabase() {
 /** Alias of {@link getBartmailSupabase} for consumers that named it `getBartmailClient`. */
 export { getBartmailSupabase as getBartmailClient };
 
+/**
+ * The marketing system's suppression reasons ('bounce', 'soft_bounce', 'spam', 'unsubscribe', 'manual') for ONE address
+ * on ONE brand. READ-ONLY: it never writes a contact, tag or suppression row (a tag write can start a sequence that
+ * sends email, and a suppression delete would resubscribe someone). For a success page that warns the buyer about their
+ * own address; the address must come from the buyer's own order or session, never free text. Bounded by `timeoutMs`
+ * (default 1500) and never throws: any failure, a missing brand or an unknown contact is an empty list.
+ */
+export async function getBartmailSuppressionReasons(
+  email: string,
+  brandSlug: string,
+  opts?: { client?: ReturnType<typeof getBartmailSupabase>; timeoutMs?: number }
+): Promise<string[]> {
+  const addr = String(email ?? "").trim().toLowerCase();
+  if (!addr.includes("@") || !brandSlug) return [];
+  const work = async (): Promise<string[]> => {
+    const supabase = opts?.client ?? getBartmailSupabase();
+    const { data: brand } = await supabase.from("brands").select("id, tenant_id").eq("slug", brandSlug).maybeSingle();
+    if (!brand) return [];
+    const b = brand as { id: string; tenant_id: string };
+    const { data: contact } = await supabase.from("contacts").select("id").eq("email", addr).eq("tenant_id", b.tenant_id).maybeSingle();
+    if (!contact) return [];
+    const { data: rows } = await supabase
+      .from("contact_suppressions")
+      .select("reason")
+      .eq("contact_id", (contact as { id: string }).id)
+      .eq("tenant_id", b.tenant_id)
+      .eq("brand_id", b.id);
+    return ((rows ?? []) as { reason: string | null }[]).map((r) => String(r.reason ?? "")).filter(Boolean);
+  };
+  try {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<string[]>((resolve) => {
+      timer = setTimeout(() => resolve([]), opts?.timeoutMs ?? 1500);
+    });
+    try {
+      return await Promise.race([work(), timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  } catch {
+    return [];
+  }
+}
+
 export interface BartmailOptinParams {
   email: string;
   brand: string;

@@ -446,3 +446,4 @@ a CI step that fetches the raw file.
   computed styles or class names built by concatenation; the screenshot checks
   stay manual. `--self-test` runs in this repo's CI. Consumers fetch it pinned
   by `WEB_CORE_REF`. Plain Node, no dependencies.
+- `check-success-safety-net.mjs` — a `.tsx`/`.jsx` success / thank-you page (under a `success`, `thank-you`, `order-complete` or `confirmation` directory, or named for one) that confirms a PAYMENT must render the shared safety net: an import of `.../SafetyNet` or `.../web-core/safetyNet`, or `<SafetyNet`, anywhere in the same success directory (a thin `page.tsx` that renders a sibling client which renders it passes). Waive a non-purchase page with `// safety-net-ok: <reason>` or a `.safety-net-baseline` line `path # reason`; a waiver with no reason is not honoured. Mirrors check-post-submit-notice.mjs. Not yet fetched by any consumer's CI; wire it in the same way as that one.

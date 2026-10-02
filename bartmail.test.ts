@@ -6,6 +6,7 @@ import {
   settlePartialOptin,
   isBartmailPartialOptinError,
   BartmailPartialOptinError,
+  getBartmailSuppressionReasons,
 } from "./bartmail";
 
 // ---------------------------------------------------------------------------
@@ -122,4 +123,36 @@ test("settlePartialOptin: a non-function handler (e.g. spread from JSON) is igno
     settlePartialOptin([{ name: "t", error: { message: "x" } }], null, ctx, "x" as unknown as undefined),
     (err: unknown) => isBartmailPartialOptinError(err),
   );
+});
+
+// A chainable stand-in for the BartMail client: records which tables were touched and with what verb.
+function fakeClient(tables: Record<string, unknown>) {
+  const touched: string[] = [];
+  const client = {
+    from(table: string) {
+      touched.push(`from:${table}`);
+      const q: Record<string, unknown> = {};
+      const chain = () => q;
+      for (const m of ["select", "eq"]) q[m] = chain;
+      q.maybeSingle = () => Promise.resolve({ data: tables[table] ?? null, error: null });
+      q.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: tables[table] ?? [], error: null }).then(res);
+      for (const w of ["insert", "update", "upsert", "delete"]) q[w] = () => { touched.push(`WRITE:${w}:${table}`); return q; };
+      return q;
+    },
+  };
+  return { client: client as never, touched };
+}
+
+test("getBartmailSuppressionReasons: returns the reasons for the one address, reads only", async () => {
+  const { client, touched } = fakeClient({ brands: { id: "b1", tenant_id: "t1" }, contacts: { id: "c1" }, contact_suppressions: [{ reason: "bounce" }, { reason: "unsubscribe" }] });
+  assert.deepEqual(await getBartmailSuppressionReasons(" A@B.com ", "nutty-orange", { client }), ["bounce", "unsubscribe"]);
+  assert.ok(touched.every((t) => t.startsWith("from:")), "no write verb is ever used");
+});
+
+test("getBartmailSuppressionReasons: unknown brand, unknown contact, bad input and errors are an empty list", async () => {
+  assert.deepEqual(await getBartmailSuppressionReasons("a@b.com", "x", { client: fakeClient({}).client }), []);
+  assert.deepEqual(await getBartmailSuppressionReasons("a@b.com", "x", { client: fakeClient({ brands: { id: "b", tenant_id: "t" } }).client }), []);
+  assert.deepEqual(await getBartmailSuppressionReasons("not-an-email", "x", { client: fakeClient({}).client }), []);
+  const boom = { from() { throw new Error("down"); } } as never;
+  assert.deepEqual(await getBartmailSuppressionReasons("a@b.com", "x", { client: boom }), []);
 });

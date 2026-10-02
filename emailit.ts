@@ -526,6 +526,24 @@ export function isSoftFailSuppression(s: Pick<EmailitSuppression, "type" | "reas
   return /\bsoft[\s_-]*(fail|bounce)/.test(reason);
 }
 
+export type SuppressionKind = "soft" | "hard" | "complaint" | "unsubscribe" | "unknown";
+
+/**
+ * What kind of suppression this is. `soft` is exactly `isSoftFailSuppression`; everything else is a reason the
+ * address must NOT be re-enabled silently. `complaint` (the person marked a mail as spam) is the only non-soft
+ * kind that `clearComplaintSuppressionOnConsent` may remove, and only on the person's own explicit click.
+ * An unrecognised record is `unknown` and is never cleared.
+ */
+export function classifySuppression(s: Pick<EmailitSuppression, "type" | "reason"> | null | undefined): SuppressionKind {
+  if (!s) return "unknown";
+  if (isSoftFailSuppression(s)) return "soft";
+  const text = `${String(s.type ?? "")} ${String(s.reason ?? "")}`.toLowerCase();
+  if (/(complain|spam|abuse)/.test(text)) return "complaint";
+  if (/unsub/.test(text)) return "unsubscribe";
+  if (/(hard|bounce|invalid|reject|undeliver)/.test(text)) return "hard";
+  return "unknown";
+}
+
 /**
  * One interface rather than a union on `ok`: consumers compile this source with
  * their own tsconfig, and boolean-discriminant narrowing silently stops working
@@ -695,6 +713,12 @@ export interface ClearSelfRequestedOptions {
   store: SuppressionClearStore | null | undefined;
   timeoutMs?: number;
   label?: string;
+  /**
+   * Which kinds of record may be deleted. Default `["soft"]`: the original, unchanged behaviour. The only caller
+   * that widens it is `clearComplaintSuppressionOnConsent` below. Anything not listed is left in place and
+   * reported as `kept`.
+   */
+  allowKinds?: SuppressionKind[];
 }
 
 export type ClearSelfRequestedResult =
@@ -724,6 +748,8 @@ export async function clearSelfRequestedSoftFailSuppression(
   const label = opts.label ?? "emailit-suppression";
   const email = opts.email.trim().toLowerCase();
   const t = { timeoutMs: opts.timeoutMs ?? DEFAULT_SUPPRESSION_TIMEOUT_MS };
+  const allowKinds = opts.allowKinds ?? ["soft"];
+  const allowed = (rec: EmailitSuppression) => allowKinds.includes(classifySuppression(rec));
 
   const first = await getEmailitSuppression(opts.apiKey, email, t);
   if (!first.ok) {
@@ -732,7 +758,7 @@ export async function clearSelfRequestedSoftFailSuppression(
   }
   if (!first.suppression) return { action: "none" };
   const firstRec: EmailitSuppression = first.suppression;
-  if (!isSoftFailSuppression(firstRec)) {
+  if (!allowed(firstRec)) {
     // Visible on purpose: this send is about to be dropped by the provider.
     console.warn(
       `[${label}] ${opts.source}: address is suppressed for a non-soft reason ("${firstRec.reason ?? ""}") — left in place, the send will not be delivered`
@@ -740,7 +766,7 @@ export async function clearSelfRequestedSoftFailSuppression(
     return { action: "kept", reason: firstRec.reason ?? null, suppressionId: firstRec.id };
   }
   if (!opts.store) {
-    console.error(`[${label}] ${opts.source}: soft-fail suppression found but no audit store supplied — NOT cleared`);
+    console.error(`[${label}] ${opts.source}: suppression found but no audit store supplied — NOT cleared`);
     return { action: "error", error: "no audit store" };
   }
 
@@ -804,7 +830,7 @@ export async function clearSelfRequestedSoftFailSuppression(
       await finish("cleared", { deleted });
       return { action: "cleared", suppressionId: firstRec.id, reason: firstRec.reason ?? null };
     }
-    if (!isSoftFailSuppression(again.suppression)) {
+    if (!allowed(again.suppression)) {
       await finish("kept", { deleted, remaining_id: again.suppression.id, remaining_reason: again.suppression.reason ?? null });
       return { action: "kept", reason: again.suppression.reason ?? null, suppressionId: again.suppression.id };
     }
@@ -812,4 +838,99 @@ export async function clearSelfRequestedSoftFailSuppression(
   }
   await finish("error", { deleted, error: "still suppressed after 3 rounds" });
   return { action: "error", error: "still suppressed after 3 rounds" };
+}
+
+// ---------------------------------------------------------------------------
+// The buyer's OWN address: is it blocked, and may they opt back in?
+//
+// For a success / thank-you page. The address always comes from the buyer's own
+// order or session — never from free text — so this cannot be used to probe
+// whether someone else's address is suppressed. Everything here fails soft: a
+// slow or erroring lookup is reported as `unknown` and the page shows only its
+// generic note.
+//
+// What the buyer sees, by state:
+//   ok          nothing (also a SOFT-fail record: the send path already clears those)
+//   hard_bounce "Our emails to <address> have bounced before..." — never cleared (a dead mailbox)
+//   complaint   "This address once marked one of our emails as spam..." — with a one-click opt-in
+//   unknown     lookup failed/slow, or a kind we do not act on: the generic note only
+//
+// The opt-in clears the provider's complaint record for TRANSACTIONAL mail only.
+// It touches nothing in the marketing system — no tag, no list, no suppression row
+// there (a tag write can start a sequence that sends email). Callers must not add any.
+// ---------------------------------------------------------------------------
+
+export type BuyerDeliverabilityState = "ok" | "hard_bounce" | "complaint" | "unknown";
+
+export interface BuyerDeliverability {
+  state: BuyerDeliverabilityState;
+  /** The provider's own reason text, for logs only. Never show it to the buyer. */
+  reason?: string | null;
+}
+
+/**
+ * Pure decision. `bartmailReasons` are the marketing system's suppression reasons for the same address ('bounce',
+ * 'soft_bounce', 'spam', 'unsubscribe', 'manual'); they can only ADD the hard-bounce warning when the provider has no
+ * record, never a complaint opt-in (only the provider's own block stops a transactional send).
+ */
+export function deliverabilityState(
+  providerRecord: Pick<EmailitSuppression, "type" | "reason"> | null | undefined,
+  bartmailReasons: readonly string[] = []
+): BuyerDeliverability {
+  if (providerRecord) {
+    const kind = classifySuppression(providerRecord);
+    const reason = providerRecord.reason ?? null;
+    if (kind === "complaint") return { state: "complaint", reason };
+    if (kind === "hard") return { state: "hard_bounce", reason };
+    if (kind === "soft") return { state: "ok", reason };
+    return { state: "unknown", reason };
+  }
+  if (bartmailReasons.some((r) => String(r).toLowerCase() === "bounce")) return { state: "hard_bounce", reason: "bartmail:bounce" };
+  return { state: "ok" };
+}
+
+/**
+ * Look up the buyer's own address. Bounded by `timeoutMs` (default 1500): a slower answer is `unknown`. Never throws.
+ */
+export async function checkBuyerDeliverability(opts: {
+  apiKey: string;
+  email: string;
+  bartmailReasons?: readonly string[];
+  timeoutMs?: number;
+}): Promise<BuyerDeliverability> {
+  const timeoutMs = opts.timeoutMs ?? 1500;
+  try {
+    const lookup = await getEmailitSuppression(opts.apiKey, opts.email, { timeoutMs });
+    if (!lookup.ok) return { state: "unknown", reason: lookup.error ?? null };
+    return deliverabilityState(lookup.suppression, opts.bartmailReasons ?? []);
+  } catch (err) {
+    return { state: "unknown", reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export interface ClearComplaintOnConsentOptions extends Omit<ClearSelfRequestedOptions, "allowKinds" | "source"> {
+  /** Audit label of the page, e.g. "checkout:success-optin". The order is appended. */
+  source: string;
+  /** The order this opt-in belongs to. Required: it is recorded on the audit row and is how a caller enforces once-per-order. */
+  orderRef: string;
+  /** Must be literally true: set only by the handler of the buyer's own explicit click. */
+  explicitBuyerConsent: true;
+}
+
+/**
+ * Remove the provider's COMPLAINT suppression on the buyer's own address, once the buyer has explicitly clicked to opt
+ * in for transactional mail. Same audited, throttled path as the soft-fail clear (`claim_suppression_clear` /
+ * `finish_suppression_clear`, recording source and order). A hard bounce, an unsubscribe or an unknown record is left
+ * in place and reported as `kept`. Does NOT re-subscribe anyone to marketing and must never be paired with a tag or list
+ * write. The caller enforces "once per order" in its own store and must not call this without the click.
+ */
+export async function clearComplaintSuppressionOnConsent(opts: ClearComplaintOnConsentOptions): Promise<ClearSelfRequestedResult> {
+  if (opts.explicitBuyerConsent !== true || !opts.orderRef || !opts.orderRef.trim()) {
+    return { action: "error", error: "consent and order reference are required" };
+  }
+  return clearSelfRequestedSoftFailSuppression({
+    ...opts,
+    source: `${opts.source}:order:${opts.orderRef.trim()}`.slice(0, 120),
+    allowKinds: ["complaint"],
+  });
 }

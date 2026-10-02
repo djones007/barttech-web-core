@@ -268,3 +268,153 @@ export function isOptinHealthSentinel(email: string | null | undefined): boolean
   const re = new RegExp(`^${user}\\+optin-health-[a-z0-9-]+@${domain}$`, "i");
   return re.test(email.trim());
 }
+
+// ---------------------------------------------------------------------------
+// Email domain typo suggestion ("Did you mean hotmail.com?"). Pure, no network,
+// no paid verifier. Used by every checkout/optin form that collects an address
+// the buyer's access or receipt is sent to: a mistyped domain is a purchase whose
+// email goes to a stranger or nowhere (hotmial.com, gmial.com, .con).
+//
+// It only ever SUGGESTS. The caller shows "Did you mean x?" with accept and ignore
+// controls, and never rewrites what the buyer typed on its own.
+//
+// Deliberately conservative: a wrong suggestion on a real address is an annoyance
+// the buyer must dismiss, so the fuzzy match only runs against the big consumer
+// providers (long names, where one edit is unambiguous) and never against a
+// domain that is itself a known real provider (mail.com is not a typo of gmail.com).
+// ---------------------------------------------------------------------------
+
+/** Providers a one-edit typo is matched against. Long names only (see the module note). */
+const TYPO_TARGETS = [
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "hotmail.co.uk",
+  "outlook.com",
+  "yahoo.com",
+  "yahoo.co.uk",
+  "icloud.com",
+  "protonmail.com",
+  "btinternet.com",
+  "virginmedia.com",
+  "blueyonder.co.uk",
+  "talktalk.net",
+  "ntlworld.com",
+];
+
+/** Real domains that are close to a target but are not typos of it, plus other common providers: never flagged. */
+const KNOWN_REAL_DOMAINS = new Set([
+  ...TYPO_TARGETS,
+  "mail.com",
+  "email.com",
+  "ymail.com",
+  "rocketmail.com",
+  "gmx.com",
+  "gmx.net",
+  "gmx.co.uk",
+  "aol.com",
+  "aol.co.uk",
+  "live.com",
+  "live.co.uk",
+  "live.ie",
+  "msn.com",
+  "me.com",
+  "mac.com",
+  "proton.me",
+  "pm.me",
+  "hey.com",
+  "fastmail.com",
+  "fastmail.fm",
+  "zoho.com",
+  "tutanota.com",
+  "yandex.com",
+  "sky.com",
+  "tiscali.co.uk",
+  "outlook.ie",
+  "att.net",
+  "comcast.net",
+  "verizon.net",
+  "sbcglobal.net",
+  "bellsouth.net",
+  "cox.net",
+  "charter.net",
+  "earthlink.net",
+  "qq.com",
+  "163.com",
+]);
+
+/** Top-level-domain slips that are never intended, whatever the name before them. */
+const TLD_FIXES: [RegExp, string][] = [
+  [/\.(con|cim|cpm|xom|vom|comm|coom|ocm|cmo|conm|comn)$/, ".com"],
+  [/\.(co\.k|co\.ik|co\.uuk|couk|co\.u|co\.ul|co\.yk|c\.uk|cou\.k|co\.uk\.uk|co\.ukk|co\.uik|co\.jk)$/, ".co.uk"],
+];
+
+/** Optimal string alignment distance (insert, delete, substitute, adjacent swap). */
+function editDistance(a: string, b: string): number {
+  const al = a.length;
+  const bl = b.length;
+  if (Math.abs(al - bl) > 2) return 3;
+  const d: number[][] = Array.from({ length: al + 1 }, () => new Array<number>(bl + 1).fill(0));
+  for (let i = 0; i <= al; i++) d[i][0] = i;
+  for (let j = 0; j <= bl; j++) d[0][j] = j;
+  for (let i = 1; i <= al; i++) {
+    for (let j = 1; j <= bl; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[al][bl];
+}
+
+export interface EmailSuggestion {
+  /** The full corrected address, ready to put back in the field. */
+  suggestion: string;
+  /** The corrected domain alone, for the prompt text ("Did you mean hotmail.com?"). */
+  domain: string;
+}
+
+/**
+ * A suggested correction for a mistyped email domain, or null when the address looks fine (or we are not sure).
+ * Never validates: pair it with `isValidEmail`. Case of the part before the @ is preserved.
+ */
+export function suggestEmailCorrection(email: unknown): EmailSuggestion | null {
+  if (typeof email !== "string") return null;
+  const trimmed = email.trim();
+  if (trimmed.length > 254) return null;
+  const at = trimmed.indexOf("@");
+  if (at < 1 || at !== trimmed.lastIndexOf("@")) return null;
+  const local = trimmed.slice(0, at);
+  const domain = trimmed.slice(at + 1).toLowerCase();
+  if (!domain.includes(".") || /\s/.test(trimmed)) return null;
+  if (KNOWN_REAL_DOMAINS.has(domain)) return null;
+
+  // 1. A top-level-domain slip fixes any domain (company.con is never meant).
+  let fixed = domain;
+  for (const [re, to] of TLD_FIXES) {
+    if (re.test(fixed)) {
+      fixed = fixed.replace(re, to);
+      break;
+    }
+  }
+  if (fixed !== domain && KNOWN_REAL_DOMAINS.has(fixed)) return { suggestion: `${local}@${fixed}`, domain: fixed };
+
+  // 2. A big provider's name with one slip (hotmial, gmal, yahooo, outlok), possibly with a fixed TLD.
+  let best: { target: string; dist: number } | null = null;
+  for (const target of TYPO_TARGETS) {
+    const dist = editDistance(fixed, target);
+    if (dist === 1 && (!best || dist < best.dist)) best = { target, dist };
+  }
+  if (best) return { suggestion: `${local}@${best.target}`, domain: best.target };
+
+  // 3. Only the TLD slipped on a domain that is not a known provider: company.con -> company.com.
+  if (fixed !== domain) return { suggestion: `${local}@${fixed}`, domain: fixed };
+
+  // 4. A known provider's own name with a truncated TLD (gmail.co, hotmail.c): suggest .com.
+  const m = domain.match(/^(gmail|hotmail|outlook|yahoo|icloud|live|aol|protonmail)\.(c|co|cm)$/);
+  if (m) {
+    const target = `${m[1]}.com`;
+    return { suggestion: `${local}@${target}`, domain: target };
+  }
+  return null;
+}

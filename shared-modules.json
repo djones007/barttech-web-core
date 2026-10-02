@@ -95,7 +95,7 @@
           "reason": "send pacing, the 2/sec API cap and retry handling live in this module. A direct call bypasses all three and can trip the rate limit for every other sender."
         }
       ],
-      "why": "Owns the transactional send transport AND the provider's per-address suppression switch (the delivery gate, never an audience). clearSelfRequestedSoftFailSuppression() is the ONE implementation of 'a person just asked for mail, so a soft-fail suppression on that exact address is cleared first' — soft-fail only, hard/complaint/unsubscribe never touched, fail-closed on its audit+throttle store. Before it existed a soft-fail suppression from a months-old deferral silently swallowed sign-in codes and purchase receipts, with the provider accepting the API call and dropping the mail."
+      "why": "Owns the transactional send transport AND the provider's per-address suppression switch (the delivery gate, never an audience). clearSelfRequestedSoftFailSuppression() is the ONE implementation of 'a person just asked for mail, so a soft-fail suppression on that exact address is cleared first' — soft-fail only, hard/complaint/unsubscribe never touched, fail-closed on its audit+throttle store. Before it existed a soft-fail suppression from a months-old deferral silently swallowed sign-in codes and purchase receipts, with the provider accepting the API call and dropping the mail. Also owns the BUYER'S-OWN-ADDRESS check for a success page (checkBuyerDeliverability: soft = nothing, hard bounce = warn, complaint = one-click opt-in; bounded to 1.5s, fails soft) and clearComplaintSuppressionOnConsent(), the ONE way a COMPLAINT suppression is ever removed: only on the buyer's own explicit click (the flag is a literal-true parameter), audited with the order, throttled, never a hard bounce, and never paired with a marketing tag or list write (a tag write can start a sequence that sends email). classifySuppression() is the single place that decides soft/hard/complaint/unsubscribe."
     },
     "graph": {
       "owner": "@/web-core/graph",
@@ -244,6 +244,21 @@
         }
       ]
     },
+    "buyerContact": {
+      "owner": "@/web-core/buyerContact",
+      "resources": [],
+      "why": "pure copy and classification for the human hand-off when a buyer's email is blocked: a complaint becomes a personal Outlook DRAFT (never auto-sent) carrying their ticket code, a hard bounce becomes a Command Centre task and bell with every other contact detail. Does no I/O; the apps own the Graph draft and the bell call."
+    },
+    "safetyNet": {
+      "owner": "@/web-core/safetyNet",
+      "resources": [],
+      "why": "pure content for the 'everything you need without the email' block on a success page: the order ref, a code or link where the product has one, the steps, the support line, and the copy-details text, for every product type (game licence, course, download, physical, none, unknown). One model feeds the page, the PDF ticket and the copy text so they cannot disagree. Product- and brand-neutral: names, URLs and the support address are passed in. The page component stays per-repo (no React here); scripts/check-success-safety-net.mjs gates that a payment-confirming success page renders it."
+    },
+    "ticketPdf": {
+      "owner": "@/web-core/ticketPdf",
+      "resources": [],
+      "why": "a hand-written one-page PDF (standard fonts, WinAnsi, optional QR matrix passed in) for the safety-net ticket. No library and no network, so it adds no dependency to any consumer. The route that serves it holds a bearer code and must send Cache-Control private, no-store after authorising the caller."
+    },
     "uploads": {
       "owner": "@/web-core/uploads",
       "resources": [],
@@ -251,8 +266,13 @@
     },
     "validation": {
       "owner": "@/web-core/validation",
-      "resources": [],
-      "why": "pure predicates over strings. No external system."
+      "resources": [
+        {
+          "match": "['\"](?:gmial|hotmial|hotmai|gmal|yahooo|outlok)\\.(?:com|co\\.uk)['\"]",
+          "reason": "a hand-written map of mistyped provider domains is a copy of suggestEmailCorrection() that drifts the first time a provider or a false positive (mail.com is not a typo of gmail.com) is added. Call the shared function."
+        }
+      ],
+      "why": "pure predicates over strings. No external system. Includes suggestEmailCorrection(): the ONE email-domain typo suggester (hotmial.com, gmial.com, .con, .co.k) for every form that collects an address a receipt or access link is sent to. It only suggests; the page shows 'Did you mean x?' with accept and ignore."
     },
     "attribution": {
       "owner": "@/web-core/attribution",

@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-02a] — The buyer safety net: typo check, success-page block, own-address check, ticket PDF
+
+### Added
+- **`validation.ts` `suggestEmailCorrection()`**: the one email-domain typo suggester ("Did you mean hotmail.com?"): hotmial, hotmai, gmial, gmal, yahooo, outlok, `.con`, `.co.k` and friends. Pure, no network, conservative (one-edit match against the big consumer providers only; mail.com, email.com and other real providers are never flagged). It only suggests. Tests in `validation.test.ts`.
+- **`emailit.ts`**: `classifySuppression()` (soft / hard / complaint / unsubscribe / unknown, the single place that decides), `deliverabilityState()` and `checkBuyerDeliverability()` (a success page's check of the buyer's OWN address; bounded to 1.5s, fails soft), and `clearComplaintSuppressionOnConsent()`, the only way a complaint suppression is ever removed: only on the buyer's explicit click (a literal-true parameter), audited with the order via the existing `claim_suppression_clear` / `finish_suppression_clear`, throttled, never a hard bounce, never a marketing tag or list write. `clearSelfRequestedSoftFailSuppression` gains an optional `allowKinds` (default `["soft"]`, behaviour unchanged).
+- **`bartmail.ts` `getBartmailSuppressionReasons()`**: read-only, bounded, never throws; the marketing system's suppression reasons for one address, so a success page can add the hard-bounce warning.
+- **`safetyNet.ts`**: product- and brand-neutral content for the "everything you need without the email" block (order ref, a claim code or link where the product has one, steps, support line, copy-details text) for every product type, one model for the page, the PDF and the copy text. **`ticketPdf.ts`**: a hand-written one-page ticket PDF with no library and no network (standard fonts, optional QR matrix passed in). **`buyerContact.ts`**: pure copy and classification for the human hand-off when a buyer's email is blocked (complaint becomes a personal Outlook draft, hard bounce becomes a Command Centre task and bell).
+- **`scripts/check-success-safety-net.mjs`** + test: a payment-confirming success page must render the shared safety net (mirrors check-post-submit-notice). Not yet wired into any consumer's CI.
+- `shared-modules.json` entries for `safetyNet`, `ticketPdf`, `buyerContact`; `emailit` and `validation` entries updated.
+
+### Changed
+- **`graph.ts` `createDraft()`** takes an optional `mailbox` (create the draft in another mailbox of the tenant) and returns the draft's `id` and `webLink` (it returned nothing). Backwards compatible. Still never sends.
+
 ## [2026-10-01b] — safeRedirectPath: result can no longer start with `//`
 
 ### Fixed
