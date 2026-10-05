@@ -132,3 +132,50 @@ test("product params: one description renders both platform shapes consistently"
   assert.equal(meta.value, 19.99);
   assert.equal(meta.num_items, 1);
 });
+
+// ---------------------------------------------------------------------------
+// trackMetaTwin: the server-twin standard for a click event (2026-10-05). The id given
+// to the pixel and the id beaconed to the server MUST be identical (else Meta counts a
+// consenting visitor twice), and the beacon MUST go out even with no pixel (that is the
+// whole point: a decliner has no fbq and was previously never counted at all).
+// ---------------------------------------------------------------------------
+test("trackMetaTwin: pixel and server beacon carry the SAME event id", async () => {
+  installFbq();
+  const beacons: { url: string; body: string }[] = [];
+  (win.location as { href?: string }).href = "https://example.test/?fbclid=abc";
+  win.navigator = { sendBeacon: (url: string, blob: Blob) => { void blob.text().then((t) => beacons.push({ url, body: t })); return true; } };
+  const id = events.trackMetaTwin("AddToCart", { currency: "GBP", value: 19.99, content_name: "Game" }, { endpoint: "/api/meta/click" });
+  await tick();
+  assert.equal(fbqCalls.length, 1);
+  assert.deepEqual(fbqCalls[0].slice(0, 2), ["track", "AddToCart"]);
+  assert.equal((fbqCalls[0][3] as { eventID: string }).eventID, id);
+  assert.equal(beacons.length, 1);
+  assert.equal(beacons[0].url, "/api/meta/click");
+  const body = JSON.parse(beacons[0].body);
+  assert.equal(body.eventId, id);
+  assert.equal(body.event, "AddToCart");
+  assert.equal(body.value, 19.99);
+  assert.equal(body.currency, "GBP");
+  assert.equal(body.sourceUrl, "https://example.test/?fbclid=abc");
+});
+
+test("trackMetaTwin: with NO pixel (visitor declined cookies) the server twin is still sent", async () => {
+  delete win.fbq;
+  const beacons: string[] = [];
+  win.navigator = { sendBeacon: (_u: string, blob: Blob) => { void blob.text().then((t) => beacons.push(t)); return true; } };
+  events.trackMetaTwin("AddToCart", { currency: "USD", value: 24.99 }, { endpoint: "/api/meta/click" });
+  await tick();
+  assert.equal(fbqCalls.length, 0);
+  assert.equal(beacons.length, 1);
+});
+
+test("trackMetaTwin: falls back to fetch keepalive when sendBeacon is unavailable or refuses", async () => {
+  delete win.fbq;
+  const fetched: { url: string; keepalive?: boolean }[] = [];
+  win.navigator = { sendBeacon: () => false };
+  win.fetch = (url: string, init: { keepalive?: boolean }) => { fetched.push({ url, keepalive: init.keepalive }); return Promise.resolve({}); };
+  events.trackMetaTwin("AddToCart", { currency: "GBP", value: 19.99 }, { endpoint: "/api/meta/click" });
+  await tick();
+  assert.deepEqual(fetched, [{ url: "/api/meta/click", keepalive: true }]);
+  delete win.fetch;
+});

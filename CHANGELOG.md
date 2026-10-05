@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-05a] — Server twin for click events: trackMetaTwin + sendClickEvent (the standard for every Meta conversion event)
+
+### Added
+- **Standard (Dom, 2026-10-05):** every Meta conversion event the browser pixel fires has a server-side twin with the SAME event id, because the pixel only exists after advertising consent and so only counts people who accepted. Purchase and InitiateCheckout (sent by the checkout) and ViewContent (`sendLandingPageView`) already followed it; AddToCart did not, so its volume was a consent-filtered fraction of the real clicks.
+- **`metaClickEvent.ts`** (+ test): the pure half. `CLICK_EVENTS` allowlist (AddToCart, InitiateCheckout, Lead, Contact, Schedule: never ViewContent/PageView/Purchase, because a crawler can emit those), `parseClickEventBody` (mandatory well-formed shared `eventId`, ISO currency, bounded value, http(s) source), `isFromAllowedHost` (fails CLOSED on a missing Origin/Referer), `fbclidFromUrl`.
+- **`sendClickEvent`** in `metaCapi.ts`: for a site's route handler; refuses an automated request, a request not from the site's own pages, a bad body, an unconfigured pixel; sends via `sendCAPIEvent` with fbc taken from the page url's fbclid so a decliner's click is attributable. Never throws.
+- **`trackMetaTwin`** + `newClientEventId` in `clientEvents.ts`: generates the id, fires the pixel with it (if consented) and ALWAYS beacons the event to the site's route (sendBeacon, fetch keepalive fallback). Three tests: same id on both halves, the beacon goes out with no pixel, the fetch fallback.
+- `metaClickEvent` declared in `shared-modules.json`; added to the test script.
+
+### Notes
+- A site adopts it by adding a POST route that calls `sendClickEvent` inside `after()` and switching its bare `trackMeta("AddToCart", ...)` to `trackMetaTwin`. Consumers pick it up when they bump the submodule; nothing changes until then.
+
 ## [2026-10-02e] — Buyer-facing "ticket" is now "Game Pass"
 
 ### Changed

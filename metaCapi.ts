@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { isAutomatedRequest } from "./requestSignals";
 import { hashedCapiIdentity } from "./metaCapiUserData";
+import { fbclidFromUrl, isFromAllowedHost, parseClickEventBody } from "./metaClickEvent";
 
 // Re-exported so the existing import surface is unchanged (golden rule 4) and so
 // the gate below and its tests name the same function.
@@ -334,4 +335,51 @@ export async function sendLandingPageView(args: {
     },
     args.credentials
   );
+}
+
+/**
+ * The server twin of a click-driven browser event (AddToCart, InitiateCheckout,
+ * Lead...). Call from the site's route handler inside `after()`:
+ *
+ *   after(() => sendClickEvent({ hdrs: req.headers, raw: await req.json(), allowedHosts: ["example.com"] }));
+ *
+ * Body shape and the click-event allowlist: `metaClickEvent.ts`. The browser sends the
+ * SAME eventId it gave the pixel (`trackMetaTwin` in clientEvents.ts), so Meta counts a
+ * consenting visitor once and counts a decliner (who has no pixel) via this call alone.
+ *
+ * Refuses, in order, and returns { sent: false, reason }: an automated request
+ * (same `isAutomatedRequest` filter as ViewContent), a request that is not from the
+ * site's own pages (fails closed on a missing Origin/Referer), a body that is not an
+ * allowed click event with a valid shared id, an unconfigured pixel/token. Never throws.
+ */
+export async function sendClickEvent(args: {
+  hdrs: { get(name: string): string | null };
+  raw: unknown;
+  allowedHosts: readonly string[];
+  credentials?: CAPICredentials;
+}): Promise<{ sent: boolean; reason?: string }> {
+  if (isAutomatedRequest(args.hdrs)) return { sent: false, reason: "automated request" };
+  if (!isFromAllowedHost(args.hdrs, args.allowedHosts)) return { sent: false, reason: "origin not allowed" };
+  const parsed = parseClickEventBody(args.raw);
+  if (!parsed.ok) return { sent: false, reason: parsed.reason };
+  if (!isCapiConfigured(args.credentials)) return { sent: false, reason: "capi not configured" };
+  const b = parsed.body;
+  const fbclid = fbclidFromUrl(b.sourceUrl);
+  const ok = await sendCAPIEvent(
+    {
+      eventName: b.event,
+      eventId: b.eventId,
+      sourceUrl: b.sourceUrl,
+      ...capiUserDataFromRequest(args.hdrs, fbclid ? { fbclid } : undefined),
+      currency: b.currency,
+      value: b.value,
+      customData: {
+        ...(b.contentName ? { content_name: b.contentName } : {}),
+        ...(b.contentIds && b.contentIds.length ? { content_ids: b.contentIds.join(",") } : {}),
+        content_type: "product",
+      },
+    },
+    args.credentials
+  );
+  return ok ? { sent: true } : { sent: false, reason: "meta rejected or network error" };
 }

@@ -152,6 +152,11 @@
         }
       ]
     },
+    "metaClickEvent": {
+      "owner": "@/web-core/metaClickEvent",
+      "resources": [],
+      "why": "the pure half of the server twin of a click event (AddToCart, InitiateCheckout, Lead...): the click-event allowlist (never ViewContent/PageView, which a crawler can emit), the body parser with the mandatory shared event id, and the fail-closed origin check. Owns no external system — the events edge it feeds is matched under metaCapi above. Split out so the rules can be unit-tested; sendClickEvent in metaCapi imports server-only, which cannot resolve in the node:test build."
+    },
     "metaCapiUserData": {
       "owner": "@/web-core/metaCapiUserData",
       "resources": [],

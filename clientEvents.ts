@@ -28,6 +28,8 @@ import { onConsentChange } from "./consent";
  *   - InitiateCheckout is NEVER sent from a site whose checkout sends it itself (an owned
  *     checkout does, browser + server). The site's buy link sends AddToCart only.
  *   - A browser event that also has a server twin MUST carry the server twin's event id.
+ *   - EVERY click event a site sends goes through `trackMetaTwin` (pixel + server twin, one id),
+ *     never a bare `trackMeta`: a bare pixel call counts consenting visitors only (2026-10-05).
  *
  * SSR-SAFE and framework-agnostic (golden rule 6): no React, no `declare global`, no tag ids.
  */
@@ -88,6 +90,59 @@ export function trackMeta(event: string, params: Record<string, unknown> = {}, o
       }, 0);
     });
   }, 0);
+}
+
+/**
+ * THE SERVER-TWIN STANDARD for a click event (Dom, 2026-10-05). Fires the pixel (only if
+ * the visitor consented) AND beacons the same event to the site's own route, which sends
+ * it to Meta server-side with the same id. Without this the event counts consenting
+ * visitors only. `endpoint` is the site's route (POST, see `sendClickEvent`); the beacon
+ * is sent whether or not the pixel exists, and survives the page unloading into checkout.
+ * Returns the event id. Click events only (see `CLICK_EVENTS`); never use this for a
+ * page-load event.
+ */
+export function trackMetaTwin(
+  event: string,
+  params: Record<string, unknown>,
+  opts: { endpoint: string; contentName?: string; contentIds?: string[] }
+): string {
+  const eventId = newClientEventId();
+  trackMeta(event, params, { eventId });
+  const w = window as unknown as { location?: { href: string }; navigator?: Navigator; fetch?: typeof fetch };
+  if (typeof window !== "undefined" && w.location) {
+    const body = JSON.stringify({
+      event,
+      eventId,
+      sourceUrl: w.location.href,
+      ...(typeof params.currency === "string" ? { currency: params.currency } : {}),
+      ...(typeof params.value === "number" ? { value: params.value } : {}),
+      ...(opts.contentName ? { contentName: opts.contentName } : typeof params.content_name === "string" ? { contentName: params.content_name } : {}),
+      ...(opts.contentIds ? { contentIds: opts.contentIds } : Array.isArray(params.content_ids) ? { contentIds: params.content_ids } : {}),
+    });
+    let sent = false;
+    try {
+      if (w.navigator && typeof w.navigator.sendBeacon === "function") {
+        sent = w.navigator.sendBeacon(opts.endpoint, new Blob([body], { type: "application/json" }));
+      }
+    } catch {
+      /* fall through to fetch */
+    }
+    if (!sent && typeof w.fetch === "function") {
+      try {
+        void w.fetch(opts.endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
+      } catch {
+        /* a tracking write must never break the click */
+      }
+    }
+  }
+  return eventId;
+}
+
+/** Event id shared by the pixel call and its server twin. */
+export function newClientEventId(): string {
+  const c = (typeof crypto !== "undefined" ? crypto : undefined) as { randomUUID?: () => string } | undefined;
+  if (c?.randomUUID) return c.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 /** A single product, described once, rendered into both platforms' standard-event shapes. */
