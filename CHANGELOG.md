@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-06c] — Dependency advisory: source-map-js
+
+### Fixed
+- `npm audit fix` bumps `source-map-js` (event-loop DoS advisory GHSA-68fv-2mgg-jv7q) in the lockfile; `npm audit --audit-level=high` is clean again.
+
 ## [2026-10-06b] — `check-dead-space.mjs`: CI gate that every consumer's mobile spec runs the shared audit (estate issue 74cbe86c)
 
 ### Added
