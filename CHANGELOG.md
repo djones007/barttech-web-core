@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-06b] — `check-dead-space.mjs`: CI gate that every consumer's mobile spec runs the shared audit (estate issue 74cbe86c)
+
+### Added
+- **`scripts/check-dead-space.mjs`** (+ `check-dead-space.test.ts`, 9 cases): a repo with a UI and a `tests/mobile.spec.ts` must import `auditDeadSpace` from the `deadSpace` module and call it. Fails a spec that only names the thresholds, retypes them, keeps a local copy, imports without calling, or calls in a comment. Silent with no UI or no mobile spec; exceptions via `.dead-space-baseline`. Modelled on `check-consent-banner-size.mjs`. Documented in `scripts/CLAUDE.md`.
+
+### Notes
+- Consumers wire it via the root rollout script, which bumps `WEB_CORE_REF` to a ref containing the gate.
+
 ## [2026-10-06a] — `deadSpace.ts`: the dead-space / padding audit as a shared module (estate issue 74cbe86c)
 
 ### Added

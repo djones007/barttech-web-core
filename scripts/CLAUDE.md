@@ -186,6 +186,18 @@ a CI step that fetches the raw file.
   with no banner, since not every consumer is a public site. Exceptions go in
   `.consent-banner-baseline` with a `#` reason. Plain Node, no dependencies.
 
+- `check-dead-space.mjs` — a repo with a UI and a `tests/mobile.spec.ts` must
+  **import `auditDeadSpace` from web-core's `deadSpace` module and call it**.
+  Blank bands between sections come from stacked section padding, emptied reveal
+  wrappers and hidden blocks that keep their height; they are not a chosen value
+  and no static pattern finds them, so the check is a rendered walk
+  (`auditDeadSpace`) and this script enforces only that it was installed. A spec
+  that merely names the thresholds, retypes 120/200, carries a local copy, imports
+  without calling, or calls only in a comment fails. Silent in a repo with no UI
+  or no mobile spec. Exceptions go in `.dead-space-baseline` with a `#` reason.
+  Accepts an optional directory argument (used by its tests). Plain Node, no
+  dependencies.
+
 - `check-classifier-tests.mjs` — a function that maps untrusted request input
   (headers, cookies, a user agent) to a fixed set of outcomes must ship with a
   **committed, wired-in** test — not one run once from a throwaway script and
