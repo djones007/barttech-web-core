@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-06a] — `deadSpace.ts`: the dead-space / padding audit as a shared module (estate issue 74cbe86c)
+
+### Added
+- **`deadSpace.ts`** (+ `deadSpace.test.ts`, 5 tests, `npm test` now 461): `auditDeadSpace(page, viewport)` plus `scanDeadSpace`, `bandTextureStddev`, `judgeDeadSpace`, the thresholds (`DEAD_SPACE_FAIL_PX` 120 phone / 200 desktop, `FLAT_STDDEV`, `EMPTY_BOX_MAX_PX`), `DEAD_SPACE_VIEWPORTS` and the failure-message builders. Moved out of the ~270-line copy pasted into `the starter template/tests/mobile.spec.ts` on 2026-10-01 so every repo's mobile spec calls one function instead of carrying (or lacking) a copy. Takes a structural `DeadSpacePage`, so web-core still takes no Playwright dependency; a test reads the `page.evaluate` callbacks' source and fails if they close over module scope.
+- `deadSpace` declared in `shared-modules.json` (convention-only entry, like `consentBannerSize`); added to the test script.
+
+### Notes
+- Thresholds remain canonical in the root repo (`tools/page-readability-audit.py`, `tools/playwright/scripts/readability-capture.js`); change those first. No CI gate added yet: it would fail every repo until their specs are migrated.
+
 ## [2026-10-05a] — Server twin for click events: trackMetaTwin + sendClickEvent (the standard for every Meta conversion event)
 
 ### Added

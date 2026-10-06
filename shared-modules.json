@@ -69,6 +69,11 @@
       "resources": [],
       "why": "owns a THRESHOLD and a measurement, not an external system — there is nothing to write to and nothing to call. The re-implementation worth forbidding is a spec that retypes the percentage instead of importing it, and that is not a resource match: it is caught by scripts/check-consent-banner-size.mjs, which requires the constant to arrive via an import from this module and fails a spec that merely names the same number."
     },
+    "deadSpace": {
+      "owner": "@/web-core/deadSpace",
+      "resources": [],
+      "why": "owns a MEASUREMENT and its thresholds (gap px limits, flat-band texture stddev, empty-box height), not an external system. Added 2026-10-06 (estate issue 74cbe86c) so every repo's tests/mobile.spec.ts calls one auditDeadSpace() instead of pasting a 270-line copy, which is what the starter template carried from 2026-10-01 and why the check reached no other repo. No resource match: the re-implementation risk is a pasted scanDeadSpace/bandTextureStddev in a spec, which has no stable textual signature; enforced by review, same as consentBannerSize."
+    },
     "cronHeartbeat": {
       "owner": "@/web-core/cronHeartbeat",
       "resources": [
