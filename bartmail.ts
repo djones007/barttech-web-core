@@ -783,21 +783,36 @@ export async function bartmailEvent(params: BartmailEventParams): Promise<boolea
       if (v !== undefined && v !== null && v !== "") metadata[k] = v;
     }
 
+    // Lazy import, INSIDE the function — see the module header. Importing this
+    // module must not pull node:crypto into the optin path's graph.
+    const { createHmac, randomUUID } = await import("node:crypto");
+
     const bodyStr = JSON.stringify({
       email: String(params.email).trim().toLowerCase(),
       brand: params.brand,
       event_type: params.event_type,
       metadata,
+      // Idempotency key: the receiver dedupes on it, which closes replay INSIDE
+      // the signed-timestamp window. Part of the signed body, so it cannot be
+      // swapped. A receiver that predates it ignores the field.
+      event_id: randomUUID(),
     });
 
-    // Lazy import, INSIDE the function — see the module header. Importing this
-    // module must not pull node:crypto into the optin path's graph.
-    const { createHmac } = await import("node:crypto");
+    // Two signatures, deliberately. The signed-timestamp pair (./signedRequest)
+    // is the replay-resistant scheme; the body-only `x-bartmail-signature` is
+    // kept so this producer still works against a receiver that predates it.
+    // The receiver prefers the timestamped pair when present. Rollout and the
+    // enforcement switch: see the receiver's route CLAUDE.md.
+    const { signRequestBody } = await import("./signedRequest");
     const sig = `sha256=${createHmac("sha256", secret).update(bodyStr).digest("hex")}`;
 
     const res = await fetch(`${await resolveBartmailUrl()}/api/contacts/event`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-bartmail-signature": sig },
+      headers: {
+        "Content-Type": "application/json",
+        "x-bartmail-signature": sig,
+        ...signRequestBody({ rawBody: bodyStr, secret }),
+      },
       body: bodyStr,
     });
 

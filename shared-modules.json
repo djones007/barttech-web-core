@@ -37,6 +37,11 @@
         }
       ]
     },
+    "signedRequest": {
+      "owner": "@/web-core/signedRequest",
+      "resources": [],
+      "why": "the signed-timestamp scheme for server-to-server producer requests: HMAC over `{timestamp}.{body}` plus a tolerance window, so a captured signed body cannot be replayed later. A pure function over a body and a secret; it owns no table or endpoint. Producers sign through this module (the shared bartmail helper does) and receivers verify through it. Runtimes without Node crypto re-implement the documented two-line format, and must say so where they do."
+    },
     "bartmail": {
       "owner": "@/web-core/bartmail",
       "resources": [

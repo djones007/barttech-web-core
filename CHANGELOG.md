@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-06d] — `signedRequest.ts`: signed-timestamp scheme for producer requests; `bartmailEvent` signs with it
+
+### Added
+- **`signedRequest.ts`** (+ `signedRequest.test.ts`, 8 cases: sign/verify, window edges past and future, tampered body, altered timestamp, wrong secret, replay inside and outside the window, malformed input): `signRequestBody()` / `verifySignedRequest()` over `"{timestamp}.{rawBody}"`, headers `x-signed-timestamp` and `x-signed-signature` (`v1=<hex>`), default ±300 s tolerance. Constant-time compare; signature checked before the window; never throws. Declared in `shared-modules.json`.
+
+### Changed
+- **`bartmailEvent()`** now adds a per-event `event_id` (UUID, inside the signed body, for receiver-side dedupe) and sends the signed-timestamp headers alongside the existing body-only signature. Additive: a receiver that predates the scheme ignores the new fields and still verifies the old signature.
+
 ## [2026-10-06c] — Dependency advisory: source-map-js
 
 ### Fixed
