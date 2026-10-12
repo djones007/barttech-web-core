@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-12] — `bugReport.ts`: reporter picks a kind (urgent / security / bug / layout / feature)
+
+### Added
+- `BUG_REPORT_KINDS` and `BugReport.kind`. `cleanBugReport` allow-lists it and defaults anything missing or unknown to `bug`, so older app-ui builds keep working. The tracker maps the kind to issue type and priority.
+
 ## [2026-10-06d] — `signedRequest.ts`: signed-timestamp scheme for producer requests; `bartmailEvent` signs with it
 
 ### Added

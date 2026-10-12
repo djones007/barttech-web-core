@@ -30,9 +30,18 @@ export const BUG_REPORT_MAX_IMAGES = 3; // the automatic page picture + up to tw
 export const BUG_REPORT_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 export const BUG_REPORT_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 
+/**
+ * What kind of report this is, picked by the reporter so the queue can be triaged by how much it
+ * matters (full mode works everything, conserve mode only the urgent/security/broken ones). The
+ * button (app-ui) and the tracker map these ids; an unknown or missing value is "bug".
+ */
+export const BUG_REPORT_KINDS = ["urgent", "security", "bug", "layout", "feature"] as const;
+export type BugReportKind = (typeof BUG_REPORT_KINDS)[number];
+
 export type BugBreadcrumb = { at: number | null; kind: "click" | "nav" | "error"; detail: string };
 
 export type BugReport = {
+  kind: BugReportKind;
   description: string;
   expected: string;
   url: string;
@@ -85,6 +94,7 @@ export function cleanBugReport(raw: unknown): CleanResult {
   return {
     ok: true,
     report: {
+      kind: (BUG_REPORT_KINDS as readonly unknown[]).includes(r.kind) ? (r.kind as BugReportKind) : "bug",
       description,
       expected: cleanPlainText(r.expected, 1000),
       url,

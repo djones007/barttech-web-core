@@ -69,3 +69,14 @@ test("forwardBugReport never throws and refuses when unconfigured", async () => 
   const out = await forwardBugReport({ baseUrl: "", token: "t", report: r.report, meta: { repo: "demo-app", reporter: null } });
   assert.deepEqual(out, { ok: false, error: "not configured" });
 });
+
+test("cleanBugReport keeps a known kind and defaults anything else to bug", () => {
+  const k = (kind: unknown) => {
+    const r = cleanBugReport({ ...base, kind });
+    return r.ok ? r.report.kind : null;
+  };
+  assert.equal(k("security"), "security");
+  assert.equal(k("feature"), "feature");
+  assert.equal(k("whatever"), "bug");
+  assert.equal(k(undefined), "bug");
+});
