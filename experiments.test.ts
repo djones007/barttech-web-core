@@ -325,6 +325,17 @@ test("experimentEventTag: live assignment under the REQUESTED path; nothing when
   assert.deepEqual(experimentEventTag([list[0]]), {});
 });
 
+test("experimentEventTag: preferKey tags the experiment the page read, not the first live row (forced QA view)", () => {
+  const list: PageAssignment[] = [
+    { key: "still-room-home", variant: "b", forced: true, live: true, path: "/" },
+    { key: "still-room-sales-b", variant: "b", forced: true, live: true, path: "/" },
+  ];
+  assert.equal(experimentEventTag(list).experiment?.key, "still-room-home");
+  assert.equal(experimentEventTag(list, "still-room-sales-b").experiment?.key, "still-room-sales-b");
+  assert.equal(experimentEventTag(list, "not-live").experiment?.key, "still-room-home");
+  assert.equal(liveAssignment(list, null)?.key, "still-room-home");
+});
+
 // ---------------------------------------------------------------------------
 // Price tests: variant -> offer -> price, and the page price == checkout price rule
 // ---------------------------------------------------------------------------
