@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-13c] — Workflow jobs have timeout-minutes
+
+### Changed
+- `ci.yml` (30), `public-hygiene.yml` (10) and `security-review.yml` (20) each carry `timeout-minutes`, matching every other repo (Fix Engine a843e60c: a hung job otherwise runs to GitHub's 6-hour default). No code change.
+
 ## [2026-10-13b] — `sendClickEvent` no longer refuses every real browser's click beacon
 
 ### Fixed
