@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-13b] — `sendClickEvent` no longer refuses every real browser's click beacon
+
+### Fixed
+- **`sendClickEvent` (server twin of AddToCart / InitiateCheckout / Lead ...) refused every real visitor as "automated request", so it never sent a single event.** It ran `isAutomatedRequest(hdrs)` with no options, whose page-visit rule refuses any `sec-fetch-mode` other than `navigate` and any `sec-fetch-dest` other than `document`. The body arrives by `navigator.sendBeacon` / keepalive `fetch` (`trackMetaTwin`), which on every modern browser carries `sec-fetch-mode: cors` or `no-cors` and `sec-fetch-dest: empty`, so only clients with no Sec-Fetch headers at all (pre-16.4 Safari) could pass. Observed: a live pixel with ~45 browser AddToCart in 7 days and 0 server-side. Same failure shape as the 2026-09-25 `lead_submit` fix in `pageEvents`.
+
+### Added
+- **`clickEventGate(hdrs, raw, allowedHosts)`** in `metaClickEvent.ts`: the whole pre-network gate as one pure, tested function. Bot filter with `formSubmit: true` (the user-agent and prefetch checks still apply; only the navigate/document rule is lifted, since a beacon is never a navigation), then the unchanged fail-closed same-origin check, then the unchanged body/allowlist parser. `sendClickEvent` now calls it; its signature and return values are unchanged.
+- 6 tests in `metaClickEvent.test.ts`: realistic Chrome (cors and no-cors), Safari and Firefox beacon headers pass; the old rule refuses all of them (regression pin); crawlers, headless, curl/python/node-fetch, empty UA and prefetch/prerender are still refused; cross-site and headerless POSTs are still refused; ViewContent is still refused with real headers.
+
+### Notes
+- Consumers pick it up with a submodule bump; no call-site change.
+
 ## [2026-10-13] — `experimentEventTag` can prefer the experiment the page read
 
 ### Added
