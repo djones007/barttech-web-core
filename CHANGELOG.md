@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-13f] — `scripts/lighthouse-gate.mjs`: the page-speed gate for weekly smoke jobs (CC task 00f3e85b)
+
+### Added
+- `scripts/lighthouse-gate.mjs`, plain Node, fetched by consumers from raw.githubusercontent like the other `scripts/check-*`. Runs Lighthouse (mobile, pinned version) N times per route against the live URL and asserts budgets on the MEDIAN of LCP, CLS and TBT, never the 0-100 score. Zero routes, no budget, or too few completed runs fails loudly. `LH_ENFORCE=false` makes it report-only. Writes a GitHub step summary table.
+
 ## [2026-10-13e] — `EmailitSendResult.messageId` (the RFC Message-ID) (Fix Engine 4ed0e6af)
 
 ### Added

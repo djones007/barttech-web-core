@@ -25,6 +25,15 @@ a CI step that fetches the raw file.
   (see `tools/lead-store-gate-rollout.py` in the workspace root) rather than
   embedding a copy, so tuning the rules fixes every repo at once.
 
+- `lighthouse-gate.mjs` — the **page-speed gate** for a repo's weekly `smoke.yml`, against the LIVE
+  production URL. Budgets (`LH_LCP_MS`, `LH_CLS`, `LH_TBT_MS`) are asserted on the **median of 3** runs of
+  each metric, never on the 0-100 score (a weighted composite that swings run to run on identical code; a
+  flaky gate gets disabled, and a disabled gate catches nothing). Fails loudly on zero routes, no budget set,
+  or fewer than half the runs completing. `LH_ENFORCE=false` = report only. Budgets are mirrored by hand
+  from Command Centre `/page-speed` (CI has no service key to read the table). Plain Node, no dependencies
+  (it shells out to `npx lighthouse@<pinned>`); consumers fetch it from raw.githubusercontent, pinned to a
+  web-core sha.
+
 - `check-id-list-filters.mjs` — flags an **unbounded id array being used as a
   PostgREST query filter**, i.e. the interpolated `.not('id', 'in', \`(${…})\`)`
   form. PostgREST has two caps and fixing one leads into the other: paginating a
