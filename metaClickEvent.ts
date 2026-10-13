@@ -21,6 +21,8 @@
  * pixel with it if consented, and ALWAYS beacons this body to the site's route).
  */
 
+import { isAutomatedRequest } from "./requestSignals";
+
 /** Events a visitor causes by clicking. Never ViewContent / PageView / anything fired on load. */
 export const CLICK_EVENTS = ["AddToCart", "InitiateCheckout", "Lead", "Contact", "Schedule"] as const;
 export type ClickEventName = (typeof CLICK_EVENTS)[number];
@@ -85,4 +87,26 @@ export function fbclidFromUrl(url: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Every refusal `sendClickEvent` makes BEFORE it touches the network, in order, as one pure
+ * function so the whole gate is unit-tested (metaCapi.ts cannot be: consumers add `server-only`).
+ *
+ * The bot filter runs with `formSubmit: true`, and that is the point of this function. The body
+ * arrives by `navigator.sendBeacon` (or a keepalive `fetch`), so a REAL browser always sends
+ * `sec-fetch-mode: no-cors` / `cors` and `sec-fetch-dest: empty`. The page-visit rule in
+ * `isAutomatedRequest` reads those as "not a page view" and refused every real click: the server
+ * twin sent nothing at all while the browser pixel kept counting (2026-10-13). A click beacon is
+ * never a navigation, so that rule cannot apply here; the user-agent and prefetch checks still do,
+ * and the same-origin check below still refuses anything not sent from the site's own pages.
+ */
+export function clickEventGate(
+  hdrs: { get(name: string): string | null },
+  raw: unknown,
+  allowedHosts: readonly string[],
+): ClickEventParse {
+  if (isAutomatedRequest(hdrs, { formSubmit: true })) return { ok: false, reason: "automated request" };
+  if (!isFromAllowedHost(hdrs, allowedHosts)) return { ok: false, reason: "origin not allowed" };
+  return parseClickEventBody(raw);
 }
