@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-13] — `experimentEventTag` can prefer the experiment the page read
+
+### Added
+- `liveAssignment(list, preferKey?)` and `experimentEventTag(list, preferKey?)`: when several tests are live on one path (a QA `?v=` view forces every test with that variant while none is running), the event is tagged with the experiment the page actually read instead of the first live row. Falls back to the first live assignment when `preferKey` is absent or not live, so existing callers are unchanged. Consumers must pass the key to get the fix. Estate issue 4925814c.
 ## [2026-10-12] — `bugReport.ts`: reporter picks a kind (urgent / security / bug / layout / feature)
 
 ### Added

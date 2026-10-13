@@ -439,9 +439,15 @@ export function decodeAssignments(raw: string | null | undefined): PageAssignmen
     .filter((a): a is PageAssignment => a !== null);
 }
 
-/** The LIVE assignment (the one running test on the page), if any: what events are tagged with. */
-export function liveAssignment(list: PageAssignment[]): PageAssignment | null {
-  return list.find((a) => a.live) ?? null;
+/**
+ * The LIVE assignment (the one running test on the page), if any: what events are tagged with.
+ *
+ * `preferKey` is the experiment the page actually read its variant from. A QA `?v=` view forces EVERY test on the path that has that
+ * variant when none is running, so without it the event is logged under whichever live row comes first, not the test being QA'd.
+ * Falls back to the first live assignment when `preferKey` is absent or not live.
+ */
+export function liveAssignment(list: PageAssignment[], preferKey?: string | null): PageAssignment | null {
+  return (preferKey ? list.find((a) => a.live && a.key === preferKey) : undefined) ?? list.find((a) => a.live) ?? null;
 }
 
 /**
@@ -451,8 +457,8 @@ export function liveAssignment(list: PageAssignment[]): PageAssignment | null {
  * `/v2` page) must count as a landing on `/`, or the report compares a variant
  * against nothing. Empty when nothing is live, so the event is untouched.
  */
-export function experimentEventTag(list: PageAssignment[]): { path?: string; experiment?: ParsedExperiment } {
-  const a = liveAssignment(list);
+export function experimentEventTag(list: PageAssignment[], preferKey?: string | null): { path?: string; experiment?: ParsedExperiment } {
+  const a = liveAssignment(list, preferKey);
   return a ? { path: a.path, experiment: { key: a.key, variant: a.variant, forced: a.forced } } : {};
 }
 
