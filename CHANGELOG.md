@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-10-13e] — `EmailitSendResult.messageId` (the RFC Message-ID) (Fix Engine 4ed0e6af)
+
+### Added
+- `sendEmailitEmail` now returns `messageId` (Emailit's `message_id`, angle brackets stripped) beside `id`. A reply's In-Reply-To carries this header value, never the `em_` API id, and Emailit ignores a caller-supplied Message-ID, so a thread-by-header matcher has to store this. Additive; `id` unchanged.
+
+## [2026-10-13d] — Dead-space empty-box scan ignores the Cloudflare Turnstile host (Fix Engine 42a9ee69)
+
+### Fixed
+- `deadSpace.ts` `scanDeadSpace`: the Turnstile widget's iframe lives in a closed shadow root, so its host `<div>` (a sibling of the hidden `cf-turnstile-response` input) read as an empty 73px box and failed any page carrying a Turnstile form (a private site `/contact`, phone and desktop). The scan now skips an element whose parent holds that input. Mirrored into the canonical `tools/playwright/scripts/readability-capture.js` in the root repo.
+
 ## [2026-10-13c] — Workflow jobs have timeout-minutes
 
 ### Changed

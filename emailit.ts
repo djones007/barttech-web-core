@@ -113,6 +113,16 @@ export interface EmailitSendResult {
    * failure, so a parse error here is swallowed and `id` is simply absent.
    */
   id?: string;
+  /**
+   * The RFC 5322 Message-ID Emailit put on the message, WITHOUT the angle
+   * brackets (`<token@domain>` -> `token@domain`). This — not `id` — is what a
+   * customer's mail client puts in In-Reply-To/References of a reply, so a
+   * thread-by-header matcher must store THIS. Emailit generates it itself and
+   * ignores a caller-supplied Message-ID header ("Emailit sets Message-ID
+   * itself"; confirmed against a live send 2026-10-13). Parsed best-effort,
+   * absent when the success body lacks it.
+   */
+  messageId?: string;
 }
 
 function backoffMs(attempt: number, retryAfterSec: number | undefined): number {
@@ -256,15 +266,22 @@ export async function sendEmailitEmail(
 
     if (res.ok) {
       let id: string | undefined;
+      let messageId: string | undefined;
       try {
-        const parsed = (await res.clone().json()) as { id?: string; data?: { id?: string } };
+        const parsed = (await res.clone().json()) as {
+          id?: string;
+          message_id?: string;
+          data?: { id?: string; message_id?: string };
+        };
         id = parsed?.id ?? parsed?.data?.id;
+        const rawMid = parsed?.message_id ?? parsed?.data?.message_id;
+        if (typeof rawMid === "string" && rawMid.trim()) messageId = rawMid.trim().replace(/^<|>$/g, "");
       } catch {
         // Non-JSON or unexpected success body — the send still happened; id
         // just stays absent rather than turning a delivered send into a
         // reported failure.
       }
-      return { ok: true, attempts: attempt, status: res.status, id };
+      return { ok: true, attempts: attempt, status: res.status, id, messageId };
     }
 
     const body = (await res.text().catch(() => "")).slice(0, 300);

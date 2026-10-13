@@ -249,6 +249,9 @@ export async function scanDeadSpace(page: DeadSpacePage, emptyBoxMaxPx: number):
       const r = el.getBoundingClientRect();
       if (r.height <= emptyMax || r.width < 8) return;
       if ((el.textContent || "").trim().length || el.querySelector(MEDIA)) return;
+      // Cloudflare Turnstile: the widget iframe sits in a CLOSED shadow root, so the host div is
+      // invisible to querySelector yet is real, painted content. Its sibling is the hidden response input.
+      if (el.parentElement && el.parentElement.querySelector('input[name="cf-turnstile-response"]')) return;
       if (paints(el) || Array.from(el.querySelectorAll("*")).some(paints)) return;
       const p = el.parentElement;
       if (p && p !== document.body && !(p.textContent || "").trim().length && !p.querySelector(MEDIA)) {
