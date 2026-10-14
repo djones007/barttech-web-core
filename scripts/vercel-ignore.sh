@@ -38,6 +38,7 @@ verdict() {
   case "${VERCEL_GIT_COMMIT_REF:-}" in dependabot/*) return 0 ;; esac
 
   head=$(git rev-parse -q --verify HEAD 2>/dev/null) || return 1
+  echo "vercel-ignore: head=$head prev=${VERCEL_GIT_PREVIOUS_SHA:-unset} ref=${VERCEL_GIT_COMMIT_REF:-unset} shallow=$(git rev-parse --is-shallow-repository 2>/dev/null)"
 
   base=""
   p="${VERCEL_GIT_PREVIOUS_SHA:-}"
@@ -62,6 +63,7 @@ verdict() {
     fi
   fi
 
+  echo "vercel-ignore: base=$base"
   git diff --quiet "$base" "$head" -- \
     ':(exclude,glob)*.md' ':(exclude,glob)**/CLAUDE.md' \
     ':!.github' ':!docs' ':!tests' ':!.env.example' ':!.gitignore' \
