@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-10-14c] — vercel-ignore: new branch builds, SHAs in the log, `.git`/`.env*` forbidden in `.vercelignore` (Fix Engine 39be6bdb)
+
+### Fixed
+- `scripts/vercel-ignore.sh`: no previous deployment on the branch (a new branch or the first deploy) now BUILDS. Falling back to `HEAD^` skipped a feature plus a markdown tip on a fresh branch, found on a real Vercel preview.
+- It prints head, previous and base SHAs to the build log so a skip is explainable.
+- `scripts/check-vercel-ignore.mjs` now FORBIDS `.git` and `.env*` in a `.vercelignore` (it used to require them). Vercel applies that file to the git clone it builds from, so listing them deleted `.git` (the scaffold gate's `git ls-files`) and `.env.example` and errored a consumer's production builds.
+- `vercelIgnore.test.ts` covers the new-branch and forbidden-line cases (20 pass).
+
 ## [2026-10-14b] — `scripts/vercel-ignore.sh`: the one Vercel ignoreCommand (Fix Engine 39be6bdb)
 
 ### Added
