@@ -25,6 +25,8 @@ a CI step that fetches the raw file.
   (see `tools/lead-store-gate-rollout.py` in the workspace root) rather than
   embedding a copy, so tuning the rules fixes every repo at once.
 
+- `vercel-ignore.sh` — the Vercel Ignored Build Step, called from every `vercel.json` as a fixed wrapper. Exit 0 = skip, 1 = build, never anything else (any other code is a Vercel build ERROR). Diffs vs `VERCEL_GIT_PREVIOUS_SHA` when that commit is present, else `HEAD^`. `check-vercel-ignore.mjs` enforces the canonical `ignoreCommand` and `.vercelignore` rules; `vercelIgnore.test.ts` is the scenario matrix. Rollout: `tools/vercel-ignore-propagate.sh` in the private root repo.
+
 - `lighthouse-gate.mjs` — the **page-speed gate** for a repo's weekly `smoke.yml`, against the LIVE
   production URL. Budgets (`LH_LCP_MS`, `LH_CLS`, `LH_TBT_MS`) are asserted on the **median of 3** runs of
   each metric, never on the 0-100 score (a weighted composite that swings run to run on identical code; a

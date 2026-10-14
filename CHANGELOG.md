@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-10-14b] — `scripts/vercel-ignore.sh`: the one Vercel ignoreCommand (Fix Engine 39be6bdb)
+
+### Added
+- `scripts/vercel-ignore.sh`: the Vercel "Ignored Build Step" logic, once, instead of an inline string copied into ~40 `vercel.json` files. Diffs against the last deployed commit (`VERCEL_GIT_PREVIOUS_SHA`) so a feature merge followed by a CHANGELOG-only commit builds. The SHA is used only if `git cat-file` proves it exists (one bounded shallow fetch of that single commit is tried first), else `HEAD^` with a merge-aware step; a redeploy (previous SHA equals HEAD) falls back too. Every failure path exits 1 (build), never an error code: the earlier unguarded `VERCEL_GIT_PREVIOUS_SHA` attempt passed git's exit 128 straight through and errored the build. Markdown-only pushes are still skipped. Exit-code convention documented in the header.
+- `scripts/check-vercel-ignore.mjs`: gate that every repo's `ignoreCommand` is the canonical wrapper (or the inline form for a repo with no web-core), within Vercel's 256-char cap, and that a repo with a huge working folder, or nested `node_modules` inside its submodules, carries a `.vercelignore` that excludes `**/node_modules` and not anything the build reads.
+- `vercelIgnore.test.ts`: scenario matrix run under `sh` against real git repos (source and markdown commits, merge plus CHANGELOG, missing / garbage / unreachable previous SHA, shallow clones with and without a reachable origin, root commit, no repo, rebased branch, wrapper with the script missing or crashing).
+
+### Notes
+- Consumers pick it up with a submodule bump AND the `vercel.json` wrapper change (`tools/vercel-ignore-propagate.sh`). Until a consumer's pointer includes this file the wrapper builds every push (fails toward building).
+
 ## [2026-10-14] — `zightLinks.ts`: Zight share links in a report become pictures
 
 ### Added
