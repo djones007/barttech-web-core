@@ -405,6 +405,16 @@
       ],
       "why": "the server half of the staff 'Report a bug' button: cleans what the browser sent, maps it to issue-tracker fields (numbered steps to reproduce from the click/navigation trail, a context block) and forwards it with its pictures to the tracker's token-gated ingest. The React button lives in the shared app-shell UI repo (no React here)."
     },
+    "zightLinks": {
+      "owner": "@/web-core/zightLinks",
+      "resources": [
+        {
+          "match": "share\\.zight\\.com",
+          "reason": "fetching a Zight share page. A hand-rolled fetch of a user-typed URL skips the zight.com-only host allow-list, the per-hop redirect re-check, the size cap and the timeout, and is a server-side request forgery hole."
+        }
+      ],
+      "why": "turns Zight share links typed into a bug report into pictures the consumer can attach. Pure functions plus one injectable fetch, no imports: zight.com-only SSRF allow-list, manual redirects re-checked at every hop, size capped while reading, per-request timeout, fails soft. The consumer owns validating, re-encoding and storing the returned files. Moved here 2026-10-14 from two byte-identical local copies. Enforced by its committed tests (zightLinks.test.ts)."
+    },
     "cronPause": {
       "owner": "@/web-core/cronPause",
       "resources": [],

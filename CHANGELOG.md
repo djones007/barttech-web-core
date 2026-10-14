@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+
+## [2026-10-14] — `zightLinks.ts`: Zight share links in a report become pictures
+
+### Added
+- `zightLinks.ts` (+ `zightLinks.test.ts`): `extractZightLinks`, `imageUrlsFromHtml`, `isAllowedZightUrl`, `resolveZightPictures`. Fetches the picture behind a Zight share link typed into a report so the consumer can attach it. zight.com-only SSRF allow-list, redirects followed by hand and re-checked at every hop, size capped while reading, per-request timeout, fails soft. Moved here from two identical local copies; consumers keep a one-line shim. No new external imports.
+- `shared-modules.json` entry `zightLinks`, so a hand-rolled fetch of a Zight share page in a consumer is flagged.
+
 ## [2026-10-13f] — `scripts/lighthouse-gate.mjs`: the page-speed gate for weekly smoke jobs (CC task 00f3e85b)
 
 ### Added
