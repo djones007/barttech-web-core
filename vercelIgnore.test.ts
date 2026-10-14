@@ -269,12 +269,17 @@ test("gate: a repo without web-core must keep the inline command", () => {
 
 test("gate: .vercelignore must exclude nested node_modules and must not exclude src", () => {
   const base = { "vercel.json": JSON.stringify({ ignoreCommand: WRAPPER }), "src/web-core/scripts/vercel-ignore.sh": "" };
-  const good = gate({ ...base, ".vercelignore": "**/node_modules\n.next\n.env*\n.git\nscene/out\n" });
+  const good = gate({ ...base, ".vercelignore": "**/node_modules\n.next\n.env\n.env.local\nscene/out\n" });
   assert.equal(good.status, 0, good.out);
-  const noNested = gate({ ...base, ".vercelignore": "node_modules\n.next\n.env*\n.git\n" });
+  const noNested = gate({ ...base, ".vercelignore": "node_modules\n.next\n.env\n" });
   assert.match(noNested.out, /\*\*\/node_modules/);
-  const bad = gate({ ...base, ".vercelignore": "**/node_modules\n.next\n.env*\n.git\nsrc\n" });
+  const bad = gate({ ...base, ".vercelignore": "**/node_modules\n.next\n.env\nsrc\n" });
   assert.match(bad.out, /excludes src/);
+  for (const forbidden of [".git", ".env*"]) {
+    const g = gate({ ...base, ".vercelignore": `**/node_modules\n.next\n${forbidden}\n` });
+    assert.notEqual(g.status, 0, forbidden);
+    assert.match(g.out, /must not list/, forbidden);
+  }
 });
 
 test("gate: nested node_modules inside a submodule (file-count) demands a .vercelignore", () => {

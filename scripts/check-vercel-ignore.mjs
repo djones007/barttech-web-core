@@ -38,7 +38,10 @@ export const INLINE =
 export const HUGE_FILES = 5000;
 export const HUGE_BYTES = 1024 * 1024 * 1024; // 1 GiB
 const SKIP = new Set(["node_modules", ".git", ".next", ".vercel"]);
-const MUST_EXCLUDE = ["**/node_modules", ".next", ".env*", ".git"];
+const MUST_EXCLUDE = ["**/node_modules", ".next"];
+// Vercel applies .vercelignore to the git clone it BUILDS from, not just to CLI uploads. Listing these deleted .git (the scaffold
+// gate runs `git ls-files`) and .env.example, and errored every production build of one consumer site.
+const FORBIDDEN = [".git", ".env*", ".env.example", ".env.*"];
 const MUST_NOT_EXCLUDE = ["src", "public", "package.json", "package-lock.json", "next.config.ts", "tsconfig.json", "scripts", "supabase", "tests"];
 
 export function check(root) {
@@ -100,6 +103,7 @@ export function check(root) {
     const norm = (l) => l.replace(/^\//, "").replace(/\/$/, "");
     const set = new Set(lines.map(norm));
     for (const m of MUST_EXCLUDE) if (!set.has(m)) errs.push(`.vercelignore does not exclude ${m}`);
+    for (const m of FORBIDDEN) if (set.has(m)) errs.push(`.vercelignore must not list ${m}: Vercel applies it to its git clone and the build gates need it`);
     for (const m of MUST_NOT_EXCLUDE) if (set.has(m)) errs.push(`.vercelignore excludes ${m}, which the build reads`);
   }
   return errs;
