@@ -28,6 +28,8 @@
 # fetch of that single commit), else we fall back to HEAD^ (the old behaviour),
 # and any non-0 result of the final diff is a BUILD.
 #
+# No previous SHA at all (new branch, first deploy): BUILD, there is nothing deployed to compare with.
+#
 # Redeploys: if the previous SHA equals HEAD (a redeploy of the deployed commit)
 # it is ignored, otherwise the diff would be empty and a redeploy would skip.
 #
@@ -42,6 +44,10 @@ verdict() {
 
   base=""
   p="${VERCEL_GIT_PREVIOUS_SHA:-}"
+  # No previous deployment on this branch (a new branch, or the first deploy): nothing has
+  # shipped yet, so there is nothing to compare against. BUILD. Falling back to HEAD^ here
+  # skipped a feature + markdown-tip push on a fresh branch (proved on a Vercel preview).
+  if [ -z "$p" ]; then return 1; fi
   if [ -n "$p" ] && [ "$p" != "$head" ]; then
     if ! git cat-file -e "$p^{commit}" 2>/dev/null; then
       # Not in the shallow clone: try to fetch just that commit. Bounded, and

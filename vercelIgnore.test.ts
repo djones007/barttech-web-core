@@ -70,7 +70,7 @@ test("markdown-only commit after a deployed source commit skips", () =>
     const deployed = commit(d, "src/x.ts");
     commit(d, "CHANGELOG.md");
     assert.equal(verdict(d, { VERCEL_GIT_PREVIOUS_SHA: deployed }), 0);
-    assert.equal(verdict(d), 0, "also skips with no previous SHA (HEAD^ fallback)");
+    assert.equal(verdict(d), 1, "no previous SHA = nothing deployed on this branch yet: build");
   }));
 
 test("markdown-only after markdown-only after deployed source still skips", () =>
@@ -214,10 +214,11 @@ function wrapped(layout: "src/web-core" | "web-core" | "none", fn: (d: string) =
 test("wrapper: runs the script from either mount path (md-only skips, source builds)", () => {
   for (const layout of ["src/web-core", "web-core"] as const) {
     wrapped(layout, (d) => {
+      const PREV = "export VERCEL_GIT_PREVIOUS_SHA=$(git rev-parse HEAD^); ";
       commit(d, "CHANGELOG.md");
-      assert.equal(sh(d, WRAPPER).status, 0, layout);
+      assert.equal(sh(d, PREV + WRAPPER).status, 0, layout);
       commit(d, "src/x.ts");
-      assert.equal(sh(d, WRAPPER).status, 1, layout);
+      assert.equal(sh(d, PREV + WRAPPER).status, 1, layout);
     });
   }
 });
