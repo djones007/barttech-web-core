@@ -235,6 +235,10 @@ export async function trackServerEvent({
         utm_source: first(searchParams.utm_source),
         utm_medium: first(searchParams.utm_medium),
         utm_campaign: first(searchParams.utm_campaign),
+        // Which ad/creative and keyword sent the visitor (2026-10-19): per-ad landings and buy clicks
+        // server-side, not only on orders. A receiver that predates them ignores the extra keys (its insert is allowlisted).
+        utm_content: first(searchParams.utm_content),
+        utm_term: first(searchParams.utm_term),
         referrer_host: referrerHost(headers, site),
         device: device(headers),
         country: headers.get("x-vercel-ip-country"),

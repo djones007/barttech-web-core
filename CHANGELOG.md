@@ -3,6 +3,11 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-10-19] — pageEvents: send utm_content and utm_term
+
+### Added
+- `trackServerEvent` now sends `utm_content` and `utm_term` with every server-side page event, so landings and buy clicks can be counted per ad and keyword, not only on orders. A receiver that does not know the fields ignores them; add them to its allowlist and table before relying on them. Test in `pageEvents.test.ts`.
+
 ## [2026-10-14c] — vercel-ignore: new branch builds, SHAs in the log, `.git`/`.env*` forbidden in `.vercelignore` (Fix Engine 39be6bdb)
 
 ### Fixed

@@ -66,3 +66,19 @@ test("a safe https URL is still fetched with the bearer token", async () => {
   assert.equal(calls[0].url, "https://ops.example.com/api/page-events");
   assert.equal((calls[0].init.headers as Record<string, string>).Authorization, `Bearer ${TOKEN}`);
 });
+
+test("utm_content and utm_term ride on every event (which ad sent the visitor)", async () => {
+  process.env.PAGE_EVENTS_URL = "https://ops.example.com/api/page-events";
+  await trackServerEvent({
+    site: "example.com",
+    event: "landing",
+    path: "/",
+    headers: browserHeaders,
+    searchParams: { utm_source: "facebook", utm_medium: "paid-social", utm_campaign: "c1", utm_content: "ad-7-cold", utm_term: "ghost game" },
+  });
+  assert.equal(calls.length, 1);
+  const body = JSON.parse(String(calls[0].init.body));
+  assert.equal(body.utm_content, "ad-7-cold");
+  assert.equal(body.utm_term, "ghost game");
+  assert.equal(body.utm_campaign, "c1");
+});
