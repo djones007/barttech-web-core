@@ -3,6 +3,11 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-10-20b] — icon gate: refuse the default Vercel favicon
+
+### Added
+- `scripts/check-icon-rgba.mjs` now also fails on the create-next-app default `favicon.ico` (md5 `c30c7d42707a47a3f4591831641e50dc`, 25931 bytes). Consumers pick it up on their next web-core bump. Test added in `check-icon-rgba.test.ts`.
+
 ## [2026-10-20] — bartmail: brand lookup errors no longer reported as "brand not found"
 
 ### Fixed

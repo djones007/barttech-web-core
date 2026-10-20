@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 // scripts/check-icon-rgba.mjs is a standalone CLI run as a consumer's prebuild step, so it is
@@ -49,7 +50,7 @@ function bmp(bpp: number): Buffer {
   return b;
 }
 
-function runAgainst(files: Record<string, Buffer>): { status: number | null; out: string } {
+function runAgainst(files: Record<string, Buffer>, env: Record<string, string> = {}): { status: number | null; out: string } {
   const dir = mkdtempSync(join(tmpdir(), "icon-rgba-"));
   try {
     for (const [rel, contents] of Object.entries(files)) {
@@ -57,7 +58,7 @@ function runAgainst(files: Record<string, Buffer>): { status: number | null; out
       mkdirSync(join(full, ".."), { recursive: true });
       writeFileSync(full, contents);
     }
-    const r = spawnSync(process.execPath, [SCRIPT, dir], { encoding: "utf8" });
+    const r = spawnSync(process.execPath, [SCRIPT, dir], { encoding: "utf8", env: { ...process.env, ...env } });
     return { status: r.status, out: r.stdout + r.stderr };
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -90,4 +91,19 @@ test("an ICO with RGBA PNG and 32bpp BMP entries passes; a 24bpp entry fails", (
 
 test("files under public/ are not Next icon-pipeline files and are ignored", () => {
   assert.equal(runAgainst({ "public/icon.png": png(2) }).status, 0);
+});
+
+test("the default Vercel favicon (by md5 + size) is refused; a brand favicon is not", () => {
+  const fake = ico([png(6)]);
+  const md5 = createHash("md5").update(fake).digest("hex");
+  const env = { ICON_GATE_DEFAULT_MD5: md5, ICON_GATE_DEFAULT_BYTES: String(fake.length) };
+  const bad = runAgainst({ "src/app/favicon.ico": fake }, env);
+  assert.equal(bad.status, 1);
+  assert.match(bad.out, /default favicon/);
+  const other = ico([png(6), png(6)]);
+  assert.equal(runAgainst({ "src/app/favicon.ico": other }, env).status, 0);
+});
+
+test("the real default md5/size constants are wired (a different file with no override passes)", () => {
+  assert.equal(runAgainst({ "src/app/favicon.ico": ico([png(6)]) }).status, 0);
 });

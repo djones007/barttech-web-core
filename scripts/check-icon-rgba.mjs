@@ -14,6 +14,10 @@
  *   - PNG: IHDR colour type must be 6 (truecolour + alpha).
  *   - ICO: every embedded image must be RGBA — a PNG entry with colour type 6, or a BMP entry at
  *     32 bits per pixel.
+ *
+ * It also refuses the Vercel/create-next-app DEFAULT favicon (md5 c30c7d42707a47a3f4591831641e50dc,
+ * 25931 bytes): 13 repos shipped that triangle to production because nothing flagged it.
+ * Replace it with the brand's own mark (icon.svg + favicon.ico + apple-icon.png).
  * Files under `public/` are not processed by Next's icon pipeline and are not checked.
  *
  * Fix: re-save as RGBA (Pillow: `.convert("RGBA")` before `.save`; the scaffold ships
@@ -22,12 +26,16 @@
  * Usage: node check-icon-rgba.mjs [repoDir]. No git needed (runs where `vercel --prod` uploads
  * without .git).
  */
+import { createHash } from "node:crypto";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve, relative } from "node:path";
 
 const ROOT = resolve(process.argv.slice(2).find((a) => !a.startsWith("--")) ?? process.cwd());
 const ICON_NAME = /^(favicon\d*\.ico|icon\d*\.png|apple-icon\d*\.png)$/i;
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+// The env overrides exist only so the unit test can use a small fixture; nothing sets them in CI.
+const DEFAULT_FAVICON_MD5 = process.env.ICON_GATE_DEFAULT_MD5 ?? "c30c7d42707a47a3f4591831641e50dc";
+const DEFAULT_FAVICON_BYTES = Number(process.env.ICON_GATE_DEFAULT_BYTES ?? 25931);
 const COLOUR = { 0: "greyscale", 2: "RGB", 3: "palette", 4: "greyscale+alpha", 6: "RGBA" };
 
 function findIcons(dir, out = []) {
@@ -92,14 +100,20 @@ const icons = [...findIcons(join(ROOT, "src", "app")), ...findIcons(join(ROOT, "
 const findings = [];
 for (const file of icons) {
   const buf = readFileSync(file);
+  if (/^favicon\d*\.ico$/i.test(file.split(/[\\/]/).pop())) {
+    const md5 = createHash("md5").update(buf).digest("hex");
+    if (md5 === DEFAULT_FAVICON_MD5 && buf.length === DEFAULT_FAVICON_BYTES) {
+      findings.push(`${relative(ROOT, file)}: is the Vercel/create-next-app default favicon (md5 ${md5}). Replace it with a brand icon.`);
+    }
+  }
   const problems = /\.ico$/i.test(file) ? icoProblems(buf) : [pngProblem(buf)].filter(Boolean);
   for (const p of problems) findings.push(`${relative(ROOT, file)}: ${p}`);
 }
 
 if (findings.length) {
-  console.log(`::error::Icon gate FAILED — Next.js rejects non-RGBA app icons and the build fails (production silently stays on the old deploy).`);
+  console.log(`::error::Icon gate FAILED — an app icon is non-RGBA (Next rejects it; production silently stays on the old deploy) or is the default Vercel favicon.`);
   for (const f of findings) console.log(`  ${f}`);
-  console.log('Re-save as RGBA, e.g. Pillow `.convert("RGBA")`, or run the scaffold\'s scripts/make-favicon.py.');
+  console.log('Non-RGBA: re-save as RGBA, e.g. Pillow `.convert("RGBA")`, or run the scaffold\'s scripts/make-favicon.py. Default favicon: replace with a brand icon.svg + favicon.ico + apple-icon.png.');
   process.exit(1);
 }
-console.log(`Icon gate: OK (${icons.length} app icon file(s), all RGBA).`);
+console.log(`Icon gate: OK (${icons.length} app icon file(s), all RGBA, none the default favicon).`);
