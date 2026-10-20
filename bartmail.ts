@@ -408,7 +408,15 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     .eq("slug", brand)
     .single();
 
-  if (brandError || !brandRecord) {
+  // A query FAILURE (timeout, PostgREST, network) must not be reported as a
+  // missing brand - that hid the real cause of an optin 500. PGRST116 is
+  // .single() finding zero rows, which genuinely is "not found".
+  if (brandError && brandError.code !== "PGRST116") {
+    throw new Error(
+      `BartMail brand lookup failed for ${brand}: ${brandError.code ?? "no-code"} ${brandError.message ?? "unknown error"}`,
+    );
+  }
+  if (!brandRecord) {
     throw new Error(`BartMail brand not found: ${brand}`);
   }
 

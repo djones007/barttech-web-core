@@ -3,6 +3,11 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-10-20] — bartmail: brand lookup errors no longer reported as "brand not found"
+
+### Fixed
+- `bartmail.ts`: a failed brand lookup (timeout, PostgREST or network error) now throws `BartMail brand lookup failed for <slug>: <code> <message>` instead of `brand not found`, which hid the real cause of an intermittent optin 500. Zero rows (PGRST116) still reports `brand not found`. Needs propagating to consumers.
+
 ## [2026-10-19] — pageEvents: send utm_content and utm_term
 
 ### Added
