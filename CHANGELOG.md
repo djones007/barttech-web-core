@@ -3,6 +3,12 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-10-21] — migration grants gate: new public tables must GRANT to service_role
+
+### Added
+- `scripts/check-migration-grants.mjs`: fails when a migration creates a table in `public` with no `GRANT ... TO service_role` in the same or a later migration (`ON ALL TABLES IN SCHEMA public` and `ALTER DEFAULT PRIVILEGES ... ON TABLES` also count). From 2026-10-30 Supabase gives new public tables no automatic Data API grants, so supabase-js gets `permission denied`. Only migrations dated on or after `ENFORCE_FROM_DATE` (`20261021`) are checked; sequentially numbered repos opt in with `enforceFromSequence` in `.migration-grants-gate.json`. Waiver `-- grants-ok: <reason>`. `--all` audits the full history.
+- `check-migration-grants.test.ts` (22 cases), wired into `npm test`. Documented in `scripts/CLAUDE.md`. Not yet fetched by any consumer's CI.
+
 ## [2026-10-20b] — icon gate: refuse the default Vercel favicon
 
 ### Added

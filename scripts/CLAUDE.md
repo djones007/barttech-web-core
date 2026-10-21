@@ -366,6 +366,27 @@ a CI step that fetches the raw file.
   `.migration-prefix-baseline` (one prefix per line, `# reason` required — a
   bare entry does not suppress). Plain Node, no dependencies.
 
+- `check-migration-grants.mjs` — every `CREATE TABLE` landing in `public` in
+  `supabase/migrations` must have a `GRANT ... ON [TABLE] public.<name> ... TO
+  service_role` in the same or a later file (`ON ALL TABLES IN SCHEMA public`
+  after the CREATE, or `ALTER DEFAULT PRIVILEGES ... ON TABLES TO service_role`,
+  also count). From 2026-10-30 Supabase gives new public tables no automatic
+  Data API grants, so a table with none returns `permission denied` to
+  supabase-js even with the service_role key — nothing fails at migrate time.
+  **Grandfathering:** only files on or after `ENFORCE_FROM_DATE` (`20261021`,
+  the day the gate shipped) are checked, read from the filename prefix
+  (8-digit date, lettered date, or 14-digit timestamp). Sequential prefixes
+  (`0546_x.sql`) carry no date and CI checks out shallow, so they are enforced
+  only from `enforceFromSequence` in `.migration-grants-gate.json` — set it to
+  (highest existing prefix + 1); until then the gate says on every run that
+  they are unchecked. Never move the cutoff later to clear a failure. Skips
+  other schemas, TEMP tables, `PARTITION OF` children and tables dropped later;
+  follows `RENAME TO`. `--all` audits the whole history. Waiver:
+  `-- grants-ok: <reason>` on or up to 3 lines above the CREATE; a bare
+  annotation fails. Cannot see dynamic grants in `DO` blocks or grants applied
+  outside migrations. Tested in `check-migration-grants.test.ts`. Plain Node,
+  no dependencies.
+
 - `check-legal-placeholders.mjs` — **a production build must not ship placeholder
   legal pages.** Scans the `/privacy`, `/terms` and `/disclaimer` page files (any
   route group, `app/` or `src/app/`) and a `lib/seller.ts` seller-identity module
