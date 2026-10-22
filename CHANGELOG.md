@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-10-22] — palette contrast gate, metaCapi drops server-only and gains tests
+
+### Added
+- `scripts/check-palette-contrast.mjs` (CC 7e8f23d2): static WCAG 2.1 AA gate for hardcoded colour pairs in CSS rule blocks, JSX style objects, Tailwind arbitrary classes and an explicit `.contrast-pairs.json`. Control borders need 3:1 (the 1.13:1 form border), text 4.5:1. Waiver `contrast-ok: <reason>`. Tested in `check-palette-contrast.test.ts` (9 cases). Not yet fetched by any consumer's CI; its first run on a consumer site flagged `app/page.tsx:351` (#888 on #2a2a2a, 4.05:1).
+- `metaCapi.test.ts` (CC 30336d7f): payload, `eventTime` (6401fde), credentials, error-logging-without-message, network failure, request parsing, landing/click refusals. Wired into `npm test` with `metaCapi.ts` itself.
+
+### Changed
+- `metaCapi.ts`: removed `import "server-only"` (golden rule 5); it could not resolve under node --test. **Cross-repo: every consumer shim and direct importer must carry the guard before it bumps past this commit.** Guard commits are prepared on a branch in each of the seven consumer repos that import it. Other repos that mount web-core and import it directly need checking at propagation time. `pageEvents.ts` still carries `import "server-only"` (same rule, not done here).
+- `sendClickEvent`: `parsed.ok === false` instead of `!parsed.ok` so the union narrows under the non-strict test build. No behaviour change.
+
 ## [2026-10-21] — migration grants gate: new public tables must GRANT to service_role
 
 ### Added
