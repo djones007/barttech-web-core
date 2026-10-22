@@ -491,3 +491,17 @@ a CI step that fetches the raw file.
   stay manual. `--self-test` runs in this repo's CI. Consumers fetch it pinned
   by `WEB_CORE_REF`. Plain Node, no dependencies.
 - `check-success-safety-net.mjs` — a `.tsx`/`.jsx` success / thank-you page (under a `success`, `thank-you`, `order-complete` or `confirmation` directory, or named for one) that confirms a PAYMENT must render the shared safety net: an import of `.../SafetyNet` or `.../web-core/safetyNet`, or `<SafetyNet`, anywhere in the same success directory (a thin `page.tsx` that renders a sibling client which renders it passes). Waive a non-purchase page with `// safety-net-ok: <reason>` or a `.safety-net-baseline` line `path # reason`; a waiver with no reason is not honoured. Mirrors check-post-submit-notice.mjs. Not yet fetched by any consumer's CI; wire it in the same way as that one.
+
+- `check-palette-contrast.mjs` — **static WCAG 2.1 AA gate for HARDCODED colour pairs** (CC task
+  7e8f23d2). A form-field border shipped at 1.13:1 against the 3:1 floor of 1.4.11 and was found only
+  by eye; the rendered `contrast.spec.ts` audits text on listed routes and `barttech-app-ui/contrast.ts`
+  handles runtime colours from data, so nothing looked at literal pairs in source. Judges: CSS rule blocks
+  (`color`+`background` 4.5:1, or 3:1 at font-size >= 24px; `border`+`background` 3:1 when the selector
+  names a form control), JSX tags (`style={{}}` and Tailwind `text-[#hex] bg-[#hex]` together in one tag;
+  border check only on input/textarea/select), and `.contrast-pairs.json` (`[{name, fg, bg, min}]`) for
+  palettes in a constants file. It cannot resolve `text-gray-400` to a surface or an inherited colour; the
+  rendered spec stays the authority there. Alpha, `var()` and named colours are skipped and the count is
+  printed. Waiver `contrast-ok: <reason>` (reason required). Reads tracked files only, skips tests and
+  web-core mounts. Plain Node, no dependencies. Tested in `check-palette-contrast.test.ts`. Not yet
+  fetched by any consumer's CI; first real run on a consumer site flagged `app/page.tsx:351`
+  (#888 on #2a2a2a, 4.05:1).
