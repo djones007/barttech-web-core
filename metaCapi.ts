@@ -1,4 +1,3 @@
-import "server-only";
 import { randomUUID } from "node:crypto";
 import { isAutomatedRequest } from "./requestSignals";
 import { hashedCapiIdentity } from "./metaCapiUserData";
@@ -44,6 +43,10 @@ export { isAutomatedRequest };
  *
  * Consumers import via a local shim (`lib/meta-capi.ts` → `export * from
  * "@/web-core/metaCapi"`). Change it HERE and propagate.
+ *
+ * NO `import "server-only"` HERE (golden rule 5): it cannot resolve under node --test, so it
+ * kept this module untested. The guard is the consumer shim's first line, and the first
+ * line of any file that imports this module directly.
  */
 
 const GRAPH_API_VERSION = "v21.0";
@@ -361,7 +364,7 @@ export async function sendClickEvent(args: {
 }): Promise<{ sent: boolean; reason?: string }> {
   // Bot filter (as a click beacon: see clickEventGate), same-origin check, body rules.
   const parsed = clickEventGate(args.hdrs, args.raw, args.allowedHosts);
-  if (!parsed.ok) return { sent: false, reason: parsed.reason };
+  if (parsed.ok === false) return { sent: false, reason: parsed.reason };
   if (!isCapiConfigured(args.credentials)) return { sent: false, reason: "capi not configured" };
   const b = parsed.body;
   const fbclid = fbclidFromUrl(b.sourceUrl);
