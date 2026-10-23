@@ -106,6 +106,9 @@ a CI step that fetches the raw file.
   `// sentry-instrumentation-ok: <reason>` in the instrumentation file, or a path
   plus a `#` reason in `.sentry-instrumentation-ok`; a waiver with no reason is
   itself a failure.
+  Also fails when `environment:` in an instrumentation file is set from `NODE_ENV`
+  alone (it is `production` on Vercel previews): server/edge must use
+  `VERCEL_ENV ?? NODE_ENV`, client `NEXT_PUBLIC_VERCEL_ENV ?? NODE_ENV`.
 
 - `check-storage-path-traversal.mjs` — a file calling Supabase Storage with a
   write/read-by-key operation (`.upload(` `.remove(` `.createSignedUrl(`

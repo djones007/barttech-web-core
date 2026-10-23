@@ -34,6 +34,7 @@
  *   1. An instrumentation file exists — `instrumentation.{ts,js}` at the repo
  *      root or under `src/`.
  *   2. It exports `onRequestError`.
+ *   2b. `environment` is not set from NODE_ENV alone (previews would be tagged production).
  *   3. No ORPHANED legacy `sentry.{server,edge,client}.config.*` files remain.
  *      Orphaned is the operative word. A server/edge config that the
  *      instrumentation file explicitly imports inside register() is a perfectly
@@ -147,6 +148,37 @@ if (found.length === 0) {
         " render, route handler or server action error is ever reported.",
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// 2b. The `environment` tag must distinguish Vercel previews from production.
+//
+// `environment: process.env.NODE_ENV` is "production" on EVERY Vercel build,
+// previews included, so a preview-deploy error is filed as a production error
+// (Fix Engine f560d9c5, 2026-10-23). Server/edge must read `VERCEL_ENV`; the
+// client must read `NEXT_PUBLIC_VERCEL_ENV` (Next inlines it on Vercel).
+// Waiver: `// sentry-instrumentation-ok: <reason>` on or just above the line.
+// ---------------------------------------------------------------------------
+const ENV_FILES = [
+  "instrumentation.ts", "instrumentation.js", "src/instrumentation.ts", "src/instrumentation.js",
+  "instrumentation-client.ts", "instrumentation-client.js", "src/instrumentation-client.ts", "src/instrumentation-client.js",
+];
+for (const p of ENV_FILES.filter((f) => existsSync(join(ROOT, f)))) {
+  const lines = readFileSync(join(ROOT, p), "utf8").split("\n");
+  lines.forEach((line, i) => {
+    const m = line.match(/\benvironment\s*:\s*(.+?),?\s*$/);
+    if (!m || /^\s*(\/\/|\*)/.test(line)) return;
+    const expr = m[1];
+    if (!/NODE_ENV/.test(expr) || /VERCEL_ENV/.test(expr)) return;
+    if (ANNOTATION.test(lines.slice(Math.max(0, i - 2), i + 1).join("\n"))) return;
+    const client = /instrumentation-client/.test(p);
+    findings.push({
+      what: `${p}:${i + 1} sets Sentry environment from NODE_ENV alone`,
+      detail:
+        "NODE_ENV is 'production' on Vercel previews too, so preview errors are tagged production." +
+        ` Use \`environment: ${client ? "process.env.NEXT_PUBLIC_VERCEL_ENV" : "process.env.VERCEL_ENV"} ?? process.env.NODE_ENV\`.`,
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
