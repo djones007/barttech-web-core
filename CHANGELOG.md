@@ -3,6 +3,12 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+
+## [2026-10-23] — Sentry environment label: previews no longer tagged production
+
+### Changed
+- `scripts/check-sentry-instrumentation.mjs` (Fix Engine f560d9c5): new check 2b fails when `environment:` in `instrumentation*.ts` is set from `NODE_ENV` alone. NODE_ENV is `production` on Vercel previews, so preview errors were tagged production. Required form: server/edge `process.env.VERCEL_ENV ?? process.env.NODE_ENV`, client `process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV`. Waiver `// sentry-instrumentation-ok: <reason>` on or just above the line. Not yet fetched by consumer CI until each repo bumps web-core; consumers were fixed on 2026-10-23.
+
 ## [2026-10-22] — palette contrast gate, metaCapi drops server-only and gains tests
 
 ### Added
