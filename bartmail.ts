@@ -705,20 +705,24 @@ export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<
 // already lives in `email_events` and purchases in `purchases`; `contact_events`
 // is deliberately NOT a copy of either — BartMail's contact page UNIONs the
 // three at read time. This holds touchpoints that otherwise have nowhere to go:
-// a quote request, an order, an enquiry, an onboarding submission, a hand-typed
+// a quote request, an order, an enquiry, a game finished, a review, a hand-typed
 // note. It replaced the retired Teable "Brand Interaction" table on 2026-07-29.
 //
 // Posted over HTTP rather than written direct to Supabase (unlike bartmailOptin)
 // because the route owns rules the caller shouldn't reimplement: the event-type
-// vocabulary, brand-slug → brand_id/tenant_id resolution, and the
-// contact-not-found → skip decision. One producer, one set of rules.
+// registry, brand-slug → brand_id/tenant_id resolution, dedupe, and the
+// contact-not-found → skip decision. One producer path, one set of rules.
 
 /**
- * The fixed event vocabulary, mirroring BartMail's `/api/contacts/event`.
- * Not free text: these drive segmentation later ("requested a quote but never
- * accepted"), and an open string becomes forty spellings of "quote" that no
- * query can group. Adding a type means adding it in BOTH places — here and in
- * the route — and the route is the authority; an unknown value is rejected 400.
+ * The event vocabulary, for autocomplete and type-checking ONLY.
+ *
+ * The authority is the receiver's database registry (`contact_event_types`),
+ * edited on its settings screen, and the receiver rejects an unknown or
+ * switched-off type with a 400. This list mirrors the registry's seed so a
+ * typo fails at compile time rather than in production; the receiver repo
+ * carries a test that fails when this list and the seed drift. A type added
+ * on the settings screen and not yet here can still be sent: `event_type`
+ * also accepts any string (`BartmailEventTypeLoose`).
  */
 export const BARTMAIL_EVENT_TYPES = [
   "quote_requested",
@@ -729,20 +733,199 @@ export const BARTMAIL_EVENT_TYPES = [
   "onboarding_submitted",
   "form_submitted",
   /** A touchpoint no automated producer saw (e.g. mail to a shared support@
-   *  inbox, which is outside BartMail's inbound reply pipeline). Describe it in
+   *  inbox, which is outside the inbound reply pipeline). Describe it in
    *  `metadata.summary`. */
   "note",
+  // Games (one row per player per party; see the producer's dedupe keys).
+  "game_started",
+  "game_finished",
+  "game_abandoned",
+  "review_requested",
+  "review_submitted",
+  "review_approved",
+  "free_pass_claimed",
+  "voucher_redeemed",
+  "licence_activated",
+  "waitlist_joined",
 ] as const;
 
 export type BartmailEventType = (typeof BARTMAIL_EVENT_TYPES)[number];
+/** A registered type, or any other string the registry has gained since. */
+export type BartmailEventTypeLoose = BartmailEventType | (string & {});
+
+/** Same rule the receiver applies: lower-case letters, digits, `_` and `-`. */
+const EVENT_SOURCE_RE = /^[a-z][a-z0-9_-]{0,31}$/;
+/** Same rule the receiver applies; generous enough for `kind:verb:<uuid>:<uuid>`. */
+const DEDUPE_KEY_RE = /^[A-Za-z0-9:._-]{1,200}$/;
 
 export interface BartmailEventParams {
   email: string;
   /** Brand SLUG (e.g. "acme-brand"), resolved to brand_id/tenant_id by the route. */
   brand: string;
-  event_type: BartmailEventType;
+  event_type: BartmailEventTypeLoose;
   /** Free-form context. Undefined/null/empty values are dropped before sending. */
   metadata?: Record<string, unknown>;
+  /**
+   * When it HAPPENED (not when it is being sent). Needed for backfill and for
+   * a sync job that runs minutes after the fact. Omitted = the receiver uses
+   * "now". An invalid date is dropped rather than sent.
+   */
+  occurredAt?: string | Date;
+  /**
+   * A deterministic key for this exact event, e.g. `shop:order_paid:<order_id>`.
+   * The receiver stores at most ONE event per key per tenant, so sending the
+   * same key again (a retry, an overlapping run, a backfill from the start)
+   * records nothing and answers `duplicate`. Without it every call is a new
+   * event. Must match /^[A-Za-z0-9:._-]{1,200}$/ or it is not sent.
+   */
+  dedupeKey?: string;
+  /** Which system wrote it (`games`, `checkout`, …). Lower-case slug. */
+  source?: string;
+}
+
+/** What the receiver did with one event. */
+export interface BartmailEventResult {
+  /** True when the receiver accepted the request (recorded, duplicate or skipped). */
+  ok: boolean;
+  /** Already recorded under the same dedupeKey / event id; nothing new was written. */
+  duplicate: boolean;
+  /** Accepted but not stored, with the receiver's reason (e.g. `contact_not_found`). */
+  skipped: string | null;
+  /** HTTP status, or 0 when nothing was sent (no secret, bad input, network failure). */
+  status: number;
+  /** Why it failed, for the caller's own log/heartbeat. Never contains the email. */
+  error: string | null;
+}
+
+/** Pure: the JSON body for one event, or an error. Exported for tests. */
+export function buildBartmailEventBody(
+  params: BartmailEventParams,
+  eventId: string,
+): { body: Record<string, unknown> } | { error: string } {
+  if (!params?.email || !params?.brand || !params?.event_type) {
+    return { error: "missing email/brand/event_type" };
+  }
+  // Strip empty values so stored metadata stays queryable rather than a
+  // scatter of nulls every later read has to special-case.
+  const metadata: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params.metadata ?? {})) {
+    if (v !== undefined && v !== null && v !== "") metadata[k] = v;
+  }
+  const body: Record<string, unknown> = {
+    email: String(params.email).trim().toLowerCase(),
+    brand: params.brand,
+    event_type: params.event_type,
+    metadata,
+    // Idempotency key for replay INSIDE the signed-timestamp window. Part of
+    // the signed body, so it cannot be swapped. A receiver that predates it
+    // ignores the field. dedupeKey (below) is the cross-retry key.
+    event_id: eventId,
+  };
+  if (params.occurredAt !== undefined && params.occurredAt !== null) {
+    const d = params.occurredAt instanceof Date ? params.occurredAt : new Date(params.occurredAt);
+    if (!Number.isNaN(d.getTime())) body.occurred_at = d.toISOString();
+  }
+  if (params.dedupeKey !== undefined) {
+    if (!DEDUPE_KEY_RE.test(params.dedupeKey)) return { error: "dedupeKey has characters outside [A-Za-z0-9:._-] or is over 200 long" };
+    body.dedupe_key = params.dedupeKey;
+  }
+  if (params.source !== undefined) {
+    if (!EVENT_SOURCE_RE.test(params.source)) return { error: "source must be a lower-case slug" };
+    body.source = params.source;
+  }
+  return { body };
+}
+
+/** Pure: read the receiver's reply. Exported for tests. */
+export function readBartmailEventReply(status: number, json: unknown): BartmailEventResult {
+  const j = (json && typeof json === "object" ? json : {}) as { ok?: unknown; duplicate?: unknown; skipped?: unknown; error?: unknown };
+  if (status >= 200 && status < 300) {
+    return {
+      ok: true,
+      duplicate: j.duplicate === true,
+      skipped: typeof j.skipped === "string" ? j.skipped : null,
+      status,
+      error: null,
+    };
+  }
+  return {
+    ok: false,
+    duplicate: false,
+    skipped: null,
+    status,
+    error: `${status} ${typeof j.error === "string" ? j.error.slice(0, 200) : "rejected"}`,
+  };
+}
+
+const failed = (error: string, status = 0): BartmailEventResult => ({ ok: false, duplicate: false, skipped: null, status, error });
+
+/**
+ * Record a non-email touchpoint against a contact, and say exactly what
+ * happened. Never throws and never rejects.
+ *
+ * Use this from a sync job that keeps its own ledger: `skipped:
+ * 'contact_not_found'` is `ok` (the request was handled) but nothing was
+ * stored, so a job that must not lose history should not mark that event done.
+ */
+export async function bartmailEventResult(params: BartmailEventParams): Promise<BartmailEventResult> {
+  // Same env var name as the internal CDP's own route and a payments-side
+  // edge function — one secret, one name estate-wide. A second alias would be
+  // exactly the drift this module exists to prevent.
+  const secret = process.env.CONTACT_EVENTS_SECRET;
+  if (!secret) {
+    // Degrading to "no timeline" rather than 500ing every form is deliberate
+    // — but it must not be inaudible. Without this line an app that was never
+    // given the secret records zero events forever and nothing says so.
+    console.warn("[bartmailEvent] CONTACT_EVENTS_SECRET not set — timeline event dropped");
+    return failed("CONTACT_EVENTS_SECRET not set");
+  }
+
+  try {
+    // Lazy import, INSIDE the function — see the module header. Importing this
+    // module must not pull node:crypto into the optin path's graph.
+    const { createHmac, randomUUID } = await import("node:crypto");
+    const built = buildBartmailEventBody(params, randomUUID());
+    if ("error" in built) {
+      console.warn(`[bartmailEvent] ${built.error} — event dropped`);
+      return failed(built.error);
+    }
+    const bodyStr = JSON.stringify(built.body);
+
+    // Two signatures, deliberately. The signed-timestamp pair (./signedRequest)
+    // is the replay-resistant scheme; the body-only `x-bartmail-signature` is
+    // kept so this producer still works against a receiver that predates it.
+    // The receiver prefers the timestamped pair when present.
+    const { signRequestBody } = await import("./signedRequest");
+    const sig = `sha256=${createHmac("sha256", secret).update(bodyStr).digest("hex")}`;
+
+    const res = await fetch(`${await resolveBartmailUrl()}/api/contacts/event`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-bartmail-signature": sig,
+        ...signRequestBody({ rawBody: bodyStr, secret }),
+      },
+      body: bodyStr,
+    });
+    const text = await res.text();
+    let json: unknown = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = { error: text.slice(0, 200) };
+    }
+    const result = readBartmailEventReply(res.status, json);
+    if (!result.ok) {
+      // Logged, not thrown. Silence here is what let the last write failure run
+      // undetected for four days.
+      console.error(`[bartmailEvent] ${String(params.event_type)} rejected: ${result.error}`);
+    }
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[bartmailEvent]", message);
+    return failed(message);
+  }
 }
 
 /**
@@ -759,86 +942,19 @@ export interface BartmailEventParams {
  * so a site that hasn't been given the secret yet degrades to "no timeline"
  * rather than 500s on every form.
  *
+ * A duplicate (same `dedupeKey` sent again) is `true`: the event is recorded.
  * Note the contact must already exist — call `bartmailOptin` FIRST. An unknown
  * contact is a no-op on BartMail's side (200 `skipped: contact_not_found`),
  * which this reports as `true`: the event was handled as intended, and the
  * missing contact means the optin write failed, which the optin health monitor
- * already alerts on.
+ * already alerts on. A caller that must tell the two apart uses
+ * `bartmailEventResult`.
  */
 export async function bartmailEvent(params: BartmailEventParams): Promise<boolean> {
-  // Same env var name as the internal CDP's own route and a payments-side
-  // edge function — one secret, one name estate-wide. A second alias would be
-  // exactly the drift this module exists to prevent.
-  const secret = process.env.CONTACT_EVENTS_SECRET;
-  if (!secret) {
-    // Degrading to "no timeline" rather than 500ing every form is deliberate
-    // (see above) — but it must not be inaudible. Without this line an app that
-    // was never given the secret records zero events forever and nothing
-    // anywhere says so, which is indistinguishable from having no events.
-    console.warn("[bartmailEvent] CONTACT_EVENTS_SECRET not set — timeline event dropped");
-    return false;
-  }
-  if (!params?.email || !params?.brand || !params?.event_type) {
-    console.warn("[bartmailEvent] missing email/brand/event_type — event dropped");
-    return false;
-  }
-
-  try {
-    // Strip empty values so stored metadata stays queryable rather than a
-    // scatter of nulls every later read has to special-case.
-    const metadata: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(params.metadata ?? {})) {
-      if (v !== undefined && v !== null && v !== "") metadata[k] = v;
-    }
-
-    // Lazy import, INSIDE the function — see the module header. Importing this
-    // module must not pull node:crypto into the optin path's graph.
-    const { createHmac, randomUUID } = await import("node:crypto");
-
-    const bodyStr = JSON.stringify({
-      email: String(params.email).trim().toLowerCase(),
-      brand: params.brand,
-      event_type: params.event_type,
-      metadata,
-      // Idempotency key: the receiver dedupes on it, which closes replay INSIDE
-      // the signed-timestamp window. Part of the signed body, so it cannot be
-      // swapped. A receiver that predates it ignores the field.
-      event_id: randomUUID(),
-    });
-
-    // Two signatures, deliberately. The signed-timestamp pair (./signedRequest)
-    // is the replay-resistant scheme; the body-only `x-bartmail-signature` is
-    // kept so this producer still works against a receiver that predates it.
-    // The receiver prefers the timestamped pair when present. Rollout and the
-    // enforcement switch: see the receiver's route CLAUDE.md.
-    const { signRequestBody } = await import("./signedRequest");
-    const sig = `sha256=${createHmac("sha256", secret).update(bodyStr).digest("hex")}`;
-
-    const res = await fetch(`${await resolveBartmailUrl()}/api/contacts/event`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-bartmail-signature": sig,
-        ...signRequestBody({ rawBody: bodyStr, secret }),
-      },
-      body: bodyStr,
-    });
-
-    if (!res.ok) {
-      // Logged, not thrown. Silence here is what let the last write failure run
-      // undetected for four days.
-      console.error(
-        `[bartmailEvent] ${params.event_type} rejected: ${res.status} ${(await res.text()).slice(0, 200)}`
-      );
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[bartmailEvent]", err instanceof Error ? err.message : String(err));
-    return false;
-  }
+  return (await bartmailEventResult(params)).ok;
 }
 
+// ---------------------------------------------------------------------------
 // Confirm a contact carries a given tag (e.g. the buyer tag) before serving a download.
 //
 // Signs the request when CONTACTS_VERIFY_SECRET is set in the CALLER's env

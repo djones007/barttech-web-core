@@ -156,3 +156,123 @@ test("getBartmailSuppressionReasons: unknown brand, unknown contact, bad input a
   const boom = { from() { throw new Error("down"); } } as never;
   assert.deepEqual(await getBartmailSuppressionReasons("a@b.com", "x", { client: boom }), []);
 });
+
+// ---------------------------------------------------------------------------
+// bartmailEvent: occurredAt / dedupeKey / source, and reading the reply.
+// ---------------------------------------------------------------------------
+import {
+  buildBartmailEventBody,
+  readBartmailEventReply,
+  bartmailEvent,
+  bartmailEventResult,
+  BARTMAIL_EVENT_TYPES,
+} from "./bartmail";
+
+test("event body: occurredAt, dedupeKey and source are sent in the receiver's field names", () => {
+  const r = buildBartmailEventBody(
+    {
+      email: "  Person@Example.COM ",
+      brand: "acme",
+      event_type: "game_finished",
+      occurredAt: new Date("2026-10-01T12:00:00Z"),
+      dedupeKey: "games:party_finished:11111111-1111-1111-1111-111111111111:22222222-2222-2222-2222-222222222222",
+      source: "games",
+      metadata: { mode: "solo", hints_used: 0, empty: "", nothing: null },
+    },
+    "evt-1",
+  );
+  assert.ok("body" in r);
+  if (!("body" in r)) return;
+  assert.equal(r.body.email, "person@example.com");
+  assert.equal(r.body.occurred_at, "2026-10-01T12:00:00.000Z");
+  assert.equal(r.body.dedupe_key, "games:party_finished:11111111-1111-1111-1111-111111111111:22222222-2222-2222-2222-222222222222");
+  assert.equal(r.body.source, "games");
+  assert.equal(r.body.event_id, "evt-1");
+  // zero is kept, empty string and null are dropped
+  assert.deepEqual(r.body.metadata, { mode: "solo", hints_used: 0 });
+});
+
+test("event body: the new fields are optional, so an old caller sends exactly what it sent before", () => {
+  const r = buildBartmailEventBody({ email: "a@b.co", brand: "acme", event_type: "note" }, "evt-2");
+  assert.ok("body" in r);
+  if (!("body" in r)) return;
+  assert.deepEqual(Object.keys(r.body).sort(), ["brand", "email", "event_id", "event_type", "metadata"]);
+});
+
+test("event body: an invalid occurredAt is dropped, never sent as 'Invalid Date'", () => {
+  const r = buildBartmailEventBody({ email: "a@b.co", brand: "acme", event_type: "note", occurredAt: "not a date" }, "e");
+  assert.ok("body" in r && !("occurred_at" in r.body));
+});
+
+test("event body: a bad dedupeKey or source is refused, not silently stripped", () => {
+  assert.ok("error" in buildBartmailEventBody({ email: "a@b.co", brand: "acme", event_type: "note", dedupeKey: "has spaces" }, "e"));
+  assert.ok("error" in buildBartmailEventBody({ email: "a@b.co", brand: "acme", event_type: "note", dedupeKey: "x".repeat(201) }, "e"));
+  assert.ok("error" in buildBartmailEventBody({ email: "a@b.co", brand: "acme", event_type: "note", source: "Games!" }, "e"));
+  assert.ok("error" in buildBartmailEventBody({ email: "", brand: "acme", event_type: "note" }, "e"));
+});
+
+test("reply: duplicate is ok (the event is recorded), skipped carries the reason", () => {
+  assert.deepEqual(readBartmailEventReply(200, { ok: true, duplicate: true }), { ok: true, duplicate: true, skipped: null, status: 200, error: null });
+  assert.deepEqual(readBartmailEventReply(200, { ok: true, skipped: "contact_not_found" }), { ok: true, duplicate: false, skipped: "contact_not_found", status: 200, error: null });
+  const bad = readBartmailEventReply(400, { error: "Unknown event_type" });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.error, "400 Unknown event_type");
+});
+
+test("bartmailEvent: a network failure returns false and never throws", async () => {
+  const prevSecret = process.env.CONTACT_EVENTS_SECRET;
+  const prevFetch = globalThis.fetch;
+  process.env.CONTACT_EVENTS_SECRET = "test-secret";
+  globalThis.fetch = (async () => {
+    throw new Error("ECONNRESET");
+  }) as typeof fetch;
+  try {
+    assert.equal(await bartmailEvent({ email: "a@b.co", brand: "acme", event_type: "note" }), false);
+    const r = await bartmailEventResult({ email: "a@b.co", brand: "acme", event_type: "note" });
+    assert.equal(r.ok, false);
+    assert.equal(r.status, 0);
+    assert.match(r.error ?? "", /ECONNRESET/);
+  } finally {
+    globalThis.fetch = prevFetch;
+    if (prevSecret === undefined) delete process.env.CONTACT_EVENTS_SECRET;
+    else process.env.CONTACT_EVENTS_SECRET = prevSecret;
+  }
+});
+
+test("bartmailEvent: a duplicate reply is true; the request is signed both ways and carries the dedupe key", async () => {
+  const prevSecret = process.env.CONTACT_EVENTS_SECRET;
+  const prevFetch = globalThis.fetch;
+  process.env.CONTACT_EVENTS_SECRET = "test-secret";
+  let seen: { headers: Record<string, string>; body: string } | null = null;
+  globalThis.fetch = (async (_url: unknown, init?: { headers?: Record<string, string>; body?: string }) => {
+    seen = { headers: init?.headers ?? {}, body: String(init?.body) };
+    return new Response(JSON.stringify({ ok: true, duplicate: true }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    assert.equal(await bartmailEvent({ email: "a@b.co", brand: "acme", event_type: "game_started", dedupeKey: "games:x:1", source: "games" }), true);
+    assert.ok(seen);
+    const s = seen as unknown as { headers: Record<string, string>; body: string };
+    assert.match(s.headers["x-bartmail-signature"], /^sha256=[0-9a-f]{64}$/);
+    assert.ok(Object.keys(s.headers).some((h) => h.startsWith("x-signed-")));
+    assert.equal(JSON.parse(s.body).dedupe_key, "games:x:1");
+  } finally {
+    globalThis.fetch = prevFetch;
+    if (prevSecret === undefined) delete process.env.CONTACT_EVENTS_SECRET;
+    else process.env.CONTACT_EVENTS_SECRET = prevSecret;
+  }
+});
+
+test("bartmailEvent: no secret is false, not a throw", async () => {
+  const prev = process.env.CONTACT_EVENTS_SECRET;
+  delete process.env.CONTACT_EVENTS_SECRET;
+  try {
+    assert.equal(await bartmailEvent({ email: "a@b.co", brand: "acme", event_type: "note" }), false);
+  } finally {
+    if (prev !== undefined) process.env.CONTACT_EVENTS_SECRET = prev;
+  }
+});
+
+test("event types: unique, lower-case slugs", () => {
+  assert.equal(new Set(BARTMAIL_EVENT_TYPES).size, BARTMAIL_EVENT_TYPES.length);
+  for (const t of BARTMAIL_EVENT_TYPES) assert.match(t, /^[a-z][a-z0-9_]{1,62}$/);
+});

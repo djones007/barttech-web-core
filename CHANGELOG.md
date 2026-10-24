@@ -4,6 +4,16 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-10-24tl] — bartmailEvent: occurredAt, dedupeKey, source, and a result that says what happened
+
+### Added
+- `bartmailEvent()` params gain three optional fields: `occurredAt` (when it happened, for backfill and sync jobs), `dedupeKey` (one event per key per tenant, so a retry or a rerun from the start records nothing new) and `source` (which system wrote it). An old caller sends exactly the body it sent before. Bad keys or sources are refused before sending, never stripped silently.
+- `bartmailEventResult()`: same call, returns `{ ok, duplicate, skipped, status, error }` so a sync job with its own ledger can tell "recorded" from "duplicate" from "accepted but no contact". `bartmailEvent()` is now a wrapper over it and still returns a boolean and never throws.
+- `buildBartmailEventBody()` / `readBartmailEventReply()` exported as pure helpers, with 9 tests (network failure returns false, duplicate is true, both signatures sent, optional fields, refusals).
+
+### Changed
+- `BARTMAIL_EVENT_TYPES` adds the games types (`game_started`, `game_finished`, `game_abandoned`, `review_requested`, `review_submitted`, `review_approved`, `free_pass_claimed`, `voucher_redeemed`, `licence_activated`, `waitlist_joined`). The receiver's database registry is now the authority; this list is for autocomplete and a typo check, and `event_type` also accepts any string the registry has gained since. Deploy the receiver first: an old receiver rejects the new types with a 400 (the call returns false, nothing breaks).
+
 ## [2026-10-24c] — sentryNoise: drop the Google app (iOS) in-app browser injected-script throws
 
 ### Fixed
