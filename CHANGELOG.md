@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-10-24b] — pageEvents.ts drops server-only (golden rule 5)
+
+### Changed
+- `pageEvents.ts`: removed `import "server-only"` (Fix Engine b8461f49), matching `metaCapi.ts` on 2026-10-22. No repo under `repos/` imports it today (git grep), so no consumer needs a guard before bumping; any future importer carries `import "server-only"` on its own first line.
+
 ## [2026-10-24] — Security: sanitize-html 2.18.1 (Dependabot)
 
 ### Fixed

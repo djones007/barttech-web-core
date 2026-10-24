@@ -1,4 +1,3 @@
-import "server-only";
 import { isAutomatedRequest } from "./requestSignals";
 import { device } from "./device";
 import { isSafeOutboundUrl } from "./security";
@@ -95,6 +94,9 @@ import { isSafeOutboundUrl } from "./security";
  * `landing`, its buy click's `reserve_click`, and any `landing_owner`
  * companion. The receiving endpoint stores experiment / variant /
  * experiment_forced; the vocabulary above does not change.
+ *
+ * NO `import "server-only"` HERE (golden rule 5; same as metaCapi.ts): it cannot resolve under node --test.
+ * A consumer that imports this module carries the guard on its own first line. Fix Engine b8461f49.
  */
 const TIMEOUT_MS = 2000;
 
