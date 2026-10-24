@@ -4,10 +4,15 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
-## [2026-10-24] — pageEvents.ts drops server-only (golden rule 5)
+## [2026-10-24b] — pageEvents.ts drops server-only (golden rule 5)
 
 ### Changed
 - `pageEvents.ts`: removed `import "server-only"` (Fix Engine b8461f49), matching `metaCapi.ts` on 2026-10-22. No repo under `repos/` imports it today (git grep), so no consumer needs a guard before bumping; any future importer carries `import "server-only"` on its own first line.
+
+## [2026-10-24] — Security: sanitize-html 2.18.1 (Dependabot)
+
+### Fixed
+- `sanitize-html` ^2.17.7 -> ^2.18.1 (dev dependency used by safeHtml tests). Closes Dependabot GHSA-x3q4-9hxx-gx8m, the incomplete CVE-2026-53606 `meta refresh` advisory and the SMIL namespace-prefix bypass. Supersedes Dependabot PR #17. 558/558 tests and typecheck pass.
 
 ## [2026-10-23] — Sentry environment label: previews no longer tagged production
 
