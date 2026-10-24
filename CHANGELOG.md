@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-10-24c] — sentryNoise: drop the Google app (iOS) in-app browser injected-script throws
+
+### Fixed
+- `isNoiseEvent` now drops errors from the Google app's iOS in-app browser (user agent `GSA/`) when no stack frame points at a script file. The app evaluates its own minified scripts inside the page; WebKit attributes their throws ("Error: pa", "Maximum call stack size exceeded." from two self-recursive minified functions, frameless unhandled rejections) to the document at line numbers past the end of the served HTML. An application error inside the same app still reports, because its frames name a `.js` file. Three tests in `sentryNoise.test.ts` (561 pass).
+
 ## [2026-10-24b] — pageEvents.ts drops server-only (golden rule 5)
 
 ### Changed
