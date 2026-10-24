@@ -70,7 +70,7 @@ export interface NoiseException {
 /** Structural subset of a Sentry error event. */
 export interface NoiseEvent {
   exception?: { values?: NoiseException[] };
-  request?: { url?: string };
+  request?: { url?: string; headers?: Record<string, string> };
 }
 
 /** Structural subset of a Sentry event hint. */
@@ -120,6 +120,38 @@ const NATIVE_BRIDGE_MESSAGES = ["Java object is gone", "window.webkit.messageHan
  */
 const TRANSLATE_PROXY_FRAME = "translate_http";
 const TRANSLATE_PROXY_HOST = ".translate.goog";
+
+/**
+ * The Google app's in-app browser on iOS (user agent token `GSA/`) evaluates
+ * its own closure-compiled scripts inside the page it is displaying. When they
+ * throw — minified one- or two-letter messages ("Error: pa"), a self-recursive
+ * pair of minified functions overflowing the stack, unhandled rejections with
+ * no stack at all — WebKit attributes the frames to the DOCUMENT, at line
+ * numbers past the end of the HTML the server actually sent. No frame ever
+ * points at a script file.
+ *
+ * Scoped by BOTH the user agent and the absence of any script-file frame, so an
+ * application error raised inside the Google app still reports: application
+ * code always ships as a `.js` file and its frames say so.
+ */
+const GOOGLE_APP_UA = /\bGSA\/\d/;
+
+function userAgentOf(event: NoiseEvent | undefined): string {
+  const headers = event?.request?.headers ?? {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === "user-agent" && typeof value === "string") return value;
+  }
+  return "";
+}
+
+function isScriptFileFrame(filename: string): boolean {
+  return /\.m?js(?:[?#]|$)/.test(filename) || filename.includes("/_next/");
+}
+
+function isGoogleAppInjectedScript(event: NoiseEvent | undefined, frames: NoiseStackFrame[]): boolean {
+  if (!GOOGLE_APP_UA.test(userAgentOf(event))) return false;
+  return !frames.some((frame) => isScriptFileFrame(frame?.filename ?? ""));
+}
 
 /**
  * Browser extensions (password managers, grammar checkers, and similar) attach
@@ -200,6 +232,8 @@ export function isNoiseEvent(event: NoiseEvent | undefined, hint?: NoiseEventHin
   }
 
   if ((event?.request?.url ?? "").includes(TRANSLATE_PROXY_HOST)) return true;
+
+  if (isGoogleAppInjectedScript(event, frames)) return true;
 
   return false;
 }

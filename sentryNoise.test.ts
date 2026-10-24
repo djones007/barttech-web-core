@@ -78,7 +78,40 @@ test("finds an injected frame deeper in a wrapped exception chain", () => {
   assert.equal(isNoiseEvent(event), true);
 });
 
+const GOOGLE_APP_IOS_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/330.0.663358993 Mobile/15E148 Safari/604.1";
+const SAFARI_IOS_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Mobile/15E148 Safari/604.1";
+
+function withUserAgent(event: NoiseEvent, ua: string): NoiseEvent {
+  return { ...event, request: { url: "https://example.test/blog/post", headers: { "User-Agent": ua } } };
+}
+
+test("drops the Google app's injected-script throws on iOS", () => {
+  // The three shapes seen live: a frame on the document past its last line,
+  // a frame whose filename is the literal string "undefined", and no stack.
+  for (const event of [
+    errorEvent("pa", ["app:///blog/post"]),
+    errorEvent("Maximum call stack size exceeded.", ["undefined"]),
+    errorEvent("La"),
+  ]) {
+    assert.equal(isNoiseEvent(withUserAgent(event, GOOGLE_APP_IOS_UA)), true);
+  }
+});
+
 // --- must NOT be filtered ---------------------------------------------------
+
+test("keeps an application error thrown inside the Google app", () => {
+  const event = errorEvent("Cannot read properties of null (reading 'id')", [
+    "app:///_next/static/chunks/page-abc.js",
+  ]);
+  assert.equal(isNoiseEvent(withUserAgent(event, GOOGLE_APP_IOS_UA)), false);
+});
+
+test("keeps a frameless error from any browser other than the Google app", () => {
+  assert.equal(isNoiseEvent(withUserAgent(errorEvent("pa", ["app:///blog/post"]), SAFARI_IOS_UA)), false);
+  assert.equal(isNoiseEvent(errorEvent("La")), false);
+});
 
 test("keeps an application error thrown inside an in-app browser", () => {
   // The whole point of scoping by frame origin rather than by user-agent: a real
