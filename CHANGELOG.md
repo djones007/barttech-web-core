@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-10-26] — sentryNoise: drop Meta's iOS in-app browser `window._META.IABInnerFrame` throws
+
+### Fixed
+- `isNoiseEvent` now drops `TypeError: undefined is not an object (evaluating 'window._META.IABInnerFrame')`, thrown by the Facebook/Instagram iOS in-app browser's own injected script (global-code frames on the document, UA `FBAN/FBIOS`), not by page code. Added as a third `NATIVE_BRIDGE_MESSAGES` substring. One positive test plus a negative test that an unrelated TypeError of the same shape still reports.
+
 ## [2026-10-24tl] — bartmailEvent: occurredAt, dedupeKey, source, and a result that says what happened
 
 ### Added
