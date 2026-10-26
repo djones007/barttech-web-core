@@ -40,6 +40,15 @@ test("drops the iOS in-app browser bridge error", () => {
   assert.equal(isNoiseEvent(errorEvent("undefined is not an object (evaluating 'window.webkit.messageHandlers')")), true);
 });
 
+test("drops the iOS in-app browser injected-script global error", () => {
+  // Thrown by the host app's own injected script (global-code frame on the
+  // document), never by page code.
+  assert.equal(
+    isNoiseEvent(errorEvent("undefined is not an object (evaluating 'window._META.IABInnerFrame')", ["app:///"])),
+    true,
+  );
+});
+
 test("drops browser-extension DOM serialisation noise", () => {
   assert.equal(isNoiseEvent(errorEvent("Object Not Found Matching Id:4")), true);
   assert.equal(
@@ -121,6 +130,18 @@ test("keeps an application error thrown inside an in-app browser", () => {
     "https://example.test/_next/static/chunks/page.js",
   ]);
   assert.equal(isNoiseEvent(event), false);
+});
+
+test("keeps an unrelated TypeError of the same shape as the in-app-browser one", () => {
+  assert.equal(
+    isNoiseEvent(
+      errorEvent("undefined is not an object (evaluating 'window.app.config')", [
+        "https://example.test/_next/static/chunks/page.js",
+      ]),
+    ),
+    false,
+  );
+  assert.equal(isNoiseEvent(errorEvent("undefined is not an object (evaluating 'e.id')", ["app:///"])), false);
 });
 
 test("keeps a real network error", () => {

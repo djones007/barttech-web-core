@@ -101,12 +101,20 @@ const INJECTED_SCRIPT_SCHEMES = ["iabjs:"];
  *   - iOS: `window.webkit.messageHandlers` is absent in the WKWebView the page
  *     has been handed, so the analytics tag's call to it throws.
  *
+ * A third entry is the same host app's iOS browser failing inside its own
+ * injected script: `window._META.IABInnerFrame` is read before that script has
+ * defined it. Page code never references the `_META` global.
+ *
  * These matter disproportionately on pages that are the destination of paid
  * social traffic, because that audience arrives INSIDE the app that produces
  * the error — the noise concentrates precisely where the real conversion
  * errors need to be visible.
  */
-const NATIVE_BRIDGE_MESSAGES = ["Java object is gone", "window.webkit.messageHandlers"];
+const NATIVE_BRIDGE_MESSAGES = [
+  "Java object is gone",
+  "window.webkit.messageHandlers",
+  "window._META.IABInnerFrame",
+];
 
 /**
  * Google's public page-translation proxy re-serves a site through its own
