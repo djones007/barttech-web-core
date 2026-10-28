@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-10-28] — sentryNoise: drop Meta's iOS in-app browser injected-script throws
+
+### Fixed
+- `isNoiseEvent` now drops errors from Meta's iOS in-app browsers (Facebook `FBAN/FBIOS` / `FB_IAB/FBIOS`, Messenger `FBAN/MessengerForiOS`, Instagram on iPhone/iPad/iPod) when no stack frame is a script file — the same two-part scope as the Google app rule. Seen live as `InvalidStateError: The object is in an invalid state.` via `onerror`, with the only frame on the document (`app:///` past the end of the HTML). Application errors in those browsers have `.js` / `/_next/` frames and still report. Tests: drops the live shape (Facebook + Instagram UAs), keeps the same UA with an `/_next/static/chunks/app.js` frame, keeps a non-Meta UA with the same document frame.
+
 ## [2026-10-26] — sentryNoise: drop Meta's iOS in-app browser `window._META.IABInnerFrame` throws
 
 ### Fixed

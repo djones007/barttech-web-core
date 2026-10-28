@@ -122,6 +122,28 @@ test("keeps a frameless error from any browser other than the Google app", () =>
   assert.equal(isNoiseEvent(errorEvent("La")), false);
 });
 
+const FACEBOOK_IOS_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/584.1.0.65.70;FBBV/1;FBDV/iPhone17,1;FBMD/iPhone;FBSN/iOS;FBSV/27.0;FBSS/3;FBCR/;FBID/phone;FBLC/en_GB;FBOP/80;IABMV/1]";
+const INSTAGRAM_IOS_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 400.0.0.0.0 (iPhone17,1; iOS 27_0; en_GB; en; scale=3.00; 1206x2622; 0)";
+const INVALID_STATE = "InvalidStateError: The object is in an invalid state.";
+
+test("drops Meta's iOS in-app browser injected-script throws", () => {
+  // Live shape: only frame is the document itself (app:///, line 1455).
+  for (const ua of [FACEBOOK_IOS_UA, INSTAGRAM_IOS_UA]) {
+    assert.equal(isNoiseEvent(withUserAgent(errorEvent(INVALID_STATE, ["app:///"]), ua)), true);
+  }
+});
+
+test("keeps an application error inside Meta's iOS in-app browser", () => {
+  const event = errorEvent(INVALID_STATE, ["app:///_next/static/chunks/app.js"]);
+  assert.equal(isNoiseEvent(withUserAgent(event, FACEBOOK_IOS_UA)), false);
+});
+
+test("keeps a document-frame error from a non-Meta browser", () => {
+  assert.equal(isNoiseEvent(withUserAgent(errorEvent(INVALID_STATE, ["app:///"]), SAFARI_IOS_UA)), false);
+});
+
 test("keeps an application error thrown inside an in-app browser", () => {
   // The whole point of scoping by frame origin rather than by user-agent: a real
   // bug that only reproduces in the Facebook browser is exactly the bug worth
