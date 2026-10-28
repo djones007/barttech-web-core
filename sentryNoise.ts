@@ -162,6 +162,27 @@ function isGoogleAppInjectedScript(event: NoiseEvent | undefined, frames: NoiseS
 }
 
 /**
+ * Meta's in-app browsers on iOS (Facebook `FBAN/FBIOS` / `FB_IAB/FBIOS`,
+ * Messenger `FBAN/MessengerForiOS`, Instagram `Instagram <ver> (iPhone…`)
+ * inject their own scripts into the page they display, exactly like the Google
+ * app above. When those scripts throw — seen live as `InvalidStateError: The
+ * object is in an invalid state.`, unhandled, via `onerror` — WebKit attributes
+ * the only frame to the DOCUMENT (`app:///` at a line past the end of the HTML),
+ * never to a script file.
+ *
+ * Same two-part scope as the Google app rule: the user agent AND the absence of
+ * any script-file frame. An application error inside these browsers ships from
+ * a `.js` / `/_next/` file and still reports. Instagram is matched only with an
+ * iOS device token so its Android WebView is not swept in.
+ */
+const META_IOS_IAB_UA = /\bFBAN\/(?:FBIOS|MessengerForiOS)\b|\bFBIOS\b|\bInstagram \d[\d.]* \(iP(?:hone|ad|od)/;
+
+function isMetaIosInAppInjectedScript(event: NoiseEvent | undefined, frames: NoiseStackFrame[]): boolean {
+  if (!META_IOS_IAB_UA.test(userAgentOf(event))) return false;
+  return !frames.some((frame) => isScriptFileFrame(frame?.filename ?? ""));
+}
+
+/**
  * Browser extensions (password managers, grammar checkers, and similar) attach
  * observers that walk the DOM and try to serialise nodes React has attached its
  * own circular internals to. The throw surfaces in the page's error handler
@@ -242,6 +263,7 @@ export function isNoiseEvent(event: NoiseEvent | undefined, hint?: NoiseEventHin
   if ((event?.request?.url ?? "").includes(TRANSLATE_PROXY_HOST)) return true;
 
   if (isGoogleAppInjectedScript(event, frames)) return true;
+  if (isMetaIosInAppInjectedScript(event, frames)) return true;
 
   return false;
 }
