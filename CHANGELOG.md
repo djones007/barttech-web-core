@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-10-30] — bartmailMarkRefunded: record a full refund on the BartMail purchase
+
+### Added
+- `bartmail.ts`: `bartmailMarkRefunded(paymentId)` stamps `purchases.refunded_at` on rows not already stamped. Sends nothing and writes no tag.
+
 ## [2026-10-28] — sentryNoise: drop Meta's iOS in-app browser injected-script throws
 
 ### Fixed

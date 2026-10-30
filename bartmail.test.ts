@@ -7,6 +7,7 @@ import {
   isBartmailPartialOptinError,
   BartmailPartialOptinError,
   getBartmailSuppressionReasons,
+  bartmailMarkRefunded,
 } from "./bartmail";
 
 // ---------------------------------------------------------------------------
@@ -275,4 +276,31 @@ test("bartmailEvent: no secret is false, not a throw", async () => {
 test("event types: unique, lower-case slugs", () => {
   assert.equal(new Set(BARTMAIL_EVENT_TYPES).size, BARTMAIL_EVENT_TYPES.length);
   for (const t of BARTMAIL_EVENT_TYPES) assert.match(t, /^[a-z][a-z0-9_]{1,62}$/);
+});
+
+function fakePurchases(result: { data: { id: string }[] | null; error: { message: string } | null }) {
+  const calls: unknown[][] = [];
+  const chain = {
+    update: (v: unknown) => (calls.push(["update", v]), chain),
+    eq: (k: string, v: unknown) => (calls.push(["eq", k, v]), chain),
+    is: (k: string, v: unknown) => (calls.push(["is", k, v]), chain),
+    select: () => Promise.resolve(result),
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { calls, db: { from: () => chain } as any };
+}
+
+test("bartmailMarkRefunded stamps only an unstamped row for that payment", async () => {
+  const f = fakePurchases({ data: [{ id: "p1" }], error: null });
+  const r = await bartmailMarkRefunded("pi_1", { at: "2026-10-30T00:00:00Z", db: f.db });
+  assert.deepEqual(r, { ok: true, updated: 1 });
+  assert.deepEqual(f.calls, [["update", { refunded_at: "2026-10-30T00:00:00Z" }], ["eq", "stripe_session_id", "pi_1"], ["is", "refunded_at", null]]);
+});
+
+test("bartmailMarkRefunded: no matching row is a normal answer", async () => {
+  assert.deepEqual(await bartmailMarkRefunded("pi_2", { db: fakePurchases({ data: [], error: null }).db }), { ok: true, updated: 0 });
+});
+
+test("bartmailMarkRefunded reports a database error", async () => {
+  assert.deepEqual(await bartmailMarkRefunded("pi_3", { db: fakePurchases({ data: null, error: { message: "boom" } }).db }), { ok: false, updated: 0, error: "boom" });
 });
