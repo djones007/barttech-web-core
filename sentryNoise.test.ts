@@ -191,3 +191,24 @@ test("never throws on a malformed, empty or undefined event", () => {
   assert.equal(isNoiseEvent({ exception: { values: [{}] } }), false);
   assert.equal(isNoiseEvent({ exception: { values: [{ stacktrace: { frames: [{}] } }] } }), false);
 });
+
+const rscEvent = (action?: string, value = "Invariant: Expected RSC response, got text/plain. This is a bug in Next.js."): NoiseEvent => ({
+  exception: { values: [{ value }] },
+  request: { url: "https://example.test/x.rsc", headers: action === undefined ? {} : { "Next-Action": action } },
+});
+
+test("a made-up Next-Action on the RSC invariant is a scanner probe", () => {
+  assert.equal(isNoiseEvent(rscEvent("cachefn")), true);
+});
+
+test("a real action id on the same invariant still reports", () => {
+  assert.equal(isNoiseEvent(rscEvent("7f3a9c1e2b4d6f8091a2b3c4d5e6f708192a3b4c")), false);
+});
+
+test("the invariant with no Next-Action header still reports", () => {
+  assert.equal(isNoiseEvent(rscEvent()), false);
+});
+
+test("a different error with a made-up Next-Action still reports", () => {
+  assert.equal(isNoiseEvent(rscEvent("cachefn", "TypeError: boom")), false);
+});
