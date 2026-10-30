@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-10-30b] — sentryNoise: drop server-action scanner probes
+
+### Added
+- `isNoiseEvent` drops the "Expected RSC response" invariant when the `Next-Action` header is not a real action id. A real action failing still reports.
+
 ## [2026-10-30] — bartmailMarkRefunded: record a full refund on the BartMail purchase
 
 ### Added

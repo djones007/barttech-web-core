@@ -226,6 +226,20 @@ function isFrameworkRedirect(value: string, hint?: NoiseEventHint): boolean {
 }
 
 /**
+ * A scanner probing for server-action bugs. It POSTs an RSC request with a made-up Next-Action header,
+ * and Next answers with "Invariant: Expected RSC response". A real action id is a long hex string, so a
+ * value that is not one never came from our own pages. Only this exact invariant is dropped: a real
+ * action that fails carries a hex id and still reports.
+ */
+const ACTION_ID = /^[0-9a-f]{32,}$/i;
+function isServerActionProbe(event: NoiseEvent | undefined, message: string): boolean {
+  if (!message.includes("Expected RSC response")) return false;
+  const headers = event?.request?.headers ?? {};
+  const name = Object.keys(headers).find((k) => k.toLowerCase() === "next-action");
+  return name !== undefined && !ACTION_ID.test(headers[name] ?? "");
+}
+
+/**
  * True when a Sentry error event came from something other than the
  * application's own code and should not be reported.
  *
@@ -261,6 +275,8 @@ export function isNoiseEvent(event: NoiseEvent | undefined, hint?: NoiseEventHin
   }
 
   if ((event?.request?.url ?? "").includes(TRANSLATE_PROXY_HOST)) return true;
+
+  if (exceptions.some((e) => isServerActionProbe(event, e.value ?? ""))) return true;
 
   if (isGoogleAppInjectedScript(event, frames)) return true;
   if (isMetaIosInAppInjectedScript(event, frames)) return true;
