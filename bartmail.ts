@@ -714,6 +714,27 @@ export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<
 // contact-not-found → skip decision. One producer path, one set of rules.
 
 /**
+ * Stamp `purchases.refunded_at` when an order is fully refunded. `paymentId` is the value the sale was
+ * recorded under (`stripe_session_id`, which a checkout may fill with the payment intent id).
+ * A stamp, never a delete: a refund is money that arrived and left. Only rows not already stamped are
+ * touched, so a redelivered webhook keeps the first date. `updated` of 0 is a normal answer: a sale
+ * that was never recorded, or one already stamped. This sends nothing and writes no tag.
+ */
+export async function bartmailMarkRefunded(
+  paymentId: string,
+  opts: { at?: string; db?: Pick<ReturnType<typeof getBartmailSupabase>, "from"> } = {}
+): Promise<{ ok: boolean; updated: number; error?: string }> {
+  const { data, error } = await (opts.db ?? getBartmailSupabase())
+    .from("purchases")
+    .update({ refunded_at: opts.at ?? new Date().toISOString() })
+    .eq("stripe_session_id", paymentId)
+    .is("refunded_at", null)
+    .select("id");
+  if (error) return { ok: false, updated: 0, error: error.message };
+  return { ok: true, updated: data?.length ?? 0 };
+}
+
+/**
  * The event vocabulary, for autocomplete and type-checking ONLY.
  *
  * The authority is the receiver's database registry (`contact_event_types`),
