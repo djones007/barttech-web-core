@@ -35,9 +35,16 @@
 #
 # Tested by vercelIgnore.test.ts in web-core (scenario matrix, run with `sh`).
 # Checked against every repo's vercel.json by scripts/check-vercel-ignore.mjs.
+#
+# TWO OPTIONAL PROJECT ENV VARS, for several Vercel projects on one repo. Both unset = no change.
+#   BUILD_ONLY_REF    this project builds this branch only. Every other branch skips, so a second
+#                     project does not add a preview build to every pull request.
+#   BUILD_SKIP_PATHS  space-separated paths (no spaces inside a path) this project does not depend
+#                     on. A push that changes nothing else skips.
 
 verdict() {
   case "${VERCEL_GIT_COMMIT_REF:-}" in dependabot/*) return 0 ;; esac
+  if [ -n "${BUILD_ONLY_REF:-}" ] && [ "${VERCEL_GIT_COMMIT_REF:-}" != "$BUILD_ONLY_REF" ]; then return 0; fi
 
   head=$(git rev-parse -q --verify HEAD 2>/dev/null) || return 1
   echo "vercel-ignore: head=$head prev=${VERCEL_GIT_PREVIOUS_SHA:-unset} ref=${VERCEL_GIT_COMMIT_REF:-unset} shallow=$(git rev-parse --is-shallow-repository 2>/dev/null)"
@@ -70,10 +77,13 @@ verdict() {
   fi
 
   echo "vercel-ignore: base=$base"
+  set -f
+  set --
+  for skip in ${BUILD_SKIP_PATHS:-}; do set -- "$@" ":!$skip"; done
   git diff --quiet "$base" "$head" -- \
     ':(exclude,glob)*.md' ':(exclude,glob)**/CLAUDE.md' \
     ':!.github' ':!docs' ':!tests' ':!.env.example' ':!.gitignore' \
-    >/dev/null 2>&1
+    "$@" >/dev/null 2>&1
   # 0 = identical (skip). 1 = changed, 128 = git error: both build.
   return $?
 }

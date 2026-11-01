@@ -143,6 +143,41 @@ test("dependabot branches skip", () =>
     assert.equal(verdict(d, { VERCEL_GIT_COMMIT_REF: "dependabot/npm/x" }), 0);
   }));
 
+test("BUILD_ONLY_REF: its own branch follows the normal rules, every other branch skips", () =>
+  withRepo((d) => {
+    commit(d, "a.txt");
+    const deployed = commit(d, "src/x.ts");
+    commit(d, "src/y.ts");
+    const env = { BUILD_ONLY_REF: "release/one", VERCEL_GIT_PREVIOUS_SHA: deployed };
+    assert.equal(verdict(d, { ...env, VERCEL_GIT_COMMIT_REF: "release/one" }), 1);
+    assert.equal(verdict(d, { ...env, VERCEL_GIT_COMMIT_REF: "main" }), 0);
+    assert.equal(verdict(d, env), 0, "no ref at all is not the named branch");
+    commit(d, "README.md");
+    assert.equal(verdict(d, { BUILD_ONLY_REF: "release/one", VERCEL_GIT_COMMIT_REF: "release/one", VERCEL_GIT_PREVIOUS_SHA: sh(d, "git rev-parse HEAD^").out }), 0, "markdown still skips");
+  }));
+
+test("BUILD_SKIP_PATHS: only those paths changed skips; anything else alongside them builds", () =>
+  withRepo((d) => {
+    commit(d, "a.txt");
+    const deployed = commit(d, "src/x.ts");
+    commit(d, "packs/one/data.json");
+    commit(d, "assets/one/a.bin");
+    const env = { BUILD_SKIP_PATHS: "packs/one assets/one", VERCEL_GIT_PREVIOUS_SHA: deployed };
+    assert.equal(verdict(d, env), 0);
+    assert.equal(verdict(d, { VERCEL_GIT_PREVIOUS_SHA: deployed }), 1, "unset changes nothing");
+    assert.equal(verdict(d, { ...env, BUILD_SKIP_PATHS: "packs/one" }), 1, "a path not listed still builds");
+    commit(d, "src/y.ts");
+    assert.equal(verdict(d, env), 1);
+  }));
+
+test("BUILD_SKIP_PATHS: a path that matches nothing never errors", () =>
+  withRepo((d) => {
+    commit(d, "a.txt");
+    const deployed = commit(d, "src/x.ts");
+    commit(d, "src/y.ts");
+    assert.equal(verdict(d, { BUILD_SKIP_PATHS: "no/such/path no/such/*", VERCEL_GIT_PREVIOUS_SHA: deployed }), 1);
+  }));
+
 test("shallow clone: previous SHA outside the clone is fetched from origin and used", () =>
   withRepo((origin) => {
     const work = mkdtempSync(join(tmpdir(), "vercel-ignore-shallow-"));

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-01d] — vercel-ignore: two optional env vars for several projects on one repo
+
+### Added
+- `BUILD_ONLY_REF` builds one branch only; `BUILD_SKIP_PATHS` lists paths a project does not depend on. Both unset changes nothing, and `ignoreCommand` stays the same fixed wrapper. Tested in `vercelIgnore.test.ts`.
+
 ## [2026-11-01c] — Redeem client checks its host; dependency audit runs on a schedule
 
 ### Changed
