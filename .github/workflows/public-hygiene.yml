@@ -36,6 +36,14 @@ name: Public Hygiene
 # tree (every `\` immediately before a regex metacharacter stripped), so a
 # regex-escaped literal reads the same as the bare one a denylist term expects.
 
+#
+# SEPARATOR BLIND SPOT (found 2026-11-01, closed in this run). A term written with
+# different separators, as snake_case in a filename or kebab-case in a test slug,
+# never matched a fixed-string term. The scan now also greps a mirror with spaces,
+# underscores and hyphens removed, against the term with the same removed. A term
+# that contains a hyphen stays exact: those are repo names, and without the hyphen
+# they can be ordinary words such as an env var name.
+
 on:
   push:
     branches: [main]
@@ -73,9 +81,11 @@ jobs:
 
           pattern = re.compile(r'\\([.^$*+?(){}|\[\]\\])')
           mirror = pathlib.Path("/tmp/deescaped")
-          if mirror.exists():
-              shutil.rmtree(mirror)
-          mirror.mkdir(parents=True)
+          collapsed = pathlib.Path("/tmp/collapsed")
+          for path in (mirror, collapsed):
+              if path.exists():
+                  shutil.rmtree(path)
+              path.mkdir(parents=True)
 
           with open("/tmp/allfiles.txt") as fh:
               rels = [line.rstrip("\n") for line in fh if line.strip()]
@@ -84,6 +94,8 @@ jobs:
               src = pathlib.Path(rel)
               dest = mirror / rel[2:] if rel.startswith("./") else mirror / rel
               dest.parent.mkdir(parents=True, exist_ok=True)
+              flat = collapsed / rel[2:] if rel.startswith("./") else collapsed / rel
+              flat.parent.mkdir(parents=True, exist_ok=True)
               try:
                   text = src.read_text(errors="ignore")
               except Exception:
@@ -93,6 +105,7 @@ jobs:
                       pass
                   continue
               dest.write_text(pattern.sub(r"\1", text))
+              flat.write_text(re.sub(r"[ \t_-]", "", text))
           PYEOF
 
           LEAKS=0
@@ -105,7 +118,15 @@ jobs:
             # (filename match, structural files, path-based signals) stays about
             # the actual tree, never the scratch mirror.
             MATCHES_DEESC=$(printf '%s\n' "$MATCHES_DEESC_RAW" | sed 's#^/tmp/deescaped/#./#')
-            MATCHES=$(printf '%s\n%s\n' "$MATCHES_RAW" "$MATCHES_DEESC" | sed '/^$/d' | sort -u)
+            MATCHES_FLAT=""
+            case "$term" in
+              *-*) ;;
+              *)
+                FLAT_TERM=$(printf '%s' "$term" | tr -d ' _')
+                MATCHES_FLAT=$(grep -riIl --fixed-strings -- "$FLAT_TERM" /tmp/collapsed | sed 's#^/tmp/collapsed/#./#' || true)
+                ;;
+            esac
+            MATCHES=$(printf '%s\n%s\n%s\n' "$MATCHES_RAW" "$MATCHES_DEESC" "$MATCHES_FLAT" | sed '/^$/d' | sort -u)
             [ -z "$MATCHES" ] && continue
             COUNT=$(printf '%s\n' "$MATCHES" | sed '/^$/d' | wc -l | tr -d ' ')
 

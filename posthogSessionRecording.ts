@@ -3,19 +3,11 @@
 // `enable_recording_console_log` on `posthog.init()`).
 //
 // WHY THIS EXISTS
-// PostHog session replay is enabled at the PROJECT level for the estate's one
-// shared project (Command Centre project bad60428-3c90-4030-ae09-c3fadd64225e
-// — see `bartmail.ts`/checkout consumers for the "one project, `brand` super-
-// property" architecture). Until 2026-09-22 every one of the 12+
-// `posthog.init()` call sites across the estate passed only `api_host`,
-// `person_profiles` and `capture_pageview` — no `session_recording` block and
-// no `enable_recording_console_log` anywhere — so rrweb's own defaults
-// applied and nobody had actually chosen them. On the checkout domain that
-// meant 100% of sessions recorded, browser console output captured into the
-// replay, and no server-side masking override: customer name/email/company,
-// order contents and console output were all sitting in session replays
-// nobody had decided to keep unmasked. Estate issue
-// 8e6fb948-935c-467b-bf9d-759d031bdb72.
+// PostHog session replay is enabled at the PROJECT level, and a `posthog.init()`
+// call that passes no `session_recording` block takes rrweb's defaults: every
+// session recorded, console output captured and no masking override. Nobody had
+// chosen those, and customer details were reaching replays. These defaults make
+// the choice explicit at every call site.
 //
 // The PROJECT-level fix (URL blocklist for payment/admin routes, console
 // recording opt-in turned off, project masking config) was made directly via

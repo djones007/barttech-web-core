@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Dead-space / padding audit — the shared measurement every repo's mobile spec calls.
 //
-// WHY: playthestillroom.com/v3 on a phone showed ~150px of empty black under the hero
+// WHY: a live sales page on a phone showed ~150px of empty black under the hero
 // (84px of hero bottom padding stacked on 72px of next-section top padding) and no
 // audit caught it: every other check in a mobile spec measures things that are THERE;
 // none measured the absence of anything. Dead space also cannot be found by reading

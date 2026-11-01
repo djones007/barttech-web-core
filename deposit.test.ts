@@ -134,7 +134,7 @@ test("depositIsFullValue is false when there is nothing to deposit", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Hardware-triggered full-quote deposit (Dom, 2026-09-21). Replaces the old
+// Hardware-triggered full-quote deposit (2026-09-21). Replaces the old
 // "100% of hardware, 50% of the rest" split, which left a small odd balance
 // to chase after the deposit was paid. `fullQuoteTriggerCategories` is unset
 // on every test above, so all of them prove the OLD tiered rule is completely

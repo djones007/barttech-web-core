@@ -4,6 +4,14 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-01] — Public hygiene: generic fixtures and comments, separator-blind scan
+
+### Changed
+- Test fixtures and comments now use neutral values, and private names are described by role (site-security-sweep 2026-11-01).
+
+### Fixed
+- `public-hygiene.yml` matched fixed strings only, so a term written with different separators passed. It now also scans a mirror with spaces, underscores and hyphens removed. Hyphenated terms stay exact, because they are repo names that can also be ordinary words in an env var.
+
 ## [2026-10-30b] — sentryNoise: drop server-action scanner probes
 
 ### Added
@@ -183,7 +191,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ## [2026-10-05a] — Server twin for click events: trackMetaTwin + sendClickEvent (the standard for every Meta conversion event)
 
 ### Added
-- **Standard (Dom, 2026-10-05):** every Meta conversion event the browser pixel fires has a server-side twin with the SAME event id, because the pixel only exists after advertising consent and so only counts people who accepted. Purchase and InitiateCheckout (sent by the checkout) and ViewContent (`sendLandingPageView`) already followed it; AddToCart did not, so its volume was a consent-filtered fraction of the real clicks.
+- **Standard (2026-10-05):** every Meta conversion event the browser pixel fires has a server-side twin with the SAME event id, because the pixel only exists after advertising consent and so only counts people who accepted. Purchase and InitiateCheckout (sent by the checkout) and ViewContent (`sendLandingPageView`) already followed it; AddToCart did not, so its volume was a consent-filtered fraction of the real clicks.
 - **`metaClickEvent.ts`** (+ test): the pure half. `CLICK_EVENTS` allowlist (AddToCart, InitiateCheckout, Lead, Contact, Schedule: never ViewContent/PageView/Purchase, because a crawler can emit those), `parseClickEventBody` (mandatory well-formed shared `eventId`, ISO currency, bounded value, http(s) source), `isFromAllowedHost` (fails CLOSED on a missing Origin/Referer), `fbclidFromUrl`.
 - **`sendClickEvent`** in `metaCapi.ts`: for a site's route handler; refuses an automated request, a request not from the site's own pages, a bad body, an unconfigured pixel; sends via `sendCAPIEvent` with fbc taken from the page url's fbclid so a decliner's click is attributable. Never throws.
 - **`trackMetaTwin`** + `newClientEventId` in `clientEvents.ts`: generates the id, fires the pixel with it (if consented) and ALWAYS beacons the event to the site's route (sendBeacon, fetch keepalive fallback). Three tests: same id on both halves, the beacon goes out with no pixel, the fetch fallback.
@@ -195,7 +203,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ## [2026-10-02e] — Buyer-facing "ticket" is now "Game Pass"
 
 ### Changed
-- Dom's standing rule (2026-10-02): what a buyer gets from an online game is a Game Pass, never a ticket. Always capitalised, "Game Pass" (Dom's correction, same day). Copy only; identifiers (`buildTicketPdf`, `TicketPalette`) and file names are unchanged. `safetyNet.ts`: the game title is always "Your Game Pass" (the pre-sale "Your ticket" title is gone), the code row reads "Game Pass code", the private note and the steps say Game Pass, and the non-game steps say "Keep this as your proof of purchase". `ownAddress.ts` (own-address banner, opt-in label, outcome messages) and `buyerContact.ts` (complaint draft subject and body, bounce task body) say Game Pass. Tests updated.
+- Standing rule (2026-10-02): what a buyer gets from an online game is a Game Pass, never a ticket. Always capitalised, "Game Pass" (Dom's correction, same day). Copy only; identifiers (`buildTicketPdf`, `TicketPalette`) and file names are unchanged. `safetyNet.ts`: the game title is always "Your Game Pass" (the pre-sale "Your ticket" title is gone), the code row reads "Game Pass code", the private note and the steps say Game Pass, and the non-game steps say "Keep this as your proof of purchase". `ownAddress.ts` (own-address banner, opt-in label, outcome messages) and `buyerContact.ts` (complaint draft subject and body, bounce task body) say Game Pass. Tests updated.
 
 ## [2026-10-02d] — giftAvailability: server-side gift availability client
 
@@ -309,7 +317,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ## [2026-09-29b] — `sendMail()` stops saving self-addressed mail to Sent Items
 
 ### Changed
-- `sendMail()` in `graph.ts` now sets `saveToSentItems` only when the recipient is someone other than `GRAPH_MAILBOX`. Every app notification to the ops mailbox was producing an Inbox copy and a Sent Items copy, and Dom's mailbox was filling with the Sent duplicates. Mail to anyone else still keeps its Sent record. Consumers pick this up on their next submodule bump.
+- `sendMail()` in `graph.ts` now sets `saveToSentItems` only when the recipient is someone other than `GRAPH_MAILBOX`. Every app notification to the ops mailbox was producing an Inbox copy and a Sent Items copy, and the owner's mailbox was filling with the Sent duplicates. Mail to anyone else still keeps its Sent record. Consumers pick this up on their next submodule bump.
 
 ## [2026-09-29] — Suppression walk survives Emailit's broken `sort` in `next_page_url`
 
@@ -334,7 +342,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - New deterministic CI gate, `scripts/check-selfrequested-suppression.mjs`. `clearSelfRequestedSoftFailSuppression()`
   (`emailit.ts`) exists so a self-requested transactional send (receipt, sign-in code, sign-up confirmation,
   password reset, magic link) clears a soft-fail suppression on that exact address before sending — documented
-  in four places (template, website-build, brand-email, project_nutty_orange_ms_deliverability) but enforced
+  in four places (template, website-build, brand-email, a private deliverability note) but enforced
   nowhere, so a new route could silently drop mail to any of the ~6,300 soft-suppressed Microsoft addresses.
   Checks (A) a direct `sendEmailitEmail()` call whose nearby context looks self-requested has the clear
   function reachable in the same file, and (B) a call to a repo's `sendEmail()` wrapper that looks
@@ -524,7 +532,7 @@ existing was renamed or removed.
 The original gate only fires on hand-written junk-folder COPY, so it cannot see a screen that sends
 mail and shows no notice whatsoever. a live consumer's sign-in, sign-up and reset screens shipped
 exactly that way and a real user (Hotmail) never saw junk-folder guidance because there was nothing
-to see — approved by Dom 2026-09-26 to make the estate's post-submit notice mandatory by gate, not
+to see — approved 2026-09-26 to make the estate's post-submit notice mandatory by gate, not
 convention.
 
 ## [2026-09-26] — `emailit`: clear a SOFT-FAIL suppression before a self-requested send; new `ccNotify` module
@@ -2758,7 +2766,7 @@ route that passes arbitrary caller-supplied filters through.
 ## [2026-07-29g] — validation.ts: isOptinHealthSentinel()
 
 ### Added
-- `isOptinHealthSentinel(email)` — true for the internal CDP's optin-health monitor addresses (a fixed `dom+optin-health-<brand>@…` pattern).
+- `isOptinHealthSentinel(email)` — true for the internal CDP's optin-health monitor addresses (a fixed plus-addressed pattern).
 
 ### Why
 The monitor POSTs through each brand's **real** optin route on a schedule, which is exactly what makes it worth having. But some of those routes email an internal notification on a new signup, so several fake lead notifications were arriving daily — indistinguishable at a glance from a real one, which is worse than noise because it trains you to ignore the alert.

@@ -3,12 +3,12 @@
  * Pure: no "server-only", no network, so it is unit-tested. `sendClickEvent` in
  * metaCapi.ts is the thin sender that uses it.
  *
- * THE STANDARD (Dom, 2026-10-05): every Meta conversion event the browser pixel
+ * THE STANDARD (2026-10-05): every Meta conversion event the browser pixel
  * fires has a server-side twin carrying the SAME event id, because the pixel only
  * exists after advertising consent and so only counts people who accepted. Purchase
  * and InitiateCheckout already follow this (the checkout sends both from the server);
  * ViewContent follows it (`sendLandingPageView`); AddToCart did not, which is why the
- * Still Room's AddToCart volume was a consent-filtered fraction of the real clicks.
+ * one site's AddToCart volume was a consent-filtered fraction of the real clicks.
  *
  * Why only CLICK events are allowed through this door. `ViewContent` / `PageView`
  * are events a server can emit with no human behind them: a crawler's page load made

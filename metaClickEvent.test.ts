@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { CLICK_EVENTS, clickEventGate, fbclidFromUrl, isFromAllowedHost, parseClickEventBody } from "./metaClickEvent";
 import { isAutomatedRequest } from "./requestSignals";
 
-const good = { event: "AddToCart", eventId: "0c3f8d52-1111-4a4a-9999-aaaaaaaaaaaa", sourceUrl: "https://playthestillroom.com/", currency: "GBP", value: 19.99 };
+const good = { event: "AddToCart", eventId: "0c3f8d52-1111-4a4a-9999-aaaaaaaaaaaa", sourceUrl: "https://shop.example.com/", currency: "GBP", value: 19.99 };
 const hdrs = (o: Record<string, string>) => ({ get: (n: string) => o[n.toLowerCase()] ?? null });
 
 test("the allowlist holds click events only: never ViewContent or PageView (a crawler can emit those)", () => {
@@ -36,12 +36,12 @@ test("bad value, currency and url are refused", () => {
 });
 
 test("origin check fails CLOSED: no header, or another host, is refused; the site and www are accepted", () => {
-  const allowed = ["playthestillroom.com"];
+  const allowed = ["shop.example.com"];
   assert.equal(isFromAllowedHost(hdrs({}), allowed), false);
   assert.equal(isFromAllowedHost(hdrs({ origin: "https://evil.example" }), allowed), false);
-  assert.equal(isFromAllowedHost(hdrs({ origin: "https://playthestillroom.com.evil.example" }), allowed), false);
-  assert.equal(isFromAllowedHost(hdrs({ origin: "https://playthestillroom.com" }), allowed), true);
-  assert.equal(isFromAllowedHost(hdrs({ referer: "https://www.playthestillroom.com/x" }), allowed), true);
+  assert.equal(isFromAllowedHost(hdrs({ origin: "https://shop.example.com.evil.example" }), allowed), false);
+  assert.equal(isFromAllowedHost(hdrs({ origin: "https://shop.example.com" }), allowed), true);
+  assert.equal(isFromAllowedHost(hdrs({ referer: "https://www.shop.example.com/x" }), allowed), true);
 });
 
 test("fbclid is read from the page url so a decliner's click is still attributable", () => {
