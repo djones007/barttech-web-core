@@ -4,6 +4,16 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-01c] — Redeem client checks its host; dependency audit runs on a schedule
+
+### Changed
+- `redeemPrepaidCode` now requires the checkout host to pass `isSafePublicHost` (never an IP, `localhost`, `.local` or `.internal` name, so a bad configuration value cannot send the bearer token and the buyer's email to an internal service or a cloud metadata address); such a host returns `misconfigured` and no request is made. New optional `allowedHosts` option: an exact, case-insensitive allowlist the caller can pass from its own config. Omitted, behaviour for any public hostname is unchanged, so no consumer breaks on a bump.
+- `npm audit --audit-level=high` moved out of the push/PR `checks` job.
+
+### Added
+- `.github/workflows/dependency-audit.yml`: runs `npm audit --audit-level=high` every Monday 07:00 UTC and on demand, blocking.
+- Tests: private and non-public hosts never reach the network; `allowedHosts` is exact and case-insensitive.
+
 ## [2026-11-01b] — Tests: neutral fixtures
 
 ### Changed

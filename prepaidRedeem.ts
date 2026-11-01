@@ -5,8 +5,14 @@
 // buyer next. All the rules (is the code real, unused, in date, rate-limited, atomic single use, fulfilment) live in the checkout
 // app that owns the codes; this module only asks it, and words the answer.
 //
+// The bearer token goes to the host the caller names, so the host is checked before any request: it must be a public dotted hostname
+// (`isSafePublicHost`: never an IP, localhost, .local or .internal name, so a bad config value cannot aim the token at an internal
+// service or a cloud metadata endpoint), and, when the caller passes `allowedHosts`, one of exactly those names.
+//
 // Server-side only (it carries a credential): call it from a route handler, never from a browser. Pure apart from the injected fetch.
 // ---------------------------------------------------------------------------
+
+import { isSafePublicHost } from "./security";
 
 /** The path the checkout app serves the redemption on. */
 export const PREPAID_REDEEM_PATH = "/api/prepaid/redeem";
@@ -34,6 +40,12 @@ export type PrepaidRedeemOutcome =
 export interface PrepaidRedeemOptions {
   /** The checkout host that owns the codes, hostname only (no scheme, no path). */
   checkoutHost: string;
+  /**
+   * Optional exact-match allowlist of checkout hostnames (case-insensitive). Pass it from the caller's own config whenever the host
+   * is known ahead of time: the token is then only ever sent to a name the site itself lists. Omitted, the host must still pass
+   * `isSafePublicHost`.
+   */
+  allowedHosts?: string[];
   /** The shared service token (from the caller's env). At least 32 characters. */
   token: string;
   code: string;
@@ -54,13 +66,15 @@ const HOST_RE = /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/i;
  * product is reached) or `successUrl` (their order page); otherwise show `message`.
  */
 export async function redeemPrepaidCode(o: PrepaidRedeemOptions): Promise<PrepaidRedeemOutcome> {
-  if (!HOST_RE.test(o.checkoutHost ?? "") || (o.token ?? "").length < 32) {
+  const host = (o.checkoutHost ?? "").trim().toLowerCase();
+  const allowed = o.allowedHosts?.length ? o.allowedHosts.some((a) => (a ?? "").trim().toLowerCase() === host) : true;
+  if (!HOST_RE.test(host) || !isSafePublicHost(host) || !allowed || (o.token ?? "").length < 32) {
     return { ok: false, kind: "misconfigured", message: PREPAID_UNAVAILABLE_MESSAGE };
   }
   if (!isPlausiblePrepaidCode(o.code)) return { ok: false, kind: "rejected", message: PREPAID_GENERIC_MESSAGE };
   const f = o.fetchImpl ?? fetch;
   try {
-    const res = await f(`https://${o.checkoutHost}${PREPAID_REDEEM_PATH}`, {
+    const res = await f(`https://${host}${PREPAID_REDEEM_PATH}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${o.token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ code: o.code, email: o.email, ...(o.clientIp ? { ip: o.clientIp } : {}), ...(o.firstName ? { firstName: o.firstName } : {}) }),

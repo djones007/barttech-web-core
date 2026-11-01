@@ -42,8 +42,9 @@ jobs:
       # change everywhere — it needs assertions, not just a clean compile.
       - if: always()
         run: npm test
-      - if: always()
-        run: npm audit --audit-level=high
+      # `npm audit` moved to dependency-audit.yml (weekly + on demand) on 2026-11-01: an
+      # upstream advisory is not news about the diff under test, and was forcing unrelated
+      # fix-commits into the repo that gates its consumers.
 
       # A classifier over untrusted input (headers, user agent, query params)
       # shipped in a consumer site with no test at all — 66 of its
