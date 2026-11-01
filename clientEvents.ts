@@ -93,7 +93,7 @@ export function trackMeta(event: string, params: Record<string, unknown> = {}, o
 }
 
 /**
- * THE SERVER-TWIN STANDARD for a click event (Dom, 2026-10-05). Fires the pixel (only if
+ * THE SERVER-TWIN STANDARD for a click event (the operator, 2026-10-05). Fires the pixel (only if
  * the visitor consented) AND beacons the same event to the site's own route, which sends
  * it to Meta server-side with the same id. Without this the event counts consenting
  * visitors only. `endpoint` is the site's route (POST, see `sendClickEvent`); the beacon

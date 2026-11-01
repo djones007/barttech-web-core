@@ -3,23 +3,18 @@
 // `enable_recording_console_log` on `posthog.init()`).
 //
 // WHY THIS EXISTS
-// PostHog session replay is enabled at the PROJECT level for the estate's one
-// shared project (Command Centre project bad60428-3c90-4030-ae09-c3fadd64225e
-// — see `bartmail.ts`/checkout consumers for the "one project, `brand` super-
-// property" architecture). Until 2026-09-22 every one of the 12+
-// `posthog.init()` call sites across the estate passed only `api_host`,
-// `person_profiles` and `capture_pageview` — no `session_recording` block and
-// no `enable_recording_console_log` anywhere — so rrweb's own defaults
-// applied and nobody had actually chosen them. On the checkout domain that
-// meant 100% of sessions recorded, browser console output captured into the
-// replay, and no server-side masking override: customer name/email/company,
-// order contents and console output were all sitting in session replays
-// nobody had decided to keep unmasked. Estate issue
-// 8e6fb948-935c-467b-bf9d-759d031bdb72.
+// PostHog session replay can be enabled at the PROJECT level. A
+// `posthog.init()` call that passes only `api_host`, `person_profiles` and
+// `capture_pageview` — no `session_recording` block and no
+// `enable_recording_console_log` — inherits rrweb's own defaults, which
+// nobody has actually chosen: every session recorded, browser console output
+// captured into the replay, and no client-side masking. On a checkout page
+// that puts customer name/email/company, order contents and console output
+// into replays nobody decided to keep unmasked.
 //
-// The PROJECT-level fix (URL blocklist for payment/admin routes, console
-// recording opt-in turned off, project masking config) was made directly via
-// the PostHog API and is NOT part of this module — this repo holds no
+// The PROJECT-level settings (URL blocklist for payment/admin routes, console
+// recording opt-in off, project masking config) are configured in PostHog
+// itself and are NOT part of this module — this repo holds no
 // PostHog credentials and never will (golden rule: no tag IDs/keys in this
 // PUBLIC repo). What belongs here is the CLIENT-side default every
 // `posthog.init()` call should carry too, as defence in depth: a project
@@ -55,10 +50,7 @@
 // applies to CSP hosts and consent state.
 //
 // ROLLOUT IS DELIBERATELY NOT DONE HERE. This module ships the shared
-// default; wiring it into each of the 12+ `posthog.init()` call sites is a
-// separate estate-wide sweep (several of those repos were mid-change when
-// this shipped) — see the estate issue for the consumer list and line
-// numbers.
+// default; each consumer's `posthog.init()` call site adopts it separately.
 // ---------------------------------------------------------------------------
 
 /**
@@ -110,11 +102,10 @@ export const POSTHOG_SESSION_RECORDING_DEFAULTS: {
  * ```
  *
  * `enable_recording_console_log: false` — belt-and-braces alongside the
- * project-level `capture_console_log_opt_in: false` (set 2026-09-22). The
- * client option is `undefined` by default, which FALLS BACK to the remote
- * project setting — so this is not redundant, it is the second of two
- * independent places the estate's incident showed needed an explicit
- * choice rather than an inherited default.
+ * project-level `capture_console_log_opt_in: false`. The client option is
+ * `undefined` by default, which FALLS BACK to the remote project setting —
+ * so this is not redundant, it is the second of two independent places that
+ * need an explicit choice rather than an inherited default.
  */
 export const POSTHOG_CLIENT_DEFAULTS: {
   enable_recording_console_log: false;

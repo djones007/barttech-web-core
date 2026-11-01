@@ -35,6 +35,22 @@ name: Public Hygiene
 # through three green runs. The scan now also greps a de-escaped MIRROR of the
 # tree (every `\` immediately before a regex metacharacter stripped), so a
 # regex-escaped literal reads the same as the bare one a denylist term expects.
+#
+# SEPARATOR BLIND SPOT (found by the 2026-11-01 audit, closed in this run).
+# Fixed-string matching also misses a term spelled with different separators:
+# a term `brand name` never matches `brand_name`, `brand-name` or `brandname`
+# in the tree, and a term `brand-name` never matches `brand_name`. That is how a
+# private filename in snake_case and a kebab-case slug sat in this tree through
+# green runs. The scan now ALSO greps a separator-collapsed mirror (spaces,
+# underscores and hyphens removed from the de-escaped text) against each term
+# with the same three characters removed. The fixed-string pass is unchanged.
+#
+# One carve-out, derived from the tree rather than listed by hand: env-var
+# NAMES the modules read (`process.env.NAME` / `process.env["NAME"]`) are
+# removed from the collapsed mirror before collapsing. They are public module
+# API a consumer has to set, the same accepted residual as module filenames,
+# and collapsing them can manufacture a match the raw tree does not contain.
+# The fixed-string pass still sees them.
 
 on:
   push:
@@ -72,27 +88,54 @@ jobs:
           import pathlib, re, shutil
 
           pattern = re.compile(r'\\([.^$*+?(){}|\[\]\\])')
+          env_re = re.compile(r'process\.env(?:\.([A-Z][A-Z0-9_]*)|\[\s*["\']([A-Z][A-Z0-9_]*)["\']\s*\])')
+          sep_re = re.compile(r'[ _-]')
           mirror = pathlib.Path("/tmp/deescaped")
-          if mirror.exists():
-              shutil.rmtree(mirror)
-          mirror.mkdir(parents=True)
+          collapsed = pathlib.Path("/tmp/collapsed")
+          for m in (mirror, collapsed):
+              if m.exists():
+                  shutil.rmtree(m)
+              m.mkdir(parents=True)
 
           with open("/tmp/allfiles.txt") as fh:
               rels = [line.rstrip("\n") for line in fh if line.strip()]
 
+          texts = {}
+          for rel in rels:
+              try:
+                  texts[rel] = pathlib.Path(rel).read_text(errors="ignore")
+              except Exception:
+                  texts[rel] = None
+
+          # Env-var names read anywhere in the tree (see header): longest first so
+          # a name that prefixes another is not stripped out of it first.
+          env_names = set()
+          for text in texts.values():
+              if text:
+                  for a, b in env_re.findall(text):
+                      env_names.add(a or b)
+          env_names = sorted(env_names, key=len, reverse=True)
+
           for rel in rels:
               src = pathlib.Path(rel)
-              dest = mirror / rel[2:] if rel.startswith("./") else mirror / rel
-              dest.parent.mkdir(parents=True, exist_ok=True)
-              try:
-                  text = src.read_text(errors="ignore")
-              except Exception:
-                  try:
-                      shutil.copy(src, dest)
-                  except Exception:
-                      pass
+              tail = rel[2:] if rel.startswith("./") else rel
+              text = texts[rel]
+              for root in (mirror, collapsed):
+                  dest = root / tail
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  if text is None:
+                      try:
+                          shutil.copy(src, dest)
+                      except Exception:
+                          pass
+              if text is None:
                   continue
-              dest.write_text(pattern.sub(r"\1", text))
+              deesc = pattern.sub(r"\1", text)
+              (mirror / tail).write_text(deesc)
+              flat = deesc
+              for name in env_names:
+                  flat = flat.replace(name, "")
+              (collapsed / tail).write_text(sep_re.sub("", flat))
           PYEOF
 
           LEAKS=0
@@ -105,7 +148,14 @@ jobs:
             # (filename match, structural files, path-based signals) stays about
             # the actual tree, never the scratch mirror.
             MATCHES_DEESC=$(printf '%s\n' "$MATCHES_DEESC_RAW" | sed 's#^/tmp/deescaped/#./#')
-            MATCHES=$(printf '%s\n%s\n' "$MATCHES_RAW" "$MATCHES_DEESC" | sed '/^$/d' | sort -u)
+            # Separator-collapsed pass (see header). Skipped when the collapsed term
+            # is under 4 chars — too short to mean anything once separators go.
+            CTERM=$(printf '%s' "$term" | tr -d ' _-')
+            MATCHES_COLL=""
+            if [ "${#CTERM}" -ge 4 ]; then
+              MATCHES_COLL=$(grep -riIl --fixed-strings -- "$CTERM" /tmp/collapsed | sed 's#^/tmp/collapsed/#./#' || true)
+            fi
+            MATCHES=$(printf '%s\n%s\n%s\n' "$MATCHES_RAW" "$MATCHES_DEESC" "$MATCHES_COLL" | sed '/^$/d' | sort -u)
             [ -z "$MATCHES" ] && continue
             COUNT=$(printf '%s\n' "$MATCHES" | sed '/^$/d' | wc -l | tr -d ' ')
 
@@ -118,6 +168,9 @@ jobs:
             # gate can be wrong. Three signals, any one of which means "fix the secret,
             # not the repo":
             NAME_HITS=$(grep -icF -- "$term" /tmp/allfiles.txt || true)
+            if [ "$NAME_HITS" -eq 0 ] && [ "${#CTERM}" -ge 4 ]; then
+              NAME_HITS=$(tr -d ' _-' < /tmp/allfiles.txt | grep -icF -- "$CTERM" || true)
+            fi
             STRUCTURAL=0
             printf '%s\n' "$MATCHES" | grep -qxE '\./(package\.json|package-lock\.json|README\.md)' && STRUCTURAL=1
             WIDE=0

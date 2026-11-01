@@ -18,7 +18,7 @@
 //     switches the ENTIRE quote's non-monthly value — every one-off line, not
 //     only the triggering category, and NOT respecting a per-line
 //     `depositExempt` either — to `fullPercent`, bypassing `standardPercent`,
-//     `thresholdNet` and `fullPaymentCategories` entirely. (Dom, 2026-09-21:
+//     `thresholdNet` and `fullPaymentCategories` entirely. (the operator, 2026-09-21:
 //     splitting the deposit — 100% of hardware, 50% of the rest — left a small
 //     odd balance that had to be chased separately after the deposit was paid.
 //     "If hardware is on the quote, the entire quote bar any monthly services
@@ -26,7 +26,7 @@
 //     than the exempt-line carve-out below: verified against a real quote,
 //     where the escalated total included a `depositExempt` line (an operator
 //     had excluded a shipping charge under the old rule) specifically because
-//     Dom's rule names only ONE exception — monthly services.)
+//     The operator's rule names only ONE exception — monthly services.)
 //   * Otherwise, categories named in `fullPaymentCategories` are due in full
 //     and ignore the threshold entirely.
 //   * Everything else takes `standardPercent`, but only once the WHOLE
@@ -151,7 +151,7 @@ export function computeDeposit(
 
   if (quoteTriggered) {
     /* Deliberately `nonMonthly`, not `bearing` — a per-line `depositExempt`
-       stops applying once the trigger fires. Dom's rule names exactly one
+       stops applying once the trigger fires. The operator's rule names exactly one
        exception ("bar any monthly services"); a line an operator excluded
        under the OLD tiered rule for its own reasons is not automatically also
        an exception to this one — a deposit-exempt shipping line on the real

@@ -14,7 +14,8 @@
 // OPTIONAL `selfRequested` argument, and clears suppression only when that
 // argument is passed. The rule "a new self-requested send path must pass
 // `selfRequested`" is documented (template, website-build, brand-email,
-// project_nutty_orange_ms_deliverability) but nothing enforced it.
+// and the operator's private Microsoft-deliverability notes) but nothing
+// enforced it.
 //
 // TWO THINGS THIS GATE CHECKS
 //

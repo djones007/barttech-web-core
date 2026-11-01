@@ -146,7 +146,7 @@ function fakeClient(tables: Record<string, unknown>) {
 
 test("getBartmailSuppressionReasons: returns the reasons for the one address, reads only", async () => {
   const { client, touched } = fakeClient({ brands: { id: "b1", tenant_id: "t1" }, contacts: { id: "c1" }, contact_suppressions: [{ reason: "bounce" }, { reason: "unsubscribe" }] });
-  assert.deepEqual(await getBartmailSuppressionReasons(" A@B.com ", "nutty-orange", { client }), ["bounce", "unsubscribe"]);
+  assert.deepEqual(await getBartmailSuppressionReasons(" A@B.com ", "brand-a", { client }), ["bounce", "unsubscribe"]);
   assert.ok(touched.every((t) => t.startsWith("from:")), "no write verb is ever used");
 });
 

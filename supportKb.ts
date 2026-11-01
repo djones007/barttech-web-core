@@ -82,8 +82,8 @@ export async function getPublishedArticle(
  *
  * The logging is the point, not a side effect: rows with `results_count = 0`
  * are the knowledge-base writing backlog — precisely what customers asked for
- * and could not find — surfaced in the Support Engine admin and in Command
- * Centre. A search box that does not log its misses throws away the single
+ * and could not find — surfaced in the support admin and the ops dashboard.
+ * A search box that does not log its misses throws away the single
  * most useful signal a knowledge base produces.
  *
  * `websearch_to_tsquery` tolerates the quotes and operators people actually

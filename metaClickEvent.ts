@@ -3,7 +3,7 @@
  * Pure: no "server-only", no network, so it is unit-tested. `sendClickEvent` in
  * metaCapi.ts is the thin sender that uses it.
  *
- * THE STANDARD (Dom, 2026-10-05): every Meta conversion event the browser pixel
+ * THE STANDARD (the operator, 2026-10-05): every Meta conversion event the browser pixel
  * fires has a server-side twin carrying the SAME event id, because the pixel only
  * exists after advertising consent and so only counts people who accepted. Purchase
  * and InitiateCheckout already follow this (the checkout sends both from the server);
