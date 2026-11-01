@@ -8,7 +8,7 @@
  * exists after advertising consent and so only counts people who accepted. Purchase
  * and InitiateCheckout already follow this (the checkout sends both from the server);
  * ViewContent follows it (`sendLandingPageView`); AddToCart did not, which is why the
- * Still Room's AddToCart volume was a consent-filtered fraction of the real clicks.
+ * one site's AddToCart volume was a consent-filtered fraction of the real clicks.
  *
  * Why only CLICK events are allowed through this door. `ViewContent` / `PageView`
  * are events a server can emit with no human behind them: a crawler's page load made
