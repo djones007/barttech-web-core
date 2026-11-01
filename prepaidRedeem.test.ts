@@ -69,6 +69,36 @@ test("misconfiguration and junk never reach the network", async () => {
   assert.equal(calls, 0);
 });
 
+test("the token is never sent to a non-public host", async () => {
+  let calls = 0;
+  const fetchImpl = (async () => {
+    calls++;
+    return new Response("{}");
+  }) as unknown as typeof fetch;
+  for (const checkoutHost of ["169.254.169.254", "127.0.0.1", "10.0.0.5", "localhost", "metadata.google.internal", "db.local", "[::1]", "intranet", "a.example.com:8443", "u@evil.example.com"]) {
+    const r = await redeemPrepaidCode({ ...base, checkoutHost, fetchImpl });
+    assert.equal(r.ok === false && r.kind, "misconfigured", checkoutHost);
+  }
+  assert.equal(calls, 0);
+});
+
+test("allowedHosts is an exact, case-insensitive allowlist; omitted, any public host passes", async () => {
+  const seen: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    seen.push(url);
+    return new Response("{}", { status: 404 });
+  }) as unknown as typeof fetch;
+  const off = await redeemPrepaidCode({ ...base, checkoutHost: "other.example.com", allowedHosts: ["checkout.example.com"], fetchImpl });
+  assert.equal(off.ok === false && off.kind, "misconfigured");
+  assert.deepEqual(seen, []);
+  await redeemPrepaidCode({ ...base, checkoutHost: "Checkout.Example.com", allowedHosts: ["CHECKOUT.example.com"], fetchImpl });
+  await redeemPrepaidCode({ ...base, fetchImpl });
+  assert.deepEqual(seen, ["https://checkout.example.com/api/prepaid/redeem", "https://checkout.example.com/api/prepaid/redeem"]);
+  // an empty allowlist is the same as none given
+  await redeemPrepaidCode({ ...base, allowedHosts: [], fetchImpl });
+  assert.equal(seen.length, 3);
+});
+
 test("an ok response without a success URL is not a success", async () => {
   const r = await redeemPrepaidCode({ ...base, fetchImpl: reply(200, { ok: true }) });
   assert.equal(r.ok, false);

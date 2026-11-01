@@ -1,0 +1,37 @@
+name: Dependency Audit
+
+# Scheduled, not per-push. Until 2026-11-01 `npm audit --audit-level=high` ran inside
+# the push/PR `checks` job (ci.yml), so an advisory published upstream reddened every
+# unrelated commit and forced fix-commits like "Bump <package> (npm audit high
+# advisory)" into a repo that ~20 consumers pin to. An advisory is news about the
+# dependency tree, not about the diff under review, so it is checked on a clock.
+#
+# Blocking here: a high or critical advisory fails this run, which GitHub reports to
+# the repo's watchers. No --omit=dev: the package has no runtime dependencies, so
+# omitting dev would audit nothing. Dependabot (dependabot.yml) opens the fix PRs.
+#
+# Never on pull_request or push: no secrets are used, but the trigger shape matches
+# security-review.yml, and workflow_dispatch lets a maintainer run it on demand.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: npm audit (high and above)
+        run: npm audit --audit-level=high
