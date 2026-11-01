@@ -327,13 +327,13 @@ test("experimentEventTag: live assignment under the REQUESTED path; nothing when
 
 test("experimentEventTag: preferKey tags the experiment the page read, not the first live row (forced QA view)", () => {
   const list: PageAssignment[] = [
-    { key: "still-room-home", variant: "b", forced: true, live: true, path: "/" },
-    { key: "still-room-sales-b", variant: "b", forced: true, live: true, path: "/" },
+    { key: "home-test", variant: "b", forced: true, live: true, path: "/" },
+    { key: "sales-test-b", variant: "b", forced: true, live: true, path: "/" },
   ];
-  assert.equal(experimentEventTag(list).experiment?.key, "still-room-home");
-  assert.equal(experimentEventTag(list, "still-room-sales-b").experiment?.key, "still-room-sales-b");
-  assert.equal(experimentEventTag(list, "not-live").experiment?.key, "still-room-home");
-  assert.equal(liveAssignment(list, null)?.key, "still-room-home");
+  assert.equal(experimentEventTag(list).experiment?.key, "home-test");
+  assert.equal(experimentEventTag(list, "sales-test-b").experiment?.key, "sales-test-b");
+  assert.equal(experimentEventTag(list, "not-live").experiment?.key, "home-test");
+  assert.equal(liveAssignment(list, null)?.key, "home-test");
 });
 
 // ---------------------------------------------------------------------------

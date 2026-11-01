@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-01b] — Tests: neutral fixtures
+
+### Changed
+- Test origins and experiment keys now use `example.com`-style values, and two comments describe a site by role. No runtime change.
+
 ## [2026-11-01] — Public hygiene: remove separator-variant leaks; gate now matches separator variants
 
 ### Changed
