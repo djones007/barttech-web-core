@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-02] — minimatch advisory cleared
+
+### Fixed
+- npm `overrides` pins `minimatch` to `^11.0.3` (GHSA-g3hv-75wg-m249, patched in 11.0.1). The only copies left below 11.0.1 were eslint, `@eslint/*` and typescript-estree (3.x and 10.x), which have no patched release on their own lines. eslint 9 and typescript-estree use the `Minimatch` class or the named export, which minimatch 11 keeps; lint passes unchanged. `eslint-plugin-import` and `jsx-a11y` still import the old default export, but only inside rules this repo does not configure (no `import/` or `label-has-associated-control` options). Dev/build-time only, no runtime path. Closes the open Dependabot alerts (Fix Engine 1c6e1dcf).
+
 ## [2026-11-01d] — vercel-ignore: two optional env vars for several projects on one repo
 
 ### Added
