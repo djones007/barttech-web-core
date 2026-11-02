@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-02b] — lighthouse-gate: a breach must reproduce
+
+### Changed
+- `scripts/lighthouse-gate.mjs` re-measures a route that is over budget (`LH_CONFIRM`, default 2 extra rounds) and fails it only if every round breaches. TBT is CPU-bound and a shared GitHub runner swung it 2-3x between identical runs (428ms then 1140ms, 648ms then 532ms, 890ms then 477ms across three consumers on 2026-11-02), so three weekly Smoke jobs raised false alarms. A real regression breaches every round and still fails; the report notes "passed round N" when it needed a retry. Verified locally: a forced breach still exits 1. Consumers pick it up by bumping the pinned SHA in `smoke.yml`.
+
 ## [2026-11-02] — minimatch advisory cleared
 
 ### Fixed

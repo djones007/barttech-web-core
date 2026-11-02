@@ -34,7 +34,8 @@ a CI step that fetches the raw file.
   or fewer than half the runs completing. `LH_ENFORCE=false` = report only. Budgets are mirrored by hand
   from Command Centre `/page-speed` (CI has no service key to read the table). Plain Node, no dependencies
   (it shells out to `npx lighthouse@<pinned>`); consumers fetch it from raw.githubusercontent, pinned to a
-  web-core sha.
+  web-core sha. A route over budget is re-measured (`LH_CONFIRM`, default 2 extra rounds) and fails only if
+  every round breaches: shared-runner TBT swings 2-3x, a real regression does not.
 
 - `check-id-list-filters.mjs` — flags an **unbounded id array being used as a
   PostgREST query filter**, i.e. the interpolated `.not('id', 'in', \`(${…})\`)`
