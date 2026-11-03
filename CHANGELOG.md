@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-03] — metaCapi: accept pre-hashed identity
+
+### Added
+- `CAPIEventData.hashedUserData` (`em`, `ph`, `external_id`): identity that is already SHA-256 hashed per Meta's spec, for a caller that deliberately never keeps the raw value. A key the raw fields already produced wins; anything that is not 64 lowercase hex chars is dropped, never sent. Additive: existing callers are unchanged. Test added (588 tests pass).
+
 ## [2026-11-02b] — lighthouse-gate: a breach must reproduce
 
 ### Changed

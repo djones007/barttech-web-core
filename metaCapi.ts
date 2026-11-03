@@ -124,6 +124,12 @@ export interface CAPIEventData {
   country?: string;
   /** The person's id in the caller's own system (lead/customer id). Hashed. */
   externalId?: string;
+  /**
+   * Identity that is ALREADY SHA-256 hashed per Meta's spec (lowercase hex, 64 chars), for a caller that
+   * deliberately never keeps the raw value, such as a central tracking service storing only hashes. Used
+   * only for a key the raw fields did not produce; anything that is not 64 hex chars is dropped, never sent.
+   */
+  hashedUserData?: { em?: string; ph?: string; external_id?: string };
   /** Meta click id — `fb.1.<ts>.<fbclid>`; use `fbcFromRequest()` to derive it. */
   fbc?: string;
   /** Meta browser id from the `_fbp` cookie — absent for consent decliners. */
@@ -227,6 +233,10 @@ export async function sendCAPIEventResult(
     country: data.country,
     externalId: data.externalId,
   });
+  for (const k of ["em", "ph", "external_id"] as const) {
+    const h = data.hashedUserData?.[k];
+    if (!userData[k] && typeof h === "string" && /^[0-9a-f]{64}$/.test(h)) userData[k] = h;
+  }
   if (data.fbc) userData.fbc = data.fbc;
   if (data.fbp) userData.fbp = data.fbp;
   if (data.clientIp) userData.client_ip_address = data.clientIp;

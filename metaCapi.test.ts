@@ -121,6 +121,17 @@ test("no custom_data key when there is none; identity is hashed, never sent raw"
   assert.ok(Object.keys(ev.user_data).some((k) => k === "em"), "hashed em present");
 });
 
+test("pre-hashed identity passes through; malformed hashes are dropped; raw-derived keys win", async () => {
+  const good = "a".repeat(64);
+  await sendCAPIEvent({ ...base, hashedUserData: { em: good, ph: "b".repeat(64), external_id: "NOT-A-HASH" } }, CREDS);
+  const ud = calls[0].body.data[0].user_data;
+  assert.equal(ud.em, good);
+  assert.equal(ud.ph, "b".repeat(64));
+  assert.equal("external_id" in ud, false, "a value that is not 64 lowercase hex is never sent");
+  await sendCAPIEvent({ ...base, email: "Person@Example.com", hashedUserData: { em: good } }, CREDS);
+  assert.notEqual(calls[1].body.data[0].user_data.em, good, "the hash derived from the raw email takes precedence");
+});
+
 test("env credentials are used when none are passed; explicit creds ignore env", async () => {
   process.env.META_PIXEL_ID = "envpix";
   process.env.META_CAPI_TOKEN = "envtok";
