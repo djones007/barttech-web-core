@@ -8,6 +8,7 @@ import {
   BartmailPartialOptinError,
   getBartmailSuppressionReasons,
   bartmailMarkRefunded,
+  bartmailPurchase,
 } from "./bartmail";
 
 // ---------------------------------------------------------------------------
@@ -303,4 +304,70 @@ test("bartmailMarkRefunded: no matching row is a normal answer", async () => {
 
 test("bartmailMarkRefunded reports a database error", async () => {
   assert.deepEqual(await bartmailMarkRefunded("pi_3", { db: fakePurchases({ data: null, error: { message: "boom" } }).db }), { ok: false, updated: 0, error: "boom" });
+});
+
+// ---------------------------------------------------------------------------
+// bartmailPurchase: the parallel optin may not have created the contact yet
+// ---------------------------------------------------------------------------
+async function withPurchaseFetch(
+  responses: Array<{ status: number; body: unknown }>,
+  run: (calls: () => number) => Promise<void>
+): Promise<void> {
+  const prevFetch = globalThis.fetch;
+  const prevErr = console.error;
+  let n = 0;
+  globalThis.fetch = (async () => {
+    const r = responses[Math.min(n, responses.length - 1)];
+    n++;
+    return new Response(JSON.stringify(r.body), { status: r.status });
+  }) as typeof fetch;
+  console.error = () => {};
+  try {
+    await run(() => n);
+  } finally {
+    globalThis.fetch = prevFetch;
+    console.error = prevErr;
+  }
+}
+const PURCHASE = { email: "a@b.co", brand: "acme", product: "p", amount: 100, stripe_session_id: "cs_1" };
+const FAST = { retryDelaysMs: [1, 1] };
+
+test("bartmailPurchase: a 404 Contact not found then a 200 ends ok:true", async () => {
+  await withPurchaseFetch(
+    [{ status: 404, body: { error: "Contact not found" } }, { status: 200, body: { ok: true, duplicate: false } }],
+    async (calls) => {
+      const r = await bartmailPurchase(PURCHASE, FAST);
+      assert.deepEqual(r, { ok: true, duplicate: false });
+      assert.equal(calls(), 2);
+    }
+  );
+});
+
+test("bartmailPurchase: a persistent 404 Contact not found ends ok:false after exactly 3 tries", async () => {
+  await withPurchaseFetch([{ status: 404, body: { error: "Contact not found" } }], async (calls) => {
+    const r = await bartmailPurchase(PURCHASE, FAST);
+    assert.deepEqual(r, { ok: false, duplicate: false });
+    assert.equal(calls(), 3);
+  });
+});
+
+test("bartmailPurchase: a 401 is not retried", async () => {
+  await withPurchaseFetch([{ status: 401, body: { error: "Unauthorized" } }], async (calls) => {
+    const r = await bartmailPurchase(PURCHASE, FAST);
+    assert.deepEqual(r, { ok: false, duplicate: false });
+    assert.equal(calls(), 1);
+  });
+});
+
+test("bartmailPurchase: a 404 for another reason (Brand not found) is not retried", async () => {
+  await withPurchaseFetch([{ status: 404, body: { error: "Brand not found" } }], async (calls) => {
+    const r = await bartmailPurchase(PURCHASE, FAST);
+    assert.equal(r.ok, false);
+    assert.equal(calls(), 1);
+  });
+});
+
+test("bartmailPurchase: default backoff is 1s then 2s, 3s total", async () => {
+  const { PURCHASE_CONTACT_RETRY_DELAYS_MS } = await import("./bartmail");
+  assert.deepEqual([...PURCHASE_CONTACT_RETRY_DELAYS_MS], [1000, 2000]);
 });

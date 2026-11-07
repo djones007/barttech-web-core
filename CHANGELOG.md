@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-07] — bartmailPurchase: retry when the parallel optin has not created the contact yet
+
+### Fixed
+- `bartmailPurchase` retries a `404 {"error":"Contact not found"}` up to 3 attempts in total, backing off 1s then 2s (3s extra at most, safe inside a Stripe webhook). Callers send the optin and the purchase in parallel, and for a brand-new email BartMail can look up the contact before the optin has created it, so the purchase record was dropped. No other status is retried (401, 429, 5xx, a 404 for another reason). Safe to repeat: `/api/purchases` is idempotent on `stripe_session_id`. New optional second argument `{ retryDelaysMs }` for tests; existing callers unchanged. Tests: 404 then 200 is ok, persistent 404 stops after 3 tries, 401 and other 404s are not retried.
+
 ## [2026-11-03] — metaCapi: accept pre-hashed identity
 
 ### Added
