@@ -658,7 +658,24 @@ export interface BartmailPurchaseResult {
   duplicate: boolean;
 }
 
-export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<BartmailPurchaseResult> {
+/**
+ * Backoff before attempts 2 and 3 when BartMail answers 404 "Contact not found".
+ * Callers send bartmailOptin and bartmailPurchase in parallel; for a brand-new
+ * email the purchase can reach BartMail before the optin has created the
+ * contact. 1s + 2s = 3s extra at most, well inside a Stripe webhook's ~20s.
+ * Safe to retry because the endpoint is idempotent on stripe_session_id.
+ */
+export const PURCHASE_CONTACT_RETRY_DELAYS_MS: readonly number[] = [1000, 2000];
+
+export interface BartmailPurchaseOptions {
+  /** Override the backoff (tests). Length + 1 is the total number of attempts. */
+  retryDelaysMs?: readonly number[];
+}
+
+export async function bartmailPurchase(
+  params: BartmailPurchaseParams,
+  options: BartmailPurchaseOptions = {}
+): Promise<BartmailPurchaseResult> {
   try {
     const bodyStr = JSON.stringify(params);
     const secret = process.env.BARTMAIL_PURCHASES_SECRET;
@@ -672,19 +689,28 @@ export async function bartmailPurchase(params: BartmailPurchaseParams): Promise<
     }
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (sig) headers["x-bartmail-signature"] = sig;
-    const res = await fetch(`${await resolveBartmailUrl()}/api/purchases`, {
-      method: "POST",
-      headers,
-      body: bodyStr,
-    });
+    const url = `${await resolveBartmailUrl()}/api/purchases`;
+    const delays = options.retryDelaysMs ?? PURCHASE_CONTACT_RETRY_DELAYS_MS;
+
+    let res!: Response;
+    let errText = "";
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      res = await fetch(url, { method: "POST", headers, body: bodyStr });
+      if (res.ok) break;
+      errText = (await res.text()).slice(0, 200);
+      // ONLY a 404 "Contact not found" is retried: the parallel optin has not
+      // landed yet. Every other status (401 drifted secret, 404 unknown brand,
+      // 429, 5xx) is not a timing problem and is reported at once.
+      const contactNotYetThere = res.status === 404 && /contact not found/i.test(errText);
+      if (!contactNotYetThere || attempt === delays.length) break;
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
 
     if (!res.ok) {
       // Logged, not thrown: a purchase already succeeded upstream, and a
       // failure to RECORD it must never fail the payment flow that called us.
       // But it must reach someone.
-      console.error(
-        `[bartmailPurchase] rejected: ${res.status} ${(await res.text()).slice(0, 200)}`
-      );
+      console.error(`[bartmailPurchase] rejected: ${res.status} ${errText}`);
       return { ok: false, duplicate: false };
     }
     // `duplicate` comes from the endpoint, which derives it from a 23505 unique
