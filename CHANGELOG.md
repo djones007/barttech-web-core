@@ -4,6 +4,17 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-11] — bartmailOptin names itself as the tag writer (`applied_by: "web"`)
+
+### Changed
+- The `contact_tags` upsert in `bartmailOptin()` now sets `applied_by: "web"`. It omitted the column, so every website opt-in tag landed with `applied_by` NULL, and BartMail's nurture auto-enrol trigger had to treat NULL as "this came from a website form" in order to work at all. That made NULL a trusted provenance, which silently extended to anything else omitting the column — a hand-written insert in the Supabase SQL editor, a future RPC, a one-off script — each able to write `<brand-slug>-optin` and drop a contact into a live sending sequence. Naming the writer lets the trigger require a known provenance instead. Estate issue 545d4290.
+
+### REQUIRED BEFORE BUMPING TO THIS PIN
+- BartMail migration `20261111a` must be live on the database the site writes to (it adds `web` to the `contact_tags_applied_by_check` CHECK). Applied to the live BartMail database 2026-11-11. Without it every tag write from a site on this pin fails the CHECK, which refuses the opt-in itself — the primary lead store. A site still on an OLDER pin keeps working either way: it writes NULL, which both the CHECK and the trigger still accept.
+
+### Added
+- A test asserting the upsert sets `applied_by: "web"`, so it cannot be dropped silently. It strips comments before matching: the first cut matched the explanatory comment inside the upsert call and passed even with the property deleted — a guard that cannot fail is off. Proven both ways before commit.
+
 ## [2026-11-07] — bartmailPurchase: retry when the parallel optin has not created the contact yet
 
 ### Fixed

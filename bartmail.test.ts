@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   withMailProvider,
   assertTagWrites,
@@ -370,4 +372,31 @@ test("bartmailPurchase: a 404 for another reason (Brand not found) is not retrie
 test("bartmailPurchase: default backoff is 1s then 2s, 3s total", async () => {
   const { PURCHASE_CONTACT_RETRY_DELAYS_MS } = await import("./bartmail");
   assert.deepEqual([...PURCHASE_CONTACT_RETRY_DELAYS_MS], [1000, 2000]);
+});
+
+// ---------------------------------------------------------------------------
+// Provenance guard (2026-11-11, estate issue 545d4290). bartmailOptin's tag
+// write must NAME itself. It used to omit applied_by, so every web opt-in tag
+// landed as NULL and bartmail's nurture auto-enrol trigger had to trust NULL to
+// function — which silently extended that trust to anything else that omitted
+// the column (a SQL-editor insert, a future RPC), letting it enrol contacts into
+// a live sending sequence. A source assertion, not a behavioural one: the write
+// needs a real Supabase client, and the regression this guards against is the
+// property disappearing from the call. If this fails because the upsert moved,
+// move the assertion with it — do not delete it, and do not drop applied_by
+// without first restoring NULL trust in bartmail's trigger (20261111a/b).
+// ---------------------------------------------------------------------------
+test("bartmailOptin names itself as the tag writer (applied_by: 'web')", () => {
+  // Comments are STRIPPED before matching. The first cut of this guard matched the
+  // explanatory comment that sits inside the upsert call and passed even with
+  // applied_by deleted from the object — a guard that cannot fail is off.
+  const src = readFileSync(join(process.cwd(), "bartmail.ts"), "utf8")
+    .split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  const upsert = src.match(/\.from\("contact_tags"\)\.upsert\(([\s\S]{0,600}?)\{\s*onConflict/);
+  assert.ok(upsert, "could not find the contact_tags upsert in bartmail.ts");
+  assert.match(
+    upsert[1],
+    /applied_by:\s*"web"/,
+    "the contact_tags upsert in bartmailOptin must set applied_by: \"web\" — see estate issue 545d4290"
+  );
 });
