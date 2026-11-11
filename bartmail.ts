@@ -570,7 +570,18 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   const tagResults: TagWriteResult[] = [];
   for (const tagName of uniqueTags) {
     const { error: tagError } = await supabase.from("contact_tags").upsert(
-      { contact_id: contactId, tenant_id: tenantId, brand_id: brandId, name: tagName },
+      // applied_by: "web" is EXPLICIT (2026-11-11). It was omitted, so the row landed
+      // with applied_by NULL, and bartmail's nurture auto-enrol trigger had to treat
+      // NULL as "this came from a website form" to work at all. That made NULL a
+      // trusted provenance: anything else that omitted the column — a hand-written
+      // insert in the SQL editor, a future RPC — passed the same gate and could enrol
+      // a contact into a live sending sequence. Naming the writer here lets the trigger
+      // require a known provenance instead. "web" is in the contact_tags_applied_by
+      // CHECK from bartmail migration 20261111a — a site pinned to a web-core BEFORE
+      // that migration keeps working (it writes NULL, still accepted); a site pinned to
+      // THIS web-core against a DB without 20261111a would have every tag write fail
+      // the CHECK, so the migration goes first. See estate issue 545d4290.
+      { contact_id: contactId, tenant_id: tenantId, brand_id: brandId, name: tagName, applied_by: "web" },
       { onConflict: "contact_id,name", ignoreDuplicates: true }
     );
     tagResults.push({ name: tagName, error: tagError });
