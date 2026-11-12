@@ -1013,6 +1013,149 @@ export async function bartmailEvent(params: BartmailEventParams): Promise<boolea
 }
 
 // ---------------------------------------------------------------------------
+// Lifecycle triggers — start or stop a BartMail sequence for one person.
+//
+// Lifecycle and marketing email (abandonment, post-purchase, review requests,
+// follow-ups) is a BartMail SEQUENCE, never an app's own cron: the app reports
+// what happened, BartMail decides which emails go and when, and branches on
+// clicks. The app calls this with a tag the sequence DECLARES (its trigger tag
+// to start, one of its exit tags to stop) and the details only this event knows
+// (`payload`: e.g. a resume link), which the sequence's templates read as
+// {{event.<key>}}. An undeclared tag is refused by the receiver (422) — an app
+// cannot invent tags, and opt-in/subscriber tags are refused outright: a trigger
+// is not marketing consent.
+//
+// Signed-timestamp ONLY (same secret and scheme as bartmailEvent): the receiver
+// refuses the replayable body-only signature on this route.
+// ---------------------------------------------------------------------------
+
+export interface BartmailTriggerParams {
+  email: string;
+  /** Brand slug. The tag must start with `<brand>-`. */
+  brand: string;
+  /** A trigger or exit tag declared by one of the brand's sequences. */
+  tag: string;
+  firstName?: string | null;
+  /**
+   * Required to START a sequence: why this person may be emailed. The app holds
+   * the evidence. `soft_optin_sale`: they started a purchase and were offered a
+   * refusal at capture; `customer`: an existing customer's lifecycle mail;
+   * `consented`: an explicit opt-in.
+   */
+  lawfulBasis?: "soft_optin_sale" | "customer" | "consented";
+  /** Flat event details: string/number/boolean values; keys lowercase snake_case; `*_url` values https. */
+  payload?: Record<string, string | number | boolean | null | undefined>;
+  /** Idempotency key (e.g. the payment id): a retry with the same id never restarts the sequence. */
+  eventId?: string;
+  /** Exit tags of the started sequence to clear first — one-cycle exits such as "<brand>-checkout-paid". */
+  resetTags?: string[];
+}
+
+export interface BartmailTriggerResult {
+  /** True when the receiver accepted the trigger. */
+  ok: boolean;
+  /** 'trigger' (started) or 'exit' (stop requested), as the receiver classified the tag. */
+  role: "trigger" | "exit" | null;
+  /** Enrolments created. 0 on a trigger means the sequence is not active yet. */
+  enrolled: number;
+  /** HTTP status, or 0 when nothing was sent. */
+  status: number;
+  /** Why it failed. Never contains the email. */
+  error: string | null;
+}
+
+const TRIGGER_TAG_RE = /^[a-z0-9][a-z0-9-]{1,99}$/;
+const TRIGGER_KEY_RE = /^[a-z][a-z0-9_]{0,39}$/;
+
+/** Pure: the JSON body for one trigger, or an error. Exported for tests. */
+export function buildBartmailTriggerBody(
+  params: BartmailTriggerParams,
+): { body: Record<string, unknown> } | { error: string } {
+  if (!params?.email || !params?.brand || !params?.tag) return { error: "missing email/brand/tag" };
+  if (!TRIGGER_TAG_RE.test(params.tag)) return { error: "tag must be lowercase letters, digits and hyphens" };
+  if (!params.tag.startsWith(`${params.brand}-`)) return { error: "tag must start with the brand slug" };
+  const payload: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(params.payload ?? {})) {
+    if (v === undefined || v === null || v === "") continue; // empty values are simply absent
+    if (!TRIGGER_KEY_RE.test(k)) return { error: `payload key "${k}" must be lowercase snake_case` };
+    if (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean") return { error: `payload.${k} must be a scalar` };
+    payload[k] = v;
+  }
+  const body: Record<string, unknown> = {
+    email: String(params.email).trim().toLowerCase(),
+    brand: params.brand,
+    tag: params.tag,
+  };
+  if (params.firstName) body.first_name = String(params.firstName).trim().slice(0, 100);
+  if (params.lawfulBasis) body.lawful_basis = params.lawfulBasis;
+  if (Object.keys(payload).length) body.payload = payload;
+  if (params.eventId) body.event_id = params.eventId;
+  if (params.resetTags?.length) {
+    if (params.resetTags.some((t) => !TRIGGER_TAG_RE.test(t))) return { error: "resetTags must be tag names" };
+    body.reset_tags = params.resetTags;
+  }
+  return { body };
+}
+
+/** Pure: read the receiver's reply. Exported for tests. */
+export function readBartmailTriggerReply(status: number, json: unknown): BartmailTriggerResult {
+  const j = (json && typeof json === "object" ? json : {}) as { role?: unknown; enrolled?: unknown; error?: unknown };
+  if (status >= 200 && status < 300) {
+    return {
+      ok: true,
+      role: j.role === "trigger" || j.role === "exit" ? j.role : null,
+      enrolled: typeof j.enrolled === "number" ? j.enrolled : 0,
+      status,
+      error: null,
+    };
+  }
+  return { ok: false, role: null, enrolled: 0, status, error: `${status} ${typeof j.error === "string" ? j.error.slice(0, 200) : "rejected"}` };
+}
+
+/**
+ * Start or stop a lifecycle sequence. Never throws, never rejects — a trigger
+ * must not break the checkout or game it is attached to. Still `await` it (an
+ * un-awaited promise dies when the serverless isolate freezes). A failure is
+ * logged and returned so the caller can count it in its own heartbeat.
+ */
+export async function bartmailTrigger(params: BartmailTriggerParams): Promise<BartmailTriggerResult> {
+  const fail = (error: string, status = 0): BartmailTriggerResult => ({ ok: false, role: null, enrolled: 0, status, error });
+  const secret = process.env.CONTACT_EVENTS_SECRET;
+  if (!secret) {
+    console.warn("[bartmailTrigger] CONTACT_EVENTS_SECRET not set — trigger dropped");
+    return fail("CONTACT_EVENTS_SECRET not set");
+  }
+  try {
+    const built = buildBartmailTriggerBody(params);
+    if ("error" in built) {
+      console.warn(`[bartmailTrigger] ${built.error} — trigger dropped`);
+      return fail(built.error);
+    }
+    const bodyStr = JSON.stringify(built.body);
+    const { signRequestBody } = await import("./signedRequest");
+    const res = await fetch(`${await resolveBartmailUrl()}/api/contacts/trigger`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...signRequestBody({ rawBody: bodyStr, secret }) },
+      body: bodyStr,
+    });
+    const text = await res.text();
+    let json: unknown = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = { error: text.slice(0, 200) };
+    }
+    const result = readBartmailTriggerReply(res.status, json);
+    if (!result.ok) console.error(`[bartmailTrigger] ${params.tag} rejected: ${result.error}`);
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[bartmailTrigger]", message);
+    return fail(message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Confirm a contact carries a given tag (e.g. the buyer tag) before serving a download.
 //
 // Signs the request when CONTACTS_VERIFY_SECRET is set in the CALLER's env

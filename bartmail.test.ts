@@ -11,6 +11,9 @@ import {
   getBartmailSuppressionReasons,
   bartmailMarkRefunded,
   bartmailPurchase,
+  buildBartmailTriggerBody,
+  readBartmailTriggerReply,
+  bartmailTrigger,
 } from "./bartmail";
 
 // ---------------------------------------------------------------------------
@@ -399,4 +402,64 @@ test("bartmailOptin names itself as the tag writer (applied_by: 'web')", () => {
     /applied_by:\s*"web"/,
     "the contact_tags upsert in bartmailOptin must set applied_by: \"web\" — see estate issue 545d4290"
   );
+});
+
+// ---------------------------------------------------------------------------
+// bartmailTrigger — lifecycle sequence start/stop
+// ---------------------------------------------------------------------------
+test("trigger body: normalises email, drops empty payload values, carries basis/event/reset", () => {
+  const r = buildBartmailTriggerBody({
+    email: " A@B.com ",
+    brand: "acme",
+    tag: "acme-checkout-started",
+    firstName: " Sam ",
+    lawfulBasis: "soft_optin_sale",
+    payload: { resume_url: "https://x.example/o", note: "", step: 2, gone: null },
+    eventId: "pi_123",
+    resetTags: ["acme-checkout-paid"],
+  });
+  assert.ok("body" in r);
+  if ("body" in r) {
+    assert.deepEqual(r.body, {
+      email: "a@b.com",
+      brand: "acme",
+      tag: "acme-checkout-started",
+      first_name: "Sam",
+      lawful_basis: "soft_optin_sale",
+      payload: { resume_url: "https://x.example/o", step: 2 },
+      event_id: "pi_123",
+      reset_tags: ["acme-checkout-paid"],
+    });
+  }
+});
+
+test("trigger body: refuses a tag outside the brand, a bad tag and a bad key", () => {
+  assert.ok("error" in buildBartmailTriggerBody({ email: "a@b.com", brand: "acme", tag: "other-x" }));
+  assert.ok("error" in buildBartmailTriggerBody({ email: "a@b.com", brand: "acme", tag: "Acme-X" }));
+  assert.ok("error" in buildBartmailTriggerBody({ email: "a@b.com", brand: "acme", tag: "acme-x", payload: { "Bad Key": "v" } }));
+  assert.ok("error" in buildBartmailTriggerBody({ email: "", brand: "acme", tag: "acme-x" }));
+});
+
+test("trigger reply: success and refusal", () => {
+  assert.deepEqual(readBartmailTriggerReply(200, { ok: true, role: "trigger", enrolled: 1 }), {
+    ok: true, role: "trigger", enrolled: 1, status: 200, error: null,
+  });
+  const bad = readBartmailTriggerReply(422, { error: "not declared" });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.error, "422 not declared");
+});
+
+test("trigger: no secret is a quiet failure, never a throw", async () => {
+  const prev = process.env.CONTACT_EVENTS_SECRET;
+  delete process.env.CONTACT_EVENTS_SECRET;
+  const orig = console.warn;
+  console.warn = () => {};
+  try {
+    const r = await bartmailTrigger({ email: "a@b.com", brand: "acme", tag: "acme-x" });
+    assert.equal(r.ok, false);
+    assert.equal(r.status, 0);
+  } finally {
+    console.warn = orig;
+    if (prev !== undefined) process.env.CONTACT_EVENTS_SECRET = prev;
+  }
 });

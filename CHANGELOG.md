@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-12] — `bartmailTrigger`: start or stop a lifecycle sequence
+
+### Added
+- `bartmailTrigger({ email, brand, tag, lawfulBasis, firstName?, payload?, eventId?, resetTags? })` in `bartmail.ts`. An app reports a lifecycle event (a checkout started, an order paid, a game finished). BartMail's sequence then decides which emails go and when. The tag must be one a brand sequence declares as its trigger or as an exit; `payload` carries event details that templates read as `{{event.<key>}}`. `lawfulBasis` is required to start a sequence. `eventId` makes a retry a no-op, and `resetTags` clears one-cycle exit tags.
+  - Signed-timestamp only, using the same `CONTACT_EVENTS_SECRET` as `bartmailEvent`.
+  - Never throws. It returns `{ ok, role, enrolled, status, error }` so the caller can count failures.
+  - Pure builders `buildBartmailTriggerBody` / `readBartmailTriggerReply`, with 4 tests.
+- Needs the receiver route `POST /api/contacts/trigger`, which is not live until its own change is merged. Until then a call returns 404 and is logged; it never breaks the caller.
+
 ## [2026-11-11] — bartmailOptin names itself as the tag writer (`applied_by: "web"`)
 
 ### Changed
