@@ -1056,8 +1056,10 @@ export interface BartmailTriggerResult {
   ok: boolean;
   /** 'trigger' (started) or 'exit' (stop requested), as the receiver classified the tag. */
   role: "trigger" | "exit" | null;
-  /** Enrolments created. 0 on a trigger means the sequence is not active yet. */
+  /** Enrolments created. 0 on a trigger means the sequence is not active yet, unless `duplicate`. */
   enrolled: number;
+  /** The receiver had already handled this exact `eventId` (a retry): nothing new, and nothing is wrong. */
+  duplicate: boolean;
   /** HTTP status, or 0 when nothing was sent. */
   status: number;
   /** Why it failed. Never contains the email. */
@@ -1099,17 +1101,18 @@ export function buildBartmailTriggerBody(
 
 /** Pure: read the receiver's reply. Exported for tests. */
 export function readBartmailTriggerReply(status: number, json: unknown): BartmailTriggerResult {
-  const j = (json && typeof json === "object" ? json : {}) as { role?: unknown; enrolled?: unknown; error?: unknown };
+  const j = (json && typeof json === "object" ? json : {}) as { role?: unknown; enrolled?: unknown; error?: unknown; duplicate?: unknown };
   if (status >= 200 && status < 300) {
     return {
       ok: true,
       role: j.role === "trigger" || j.role === "exit" ? j.role : null,
       enrolled: typeof j.enrolled === "number" ? j.enrolled : 0,
+      duplicate: j.duplicate === true,
       status,
       error: null,
     };
   }
-  return { ok: false, role: null, enrolled: 0, status, error: `${status} ${typeof j.error === "string" ? j.error.slice(0, 200) : "rejected"}` };
+  return { ok: false, role: null, enrolled: 0, duplicate: false, status, error: `${status} ${typeof j.error === "string" ? j.error.slice(0, 200) : "rejected"}` };
 }
 
 /**
@@ -1119,7 +1122,7 @@ export function readBartmailTriggerReply(status: number, json: unknown): Bartmai
  * logged and returned so the caller can count it in its own heartbeat.
  */
 export async function bartmailTrigger(params: BartmailTriggerParams): Promise<BartmailTriggerResult> {
-  const fail = (error: string, status = 0): BartmailTriggerResult => ({ ok: false, role: null, enrolled: 0, status, error });
+  const fail = (error: string, status = 0): BartmailTriggerResult => ({ ok: false, role: null, enrolled: 0, duplicate: false, status, error });
   const secret = process.env.CONTACT_EVENTS_SECRET;
   if (!secret) {
     console.warn("[bartmailTrigger] CONTACT_EVENTS_SECRET not set — trigger dropped");

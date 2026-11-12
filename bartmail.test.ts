@@ -442,8 +442,9 @@ test("trigger body: refuses a tag outside the brand, a bad tag and a bad key", (
 
 test("trigger reply: success and refusal", () => {
   assert.deepEqual(readBartmailTriggerReply(200, { ok: true, role: "trigger", enrolled: 1 }), {
-    ok: true, role: "trigger", enrolled: 1, status: 200, error: null,
+    ok: true, role: "trigger", enrolled: 1, duplicate: false, status: 200, error: null,
   });
+  assert.equal(readBartmailTriggerReply(200, { ok: true, role: "trigger", enrolled: 0, duplicate: true }).duplicate, true);
   const bad = readBartmailTriggerReply(422, { error: "not declared" });
   assert.equal(bad.ok, false);
   assert.equal(bad.error, "422 not declared");

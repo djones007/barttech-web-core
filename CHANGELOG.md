@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-12b] — `bartmailTrigger` reports a duplicate
+
+### Added
+- `BartmailTriggerResult.duplicate`: the receiver had already handled this exact `eventId`, so a retried trigger can tell "already done" apart from "sequence not active". Both report `enrolled: 0`. Additive; existing callers are unaffected.
+
 ## [2026-11-12] — `bartmailTrigger`: start or stop a lifecycle sequence
 
 ### Added
