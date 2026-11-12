@@ -1036,10 +1036,19 @@ export interface BartmailTriggerParams {
   /** A trigger or exit tag declared by one of the brand's sequences. */
   tag: string;
   firstName?: string | null;
+  /**
+   * Required to START a sequence: why this person may be emailed. The app holds
+   * the evidence. `soft_optin_sale`: they started a purchase and were offered a
+   * refusal at capture; `customer`: an existing customer's lifecycle mail;
+   * `consented`: an explicit opt-in.
+   */
+  lawfulBasis?: "soft_optin_sale" | "customer" | "consented";
   /** Flat event details: string/number/boolean values; keys lowercase snake_case; `*_url` values https. */
   payload?: Record<string, string | number | boolean | null | undefined>;
-  /** Clear the started sequence's exit tags first (one-cycle exits such as "paid"). */
-  resetExitTags?: boolean;
+  /** Idempotency key (e.g. the payment id): a retry with the same id never restarts the sequence. */
+  eventId?: string;
+  /** Exit tags of the started sequence to clear first — one-cycle exits such as "<brand>-checkout-paid". */
+  resetTags?: string[];
 }
 
 export interface BartmailTriggerResult {
@@ -1078,8 +1087,13 @@ export function buildBartmailTriggerBody(
     tag: params.tag,
   };
   if (params.firstName) body.first_name = String(params.firstName).trim().slice(0, 100);
+  if (params.lawfulBasis) body.lawful_basis = params.lawfulBasis;
   if (Object.keys(payload).length) body.payload = payload;
-  if (params.resetExitTags) body.reset_exit_tags = true;
+  if (params.eventId) body.event_id = params.eventId;
+  if (params.resetTags?.length) {
+    if (params.resetTags.some((t) => !TRIGGER_TAG_RE.test(t))) return { error: "resetTags must be tag names" };
+    body.reset_tags = params.resetTags;
+  }
   return { body };
 }
 

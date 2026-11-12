@@ -407,14 +407,16 @@ test("bartmailOptin names itself as the tag writer (applied_by: 'web')", () => {
 // ---------------------------------------------------------------------------
 // bartmailTrigger — lifecycle sequence start/stop
 // ---------------------------------------------------------------------------
-test("trigger body: normalises email, drops empty payload values, flags reset", () => {
+test("trigger body: normalises email, drops empty payload values, carries basis/event/reset", () => {
   const r = buildBartmailTriggerBody({
     email: " A@B.com ",
     brand: "acme",
     tag: "acme-checkout-started",
     firstName: " Sam ",
+    lawfulBasis: "soft_optin_sale",
     payload: { resume_url: "https://x.example/o", note: "", step: 2, gone: null },
-    resetExitTags: true,
+    eventId: "pi_123",
+    resetTags: ["acme-checkout-paid"],
   });
   assert.ok("body" in r);
   if ("body" in r) {
@@ -423,8 +425,10 @@ test("trigger body: normalises email, drops empty payload values, flags reset", 
       brand: "acme",
       tag: "acme-checkout-started",
       first_name: "Sam",
+      lawful_basis: "soft_optin_sale",
       payload: { resume_url: "https://x.example/o", step: 2 },
-      reset_exit_tags: true,
+      event_id: "pi_123",
+      reset_tags: ["acme-checkout-paid"],
     });
   }
 });
