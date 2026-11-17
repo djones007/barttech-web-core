@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-17] — `scripts/check-foreign-service-key.mjs`: an app must not hold another app's service-role key
+
+### Added
+- Dependency-free CI gate (fetched like `check-lead-store-ordering.mjs`) that fails on any env var with a caller-named forbidden prefix and a `*SERVICE_KEY` / `*SERVICE_ROLE_KEY` suffix in a consumer's source, config, `.env.example` or workflows. Prefixes come from `--forbid` or `.foreign-service-key.json` (none given = fail), owner repo exempt, docs and lockfiles skipped, zero files scanned = fail, inline `// foreign-service-key-ok: <reason>` exceptions need a reason. Test: `check-foreign-service-key.test.ts` (in `npm test`). Estate issue d74fff61.
+
 ## [2026-11-12b] — `bartmailTrigger` reports a duplicate
 
 ### Added

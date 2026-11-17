@@ -509,3 +509,5 @@ a CI step that fetches the raw file.
   web-core mounts. Plain Node, no dependencies. Tested in `check-palette-contrast.test.ts`. Not yet
   fetched by any consumer's CI; first real run on a consumer site flagged `app/page.tsx:351`
   (#888 on #2a2a2a, 4.05:1).
+
+- `check-foreign-service-key.mjs` — fails a repo whose source or config files reference another app's service-role key. The caller names the forbidden env-var prefixes (`--forbid A,B` or `.foreign-service-key.json`); the owning repo is exempt (`--owner <package name>`). Scans `.env.example` and workflows too, skips docs, lockfiles, `node_modules` and the web-core submodule, and fails if it scanned nothing or was given no prefixes. Exceptions: inline `// foreign-service-key-ok: <reason>` (reason required). Consumers fetch it in CI like the other fetched gates.
