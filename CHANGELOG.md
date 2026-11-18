@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 
 
+## [2026-11-18] — Dependencies: minimatch bumped to 11.0.7+ (GHSA-cf2h-pxjq-68xw)
+
+### Changed
+- `overrides.minimatch` raised to `^11.0.7` and lockfile refreshed (resolves 11.0.9). Dev-only path (eslint / typescript-estree / glob), Low severity. No runtime change.
+
 ## [2026-11-17] — `scripts/check-foreign-service-key.mjs`: an app must not hold another app's service-role key
 
 ### Added
