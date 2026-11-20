@@ -3,6 +3,12 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-11-20] — `bartmailOptin` lowercases the email before lookup
+
+### Fixed
+- `bartmailOptin()` looked the contact up by the raw email, so a returning contact stored lowercase but submitted with a capital letter failed the write. The email is now trimmed and lowercased once, before the lookup, insert and tag upserts. Regression test in `bartmail.test.ts`.
+
+
 
 ## [2026-11-18] — Dependencies: minimatch bumped to 11.0.7+ (GHSA-cf2h-pxjq-68xw)
 

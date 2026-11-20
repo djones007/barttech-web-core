@@ -404,6 +404,17 @@ test("bartmailOptin names itself as the tag writer (applied_by: 'web')", () => {
   );
 });
 
+// Regression (2026-11-20): a returning contact stored lowercase but submitted
+// with a capital letter missed the lookup. Source assertion, as above.
+test("bartmailOptin normalises (trim + lowercase) the email before any lookup/insert", () => {
+  const src = readFileSync(join(process.cwd(), "bartmail.ts"), "utf8");
+  const body = src.slice(src.indexOf("export async function bartmailOptin"), src.indexOf("export interface BartmailPurchaseParams"));
+  assert.match(body, /email:\s*rawEmail/, "raw email must be destructured under another name");
+  assert.match(body, /const email = String\(rawEmail \?\? ""\)\.trim\(\)\.toLowerCase\(\)/);
+  assert.ok(body.indexOf("const email =") < body.indexOf('.eq("email", email)'), "normalise before the lookup");
+  assert.doesNotMatch(body, /rawEmail[\s\S]*rawEmail[\s\S]*rawEmail/, "rawEmail must only be used for normalising");
+});
+
 // ---------------------------------------------------------------------------
 // bartmailTrigger — lifecycle sequence start/stop
 // ---------------------------------------------------------------------------

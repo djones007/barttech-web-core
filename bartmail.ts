@@ -368,7 +368,7 @@ export async function settlePartialOptin(
 
 export async function bartmailOptin(params: BartmailOptinParams): Promise<void> {
   const {
-    email,
+    email: rawEmail,
     brand,
     form_type,
     first_name,
@@ -389,6 +389,10 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
     applyOptinTags = true,
     onPartialFailure,
   } = params;
+
+  // Stored emails are lowercase; a raw "Jane@X.com" would miss the lookup and
+  // fail the write. Normalise once, before every lookup/insert/upsert.
+  const email = String(rawEmail ?? "").trim().toLowerCase();
 
   const supabase = getBartmailSupabase();
 
