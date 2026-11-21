@@ -41,13 +41,22 @@
 #                     project does not add a preview build to every pull request.
 #   BUILD_SKIP_PATHS  space-separated paths (no spaces inside a path) this project does not depend
 #                     on. A push that changes nothing else skips.
+#   BUILD_PREVIEW_TAG a marker, e.g. [preview]. When set, a PREVIEW build runs only for the first push to a
+#                     branch (no previous deployment) or a push whose head commit message contains the
+#                     marker; every later push to that branch skips. Cuts repeat fix-up builds on one PR.
+#                     Production never reads it. It needs VERCEL_ENV=preview, so if Vercel does not supply
+#                     that variable the rule does nothing and the build runs (fails toward building).
 
 verdict() {
   case "${VERCEL_GIT_COMMIT_REF:-}" in dependabot/*) return 0 ;; esac
   if [ -n "${BUILD_ONLY_REF:-}" ] && [ "${VERCEL_GIT_COMMIT_REF:-}" != "$BUILD_ONLY_REF" ]; then return 0; fi
 
+  if [ -n "${BUILD_PREVIEW_TAG:-}" ] && [ "${VERCEL_ENV:-}" = "preview" ] && [ -n "${VERCEL_GIT_PREVIOUS_SHA:-}" ]; then
+    case "${VERCEL_GIT_COMMIT_MESSAGE:-}" in *"$BUILD_PREVIEW_TAG"*) ;; *) echo "vercel-ignore: preview without $BUILD_PREVIEW_TAG after first push: skip"; return 0 ;; esac
+  fi
+
   head=$(git rev-parse -q --verify HEAD 2>/dev/null) || return 1
-  echo "vercel-ignore: head=$head prev=${VERCEL_GIT_PREVIOUS_SHA:-unset} ref=${VERCEL_GIT_COMMIT_REF:-unset} shallow=$(git rev-parse --is-shallow-repository 2>/dev/null)"
+  echo "vercel-ignore: head=$head prev=${VERCEL_GIT_PREVIOUS_SHA:-unset} ref=${VERCEL_GIT_COMMIT_REF:-unset} env=${VERCEL_ENV:-unset} shallow=$(git rev-parse --is-shallow-repository 2>/dev/null)"
 
   base=""
   p="${VERCEL_GIT_PREVIOUS_SHA:-}"

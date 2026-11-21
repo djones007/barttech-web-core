@@ -3,6 +3,11 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-11-21] — `vercel-ignore.sh`: optional BUILD_PREVIEW_TAG cuts repeat preview builds
+
+### Added
+- New optional project env var `BUILD_PREVIEW_TAG` (e.g. `[preview]`). When set, a preview build runs only for the first push to a branch or a push whose head commit message contains the marker; later pushes skip. Production never reads it, and it needs `VERCEL_ENV=preview`, so a missing variable builds as before. Unset = no change for every existing consumer. Test in `vercelIgnore.test.ts`.
+
 ## [2026-11-20] — `bartmailOptin` lowercases the email before lookup
 
 ### Fixed

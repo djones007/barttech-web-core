@@ -320,3 +320,17 @@ test("gate: .vercelignore must exclude nested node_modules and must not exclude 
 test("gate: nested node_modules inside a submodule (file-count) demands a .vercelignore", () => {
   assert.ok(existsSync(SCRIPT));
 });
+
+test("BUILD_PREVIEW_TAG: first preview push builds, later untagged pushes skip, tagged ones build", () =>
+  withRepo((d) => {
+    commit(d, "a.txt");
+    const deployed = commit(d, "src/x.ts");
+    commit(d, "src/y.ts");
+    const base = { BUILD_PREVIEW_TAG: "[preview]", VERCEL_ENV: "preview" };
+    assert.equal(verdict(d, { ...base, VERCEL_GIT_COMMIT_MESSAGE: "fix it" }), 1, "first push (no previous SHA) builds");
+    assert.equal(verdict(d, { ...base, VERCEL_GIT_PREVIOUS_SHA: deployed, VERCEL_GIT_COMMIT_MESSAGE: "fix it" }), 0, "later untagged push skips");
+    assert.equal(verdict(d, { ...base, VERCEL_GIT_PREVIOUS_SHA: deployed, VERCEL_GIT_COMMIT_MESSAGE: "fix it [preview]" }), 1, "tagged push builds");
+    assert.equal(verdict(d, { BUILD_PREVIEW_TAG: "[preview]", VERCEL_ENV: "production", VERCEL_GIT_PREVIOUS_SHA: deployed, VERCEL_GIT_COMMIT_MESSAGE: "fix it" }), 1, "production never skips on the tag");
+    assert.equal(verdict(d, { BUILD_PREVIEW_TAG: "[preview]", VERCEL_GIT_PREVIOUS_SHA: deployed, VERCEL_GIT_COMMIT_MESSAGE: "fix it" }), 1, "no VERCEL_ENV: fails toward building");
+    assert.equal(verdict(d, { VERCEL_ENV: "preview", VERCEL_GIT_PREVIOUS_SHA: deployed, VERCEL_GIT_COMMIT_MESSAGE: "fix it" }), 1, "variable unset: no change");
+  }));
