@@ -294,7 +294,7 @@ if (cfg.allowNoPrimary !== true) {
   }
 }
 if (filesWithPrimary === 0) {
-  console.log("Lead-store ordering gate: NOT APPLICABLE - no route calls the primary store (" + cfg.primary + "), and no lead-capture route paths were found. Nothing was checked.");
+  console.log("Lead-store ordering gate: NOT APPLICABLE - no route calls the primary store (" + cfg.primary + ")" + (cfg.allowNoPrimary === true ? ' (opted out via "allowNoPrimary")' : ", and no lead-capture route paths were found") + ". Nothing was checked.");
   process.exit(0);
 }
 

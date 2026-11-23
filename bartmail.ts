@@ -551,7 +551,6 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   // (clearSelfRequestedSoftFailSuppression, clearComplaintSuppressionOnConsent),
   // which act on the provider-level record, never on contact_suppressions.
   // bartmail.test.ts fails if a delete returns to this file.
-  const liftFailure: string | null = null;
 
   // Build tag list — skip the default optin tags when consent wasn't given.
   // extraTags (explicit non-optin tags) are still applied regardless.
@@ -595,7 +594,7 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   // while still alerting on the missing tag. No in-process retry: the retry
   // belongs to a sender that redelivers (payment/order webhooks, which get the
   // throw by default).
-  await settlePartialOptin(tagResults, liftFailure, { brand, contactId }, onPartialFailure);
+  await settlePartialOptin(tagResults, null, { brand, contactId }, onPartialFailure);
 
   // Sequence enrolment: NOT triggered here. The AFTER INSERT trigger on
   // contact_tags feeds tag_enrolment_outbox, drained every 2 min by
