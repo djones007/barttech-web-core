@@ -3,6 +3,13 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-11-23] — `bartmailOptin` no longer lifts suppressions; gates that check nothing now fail
+
+### Fixed
+- **`bartmailOptin()` deleted the contact's brand-level `contact_suppressions` rows (unsubscribe, complaint, bounce, manual) on every consenting optin.** A public form submit proves only that the caller knows an email address and a brand slug, so anyone could resubscribe a stranger who had unsubscribed or complained. The delete is removed. The only paths allowed to undo a suppression are the audited self-requested ones in `emailit.ts` (`clearSelfRequestedSoftFailSuppression`, `clearComplaintSuppressionOnConsent`). BartMail's own optin route and the Shopify webhook dropped the same delete on 2026-09-01 and 2026-08-27. `applyOptinTags: false` behaviour is unchanged. `BartmailPartialOptinError.suppressionLiftFailed` and `settlePartialOptin`'s signature are kept for callers that read them; the flag is now always false. Source-pin test in `bartmail.test.ts`. **Behaviour change for consumers: a previously-suppressed contact who re-submits a form stays suppressed; consumers pick this up on their next web-core pointer bump.** Estate issue b4bd94c4.
+- **`check-webhook-verification.mjs` and `check-webhook-swallowed-errors.mjs` exited 0 when they found no route files**, and `check-lead-store-ordering.mjs` printed "OK" over a repo where it had matched no primary write. A wrong `roots` path or a renamed primary function looked like a clean run. Now: a Next.js app with no route files under its roots fails (set `"allowNoRoutes": true` in `.webhook-auth-gate.json` if it genuinely has none); a repo with lead-capture route paths (`optin`, `subscribe`, `signup`, `contact`, ...) where none calls the primary store fails (set `"allowNoPrimary": true` in `.lead-store-ordering.json` if they write elsewhere); a repo with no `next` dependency, or no lead routes, prints `NOT APPLICABLE` instead of a pass. `check-webhook-swallowed-errors.mjs --strict` also fails when `typescript` cannot be resolved. Tests: `check-gates-zero-checked.test.ts` (in `npm test`).
+
+
 ## [2026-11-21] — `vercel-ignore.sh`: optional BUILD_PREVIEW_TAG cuts repeat preview builds
 
 ### Added

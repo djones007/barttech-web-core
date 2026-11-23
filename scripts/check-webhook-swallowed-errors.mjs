@@ -60,7 +60,7 @@ function loadTypescript() {
 const ts = loadTypescript()
 if (!ts) {
   console.log('webhook-swallowed-errors: `typescript` could not be resolved from the repo or web-core — NOT CHECKED (this is not a pass).')
-  process.exit(0)
+  process.exit(strict ? 1 : 0) // --strict is the CI mode: an unrun check must not look green
 }
 
 let config = { roots: ['src/app', 'app'], ignore: [] }
@@ -130,12 +130,32 @@ function enclosingFunction(n) {
   return null
 }
 
+// A gate that finds nothing to check must say so loudly. In a Next.js app, "no
+// route files under the configured roots" almost always means the roots are
+// wrong (a monorepo layout, a moved src dir), so exiting 0 reports a clean run
+// over code that was never read (estate issue b4bd94c4). Fail there unless the
+// repo opts out in .webhook-auth-gate.json with "allowNoRoutes": true. A repo
+// with no `next` dependency has no App Router routes by definition and is not
+// applicable; that is printed, not passed silently.
+function noRoutesVerdict(label) {
+  let isNext = false
+  try {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+    isNext = !!({ ...pkg.dependencies, ...pkg.devDependencies }).next
+  } catch { /* no package.json: not a Next app */ }
+  if (!isNext) { console.log(`${label}: NOT APPLICABLE - no \`next\` dependency, so there are no App Router routes to check.`); process.exit(0) }
+  if (config.allowNoRoutes === true) { console.log(`${label}: no App Router routes under ${JSON.stringify(config.roots)}; allowed by "allowNoRoutes" in .webhook-auth-gate.json.`); process.exit(0) }
+  console.error(`::error::${label}: this is a Next.js app but NO route files were found under ${JSON.stringify(config.roots)}. The gate checked nothing, which is not a pass.`)
+  console.error('  Fix "roots" in .webhook-auth-gate.json to point at the real app directory, or set "allowNoRoutes": true if the app genuinely has no route handlers.')
+  process.exit(1)
+}
+
 const files = []
 for (const r of config.roots) {
   const d = join(root, r)
   if (existsSync(d)) files.push(...walk(d))
 }
-if (!files.length) { console.log('webhook-swallowed-errors: no App Router routes found — nothing to check.'); process.exit(0) }
+if (!files.length) noRoutesVerdict('webhook-swallowed-errors')
 
 const ignoreRe = (config.ignore || []).map((p) =>
   new RegExp(p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '.*').replace(/(?<!\.)\*/g, '[^/]*')))
