@@ -213,10 +213,11 @@ export interface BartmailOptinParams {
   custom_fields?: Record<string, string>;
   /**
    * When false, skips adding the default `${brand}-optin` / `${brand}-${form_type}`
-   * tags AND does not clear existing suppression — for a form whose opt-in
-   * checkbox was left unticked (the visitor did NOT consent to marketing). The
-   * contact record + custom_fields are still stored, so the lead is retained for
-   * internal segmentation but is not enrolled or un-suppressed. Defaults to true
+   * tags — for a form whose opt-in checkbox was left unticked (the visitor did
+   * NOT consent to marketing). The contact record + custom_fields are still
+   * stored, so the lead is retained for internal segmentation but is not
+   * enrolled. Existing suppressions are NEVER cleared by this function, ticked
+   * or not (2026-11-23). Defaults to true
    * (existing behaviour for every other caller).
    */
   applyOptinTags?: boolean;
@@ -274,9 +275,10 @@ export interface TagWriteResult {
 
 /**
  * Thrown by `bartmailOptin()` when the CONTACT ROW WAS SAVED but a later step
- * failed: a tag write and/or the suppression lift on
- * a consenting re-optin. The lead is stored; what is missing is the tag that
- * enrols its sequence / gates access, or its un-suppression.
+ * failed: a tag write. The lead is stored; what is missing is the tag that
+ * enrols its sequence / gates access. (`suppressionLiftFailed` is kept for
+ * callers that read it but is always false: the optin no longer lifts
+ * suppressions.)
  *
  * Distinct from every other throw in `bartmailOptin()` (brand lookup, contact
  * lookup/insert/update), which means the lead was NOT stored. A caller can
@@ -537,22 +539,19 @@ export async function bartmailOptin(params: BartmailOptinParams): Promise<void> 
   // lead exists, something attached to it did not land. Both steps are
   // attempted regardless of the other, then reported together. Nothing below
   // may `throw` directly — route it through the partial-failure block at the end.
-  let liftFailure: string | null = null;
-  if (applyOptinTags) {
-    // Remove any brand-level suppression (resubscribe). Skipped when consent
-    // wasn't given — an unticked opt-in must not silently un-suppress a contact.
-    // Checked (2026-09-29): a failed lift left a consenting re-optin
-    // suppressed — they would never receive what they just asked for — while
-    // the optin reported success. Recorded, not thrown on the spot, so the tag
-    // writes below are still attempted; both are reported together.
-    const { error: liftError } = await supabase
-      .from("contact_suppressions")
-      .delete()
-      .eq("contact_id", contactId)
-      .eq("tenant_id", tenantId)
-      .eq("brand_id", brandId);
-    if (liftError) liftFailure = liftError.message ?? liftError.code ?? "unknown";
-  }
+  // NO SUPPRESSION LIFT HERE (2026-11-23, estate issue b4bd94c4). This used to
+  // DELETE the contact's brand-level contact_suppressions rows (unsubscribe,
+  // complaint, bounce, manual) on every consenting optin. Submitting a public
+  // form proves only that the caller knows an email address and a brand slug,
+  // not that the suppressed person consents, so anyone could resubscribe a
+  // stranger who had unsubscribed or complained. BartMail's own optin route
+  // dropped the same delete on 2026-09-01 and the Shopify webhook on
+  // 2026-08-27. The only paths allowed to undo a suppression are the audited,
+  // throttled self-requested ones in emailit.ts
+  // (clearSelfRequestedSoftFailSuppression, clearComplaintSuppressionOnConsent),
+  // which act on the provider-level record, never on contact_suppressions.
+  // bartmail.test.ts fails if a delete returns to this file.
+  const liftFailure: string | null = null;
 
   // Build tag list — skip the default optin tags when consent wasn't given.
   // extraTags (explicit non-optin tags) are still applied regardless.

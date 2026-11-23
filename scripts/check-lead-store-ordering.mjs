@@ -58,8 +58,8 @@
 // Defaults are below. `secondary` defaults to a generic pattern covering
 // mail/notification/ESP/webhook-shaped calls.
 //
-// Exit codes: 0 = every primary write is first, or the repo has none.
-//             1 = at least one ordering violation.
+// Exit codes: 0 = every primary write is first, or the repo has no lead routes (said out loud).
+//             1 = at least one ordering violation, or lead routes exist and none was checked.
 //
 // Usage: node check-lead-store-ordering.mjs [rootDir]   (default: cwd)
 // ---------------------------------------------------------------------------
@@ -270,6 +270,32 @@ if (findings.length) {
     console.log(`      ${f.text}`);
   }
   process.exit(1);
+}
+
+// ZERO CHECKED IS NOT A PASS (estate issue b4bd94c4). This gate used to report
+// "OK" over a repo where it had matched no primary write at all, which is what
+// a renamed primary function, a moved app directory or a wrong `primary` regex
+// all look like. A route whose PATH says it captures a lead (optin, subscribe,
+// signup, contact, enquiry, waitlist, newsletter, lead, register) that never
+// calls the primary store means the gate read nothing it was meant to read.
+// Fail, unless the repo says so in .lead-store-ordering.json:
+//     { "allowNoPrimary": true }   // lead routes legitimately use another store
+if (cfg.allowNoPrimary !== true) {
+  const LEAD_PATH = /(^|\/)(opt-?in|subscribe|sign-?up|contact|enquir\w*|inquir\w*|waitlist|newsletter|leads?|register)(\/|-|\.|$)[^]*route\.(ts|js|tsx|mjs)$/i;
+  const leadRoutes = trackedSourceFiles().filter((f) => LEAD_PATH.test(f) && !/\.test\./.test(f));
+  if (leadRoutes.length && filesWithPrimary === 0) {
+    console.log(
+      `::error::Lead-store ordering gate checked NOTHING: ${leadRoutes.length} lead-capture route(s) ` +
+        `(${leadRoutes.slice(0, 3).join(", ")}${leadRoutes.length > 3 ? ", ..." : ""}) but none calls the primary store ` +
+        `/${cfg.primary}/. Set "primary" in .lead-store-ordering.json to the real call name, or ` +
+        `"allowNoPrimary": true if these routes legitimately write elsewhere.`
+    );
+    process.exit(1);
+  }
+}
+if (filesWithPrimary === 0) {
+  console.log("Lead-store ordering gate: NOT APPLICABLE - no route calls the primary store (" + cfg.primary + "), and no lead-capture route paths were found. Nothing was checked.");
+  process.exit(0);
 }
 
 console.log(

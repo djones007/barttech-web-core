@@ -475,3 +475,21 @@ test("trigger: no secret is a quiet failure, never a throw", async () => {
     if (prev !== undefined) process.env.CONTACT_EVENTS_SECRET = prev;
   }
 });
+
+// ---------------------------------------------------------------------------
+// bartmailOptin must never lift a suppression (estate issue b4bd94c4, 2026-11-23).
+// A public form submit proves nothing about the suppressed person's consent;
+// only the audited self-requested paths in emailit.ts may undo a suppression.
+// bartmailOptin needs a live Supabase client, so this pins the source: no
+// delete verb may exist in bartmail.ts, and contact_suppressions may only be
+// read (getBartmailSuppressionReasons).
+// ---------------------------------------------------------------------------
+test("bartmail.ts never deletes or writes contact_suppressions", () => {
+  const src = readFileSync(join(process.cwd(), "bartmail.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+  assert.equal(/\.delete\s*\(/.test(src), false, "no .delete() call may exist in bartmail.ts");
+  for (const m of src.matchAll(/from\(\s*["']contact_suppressions["']\s*\)([\s\S]{0,200})/g)) {
+    assert.equal(/\.(delete|insert|update|upsert)\s*\(/.test(m[1]), false, "contact_suppressions is read-only here");
+  }
+});
