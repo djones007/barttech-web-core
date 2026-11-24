@@ -149,14 +149,19 @@ let checked = 0
 
 for (const file of files) {
   const rel = relative(root, file).split(sep).join('/')
-  // A cron route that RETRIES deliveries is not a receiver — it is outbound.
-  if (/\/cron\//.test(rel)) continue
   if (ignoreRe.some(r => r.test(rel))) continue
 
   const raw = readWithinRoot(root, file)
   const src = stripComments(raw)
 
-  const looksLikeReceiver = /\/(?:webhooks?|hooks?)\//.test(rel) || /webhook/i.test(rel) || SIG_HEADERS.test(src)
+  // A cron route that RETRIES deliveries is outbound, not a receiver, and its path often says
+  // "webhook". But a blanket `/cron/` skip let a real inbound receiver hide under that path, so a
+  // cron route is exempt only while it reads no provider-signature header. One that does read one
+  // is receiving signed events and must verify them like any other receiver.
+  const isCronPath = /\/cron\//.test(rel)
+  const looksLikeReceiver = isCronPath
+    ? SIG_HEADERS.test(src)
+    : /\/(?:webhooks?|hooks?)\//.test(rel) || /webhook/i.test(rel) || SIG_HEADERS.test(src)
   if (!looksLikeReceiver) continue
 
   // A route that only re-exports a shared handler is verified by that handler.
@@ -220,4 +225,8 @@ if (problems.length) {
   process.exit(1)
 }
 
+if (checked === 0) {
+  console.log(`webhook-auth-gate: NOT APPLICABLE - ${files.length} route file(s) scanned, none is a webhook receiver. Nothing was verified.`)
+  process.exit(0)
+}
 console.log(`✓ webhook-auth-gate: all ${checked} webhook receiver(s) verify and reject.`)

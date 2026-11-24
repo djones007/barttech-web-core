@@ -115,7 +115,6 @@ function loadConfig() {
 }
 
 const cfg = loadConfig();
-const PRIMARY = new RegExp(`\\b(${cfg.primary})\\s*\\(`);
 const SECONDARY = new RegExp(`await\\s+[\\w.]*\\b(${cfg.secondary})\\s*\\(`, "i");
 
 // A return that tells the caller "we're done, all good".
@@ -192,22 +191,98 @@ function guardedBefore(lines, i, limit, from = 0) {
 }
 
 const findings = [];
+const unreadable = [];
 let filesWithPrimary = 0;
 let suppressions = 0;
 
+// Read every tracked file ONCE. A file that cannot be read is a finding, never a silent skip:
+// a gate that swallows its own read error reports a clean run over code it never saw.
+const SOURCES = new Map();
 for (const rel of trackedSourceFiles()) {
-  let src;
   try {
-    src = readWithinRoot(ROOT, rel);
-  } catch {
-    continue;
+    SOURCES.set(rel, readWithinRoot(ROOT, rel));
+  } catch (e) {
+    unreadable.push(`${rel}: ${e.message}`);
   }
+}
+
+// HELPER-WRAPPED WRITES. A route that calls `captureLead(...)`, which calls the primary store, used
+// to escape this gate: the route has no direct primary call, and the helper's own file was checked
+// only within the helper. So any function that directly calls the primary (found by scanning the
+// enclosing function of each primary call) is itself treated as a primary write at its call sites,
+// repeated up to 4 rounds so a wrapper of a wrapper is caught. Only EXPORTED, lower-camel-case names
+// of 5+ characters count (a generic inner closure such as `once` or `ask` cascaded into hundreds of
+// false wrappers when tried on a real repo; React components are not wrappers). Handler verbs and
+// `default` are never wrappers. Extra names can be declared in .lead-store-ordering.json as "primaryWrappers": ["name"].
+const HANDLER_VERBS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "default"]);
+const ENCLOSING_FN = /^\s*export\s+(?:default\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)|^\s*export\s+const\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?(?:function\b|\(|[A-Za-z_$][\w$]*\s*=>)/;
+// `function bartmailOptin(` DEFINES the name; it is not a call. Only that exact shape is excluded, so a
+// one-line helper (`function store() { return await bartmailOptin(...) }`) still counts as a call.
+function isDefinitionOf(line, re) {
+  const m = line.match(re);
+  return !!m && new RegExp(`\\bfunction\\s*\\*?\\s*${m[1]}\\s*\\(`).test(line);
+}
+const ANY_FN = /^\s*(?:async\s+)?function\b|^\s*const\s+[A-Za-z_$][\w$]*\s*(?::[^=]+)?=\s*(?:async\s*)?(?:function\b|\(|[A-Za-z_$][\w$]*\s*=>)/;
+const HANDLER_FILE = /\bexport\s+(?:async\s+)?function\s+(?:GET|POST|PUT|PATCH|DELETE)\b|\bexport\s+const\s+(?:GET|POST|PUT|PATCH|DELETE)\s*=/;
+const TOP_LEVEL_FN = /^(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)|^const\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?(?:function\b|\(|[A-Za-z_$][\w$]*\s*=>)/;
+const wrapperNames = new Set(Array.isArray(cfg.primaryWrappers) ? cfg.primaryWrappers : []); // exported: estate-wide
+const localWrappers = new Map(); // rel -> Set of top-level, non-exported helpers, scoped to that file only
+const validName = (n) => n && n.length >= 5 && !/^[A-Z]/.test(n) && !HANDLER_VERBS.has(n) && n !== cfg.primary;
+const nameRe = (rel) => new RegExp(`\\b(${[cfg.primary, ...wrapperNames, ...(localWrappers.get(rel) || [])].join("|")})\\s*\\(`);
+for (let round = 0; round < 4; round++) {
+  let added = 0;
+  for (const [rel, src] of SOURCES) {
+    if (/\.test\.|\.spec\./.test(rel)) continue;
+    const re = nameRe(rel);
+    if (!re.test(src)) continue;
+    const handlerFile = HANDLER_FILE.test(src);
+    const lines = src.split("\n");
+    lines.forEach((l, i) => {
+      if (!re.test(l) || /^\s*(\/\/|\*)/.test(l) || /\bimport\b/.test(l) || isDefinitionOf(l, re)) return;
+      for (let j = i; j >= 0; j--) {
+        const ex = lines[j].match(ENCLOSING_FN);
+        if (ex) {
+          const name = ex[1] || ex[2];
+          if (validName(name) && !wrapperNames.has(name)) { wrapperNames.add(name); added++; }
+          break;
+        }
+        if (ANY_FN.test(lines[j])) {
+          // innermost function is not exported: it only counts when it is a top-level helper in a
+          // file that defines an HTTP handler, and then only for call sites in that same file.
+          const tl = handlerFile && lines[j].match(TOP_LEVEL_FN);
+          const name = tl && (tl[1] || tl[2]);
+          if (validName(name) && !wrapperNames.has(name)) {
+            const set = localWrappers.get(rel) || new Set();
+            if (!set.has(name)) { set.add(name); localWrappers.set(rel, set); added++; }
+          }
+          break;
+        }
+      }
+    });
+  }
+  if (!added) break;
+}
+const alt = (rel) => [cfg.primary, ...wrapperNames, ...(localWrappers.get(rel) || [])].join("|");
+
+for (const [rel, src] of SOURCES) {
+  if (/\.test\.|\.spec\./.test(rel)) continue;
+  const PRIMARY = nameRe(rel);
   if (!PRIMARY.test(src)) continue;
+  const PRIMARY_CALL_AT_LINE_START = new RegExp(`^\\s*(void\\s+)?[\\w.]*\\b(${alt(rel)})\\s*\\(`);
 
   const lines = src.split("\n");
-  const firstPrimary = lines.findIndex(
-    (l) => PRIMARY.test(l) && !/^\s*(\/\/|\*)/.test(l) && !/\bimport\b|\bfunction\b/.test(l)
-  );
+  // Prefer the first primary call INSIDE the exported HTTP handler (so a helper defined above it
+  // that happens to call the primary is not mistaken for the handler's write); fall back to the
+  // first call anywhere in the file when there is no handler.
+  const handlerIdx = lines.findIndex((l) => HANDLER_FILE.test(l));
+  const isCall = (l) => PRIMARY.test(l) && !/^\s*(\/\/|\*)/.test(l) && !/\bimport\b/.test(l) && !isDefinitionOf(l, PRIMARY);
+  let firstPrimary = -1;
+  if (handlerIdx >= 0) {
+    for (let k = handlerIdx; k < lines.length; k++) {
+      if (isCall(lines[k])) { firstPrimary = k; break; }
+    }
+  }
+  if (firstPrimary < 0) firstPrimary = lines.findIndex(isCall);
   if (firstPrimary < 0) continue;
   filesWithPrimary++;
 
@@ -215,7 +290,7 @@ for (const rel of trackedSourceFiles()) {
   // `void bartmailOptin(...)`, fire-and-forgets it: the handler returns success and the serverless
   // instance can freeze before the write lands, so the lead is lost with a clean-looking response.
   const bareLine = lines[firstPrimary];
-  if (new RegExp(`^\\s*(void\\s+)?[\\w.]*\\b(${cfg.primary})\\s*\\(`).test(bareLine) && !annotatedReason(lines, firstPrimary)) {
+  if (PRIMARY_CALL_AT_LINE_START.test(bareLine) && !annotatedReason(lines, firstPrimary)) {
     findings.push({
       file: rel,
       line: firstPrimary + 1,
@@ -272,6 +347,12 @@ for (const rel of trackedSourceFiles()) {
   }
 }
 
+if (unreadable.length) {
+  console.log(`::error::Lead-store ordering gate could not read ${unreadable.length} tracked file(s); a gate that skips what it cannot read reports a clean run over code it never saw:`);
+  for (const u of unreadable.slice(0, 10)) console.log(`  ${u}`);
+  process.exit(1);
+}
+
 if (findings.length) {
   console.log(
     "::error::Primary lead store is not written first. Move the primary write above every" +
@@ -301,7 +382,7 @@ if (cfg.allowNoPrimary !== true) {
     console.log(
       `::error::Lead-store ordering gate checked NOTHING: ${leadRoutes.length} lead-capture route(s) ` +
         `(${leadRoutes.slice(0, 3).join(", ")}${leadRoutes.length > 3 ? ", ..." : ""}) but none calls the primary store ` +
-        `/${cfg.primary}/. Set "primary" in .lead-store-ordering.json to the real call name, or ` +
+        `/${cfg.primary}/ (or a wrapper of it). Set "primary" in .lead-store-ordering.json to the real call name, or ` +
         `"allowNoPrimary": true if these routes legitimately write elsewhere.`
     );
     process.exit(1);

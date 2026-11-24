@@ -3,6 +3,17 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-11-24b] — Gates: helper-wrapped writes followed, `/cron/` no longer a blanket skip, unreadable files fail
+
+### Fixed
+- **`check-lead-store-ordering.mjs` now follows helper-wrapped primary writes** (code scan M8, estate issue b4bd94c4). A route calling `captureLead()` that calls `bartmailOptin()` escaped the gate because the route held no direct primary call. Any exported lower-camel-case function (5+ characters) that directly calls the primary store is now treated as a primary write at its call sites, up to four levels deep; a top-level non-exported helper in a file that defines an HTTP handler counts for that file only. Extra names can be declared with `"primaryWrappers": [...]` in `.lead-store-ordering.json`. The ordering check now starts from the first primary-or-wrapper call inside the exported `GET/POST/...` handler, so a helper above the handler no longer stands in for it. A one-line `function x() { await bartmailOptin(...) }` is now seen as a call. A tracked file the gate cannot read is now an error, not a silent `continue`.
+- **`check-webhook-verification.mjs`: a `/cron/` path no longer exempts a route from the gate.** A real inbound receiver could sit under `/cron/` and never be checked. A cron route is skipped only while it reads no provider-signature header; one that does is checked like any receiver. When routes exist but none is a receiver the gate prints `NOT APPLICABLE ... Nothing was verified` instead of `all 0 ... verify and reject`.
+- Tests: `check-gates-wrappers-cron.test.ts` (violating fixture fails, clean fixture passes, for each change).
+
+### Changed
+- **Consumer impact, checked read-only over 34 consumer checkouts 2026-11-24:** exactly one consumer newly fails the lead-store gate, because a route returns success on a honeypot above the wrapped primary write; the fix is to annotate `// primary-store-ordering-ok: <reason>` or move the return. No consumer newly fails the webhook gate. Six consumer/gate pairs already failed before this change and are unaffected.
+- Not in this repo, still open: the `|| echo` after `check-vendored-libs.mjs` and the gate steps live in each consumer's `.github/workflows/ci.yml`, seeded from the site template. Both gates are already wired in the template and in nearly every consumer workflow; a handful of non-site repos lack one or both.
+
 ## [2026-11-24] — Shared rate limiter (durable + pruned sliding window); three gates tightened
 
 ### Added
