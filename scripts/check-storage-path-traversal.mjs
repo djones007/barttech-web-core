@@ -64,7 +64,24 @@ const STORAGE_METHODS = "upload|remove|createSignedUrl|createSignedUrls|download
 const STORAGE_CALL = new RegExp(
   `\\.storage\\s*\\.\\s*from\\s*\\([^)]*\\)\\s*\\.\\s*(?:${STORAGE_METHODS})\\s*\\(`
 );
-const IMPORT_RE = /import\s*\{[^}]*\b(safeUploadFilename|sanitizeStorageSegment)\b[^}]*\}\s*from\s*["'][^"']*\/uploads["']/;
+const IMPORT_RE = /import\s*\{([^}]*\b(?:safeUploadFilename|sanitizeStorageSegment)\b[^}]*)\}\s*from\s*["'][^"']*\/uploads["']/g;
+
+// Importing the sanitiser is not using it (code scan 2026-11-20, M8). The gate used to pass on the
+// import alone, so an unused import (or one left behind by a refactor) satisfied it while the storage
+// key went in raw. Now the imported local name must also be CALLED somewhere outside the import line.
+// Returns true when a sanitiser is imported AND called.
+function sanitiserImportedAndCalled(cleaned) {
+  const locals = [];
+  for (const m of cleaned.matchAll(IMPORT_RE)) {
+    for (const spec of m[1].split(",")) {
+      const mm = spec.trim().match(/^(safeUploadFilename|sanitizeStorageSegment)(?:\s+as\s+(\w+))?$/);
+      if (mm) locals.push(mm[2] || mm[1]);
+    }
+  }
+  if (!locals.length) return false;
+  const body = cleaned.replace(IMPORT_RE, "");
+  return locals.some((n) => new RegExp(`\\b${n}\\s*\\(`).test(body));
+}
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -147,7 +164,7 @@ for (const file of walk(ROOT)) {
   checked++;
   const rel = relative(ROOT, file);
   if (baseline.includes(rel)) continue;
-  if (IMPORT_RE.test(cleaned)) continue;
+  if (sanitiserImportedAndCalled(cleaned)) continue;
 
   findings.push(rel);
 }
@@ -155,7 +172,7 @@ for (const file of walk(ROOT)) {
 if (findings.length) {
   console.log(
     "::error::A file calls Supabase Storage (.upload/.remove/.createSignedUrl(s)/.download/.move/.copy)" +
-      " without importing the shared filename sanitiser. Any user- or DB-controlled string reaching a" +
+      " without importing AND calling the shared filename sanitiser. Any user- or DB-controlled string reaching a" +
       " storage key without it is a path-traversal risk — this is what Aikido finding 37987812 flagged." +
       " Import safeUploadFilename (or a documented alias) from @/web-core/uploads (or your repo's" +
       " @/lib/uploads shim) and run it over every path SEGMENT before it reaches the storage call." +

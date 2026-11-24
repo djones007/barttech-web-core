@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
 
+## [2026-11-24] — Shared rate limiter (durable + pruned sliding window); three gates tightened
+
+### Added
+- **`rateLimit.ts`: `createRateLimiter()` and `createMemoryWindow()`.** Replaces the hand-rolled `ipCounts` Map every proxy carried (code scan 2026-11-20 M7/M8, estate issue b4bd94c4): per-instance, never pruned, fixed window. The in-memory part is a sliding window, bounded per key (at most `max` timestamps), pruned at most once a window, and capped at `maxKeys` with oldest-first eviction. When the caller injects an `rpc` it also calls the shared BartMail RPC `hit_rate_limit(p_bucket, p_max, p_window_secs) returns boolean` (bartmail migration `20260718_rate_limit_rpc.sql`, service_role only; the same call a personal-site consumer already uses) for a cross-instance verdict. No Supabase import: the client is injected. Failure behaviour is explicit via `onRpcFailure`: `"memory"` (default: the in-memory window decides, an outage never blocks a lead but a flood is still capped), `"allow"`, or `"deny"` (for routes in front of paid APIs). An RPC error, throw, timeout (default 1.5s) or non-boolean answer is a failure, never "allowed". Tests in `rateLimit.test.ts`. Declared in `shared-modules.json` with a resource match on the old fixed-window Map shape. **No migration needed: the RPC already exists in BartMail's database.** Consumers pick it up on their next pointer bump.
+
+### Changed
+- **`check-storage-path-traversal.mjs`**: importing `safeUploadFilename` / `sanitizeStorageSegment` no longer satisfies the gate; the imported name (including an `as` alias) must also be called.
+- **`check-lead-store-ordering.mjs`**: a `{ received | saved | submitted | subscribed | done: true }` return above the primary write now counts as an early success (it only recognised `ok`/`success`). A fire-and-forget primary write (bare statement or `void`) now fails as "not awaited" (standard section 20).
+- Not done (still open from M8): helper-wrapped primary writes, only the first primary call per file, webhook-verifier same-branch check, `/cron/` and thin re-export skips, wiring `check-webhook-swallowed-errors` and `check-migration-grants` into site CI, free-text `safe-html-ok:` reasons, `|| echo` on the vendored-libs step.
+
 ## [2026-11-23] — `bartmailOptin` no longer lifts suppressions; gates that check nothing now fail
 
 ### Fixed
