@@ -37,6 +37,15 @@
         }
       ]
     },
+    "rateLimit": {
+      "owner": "@/web-core/rateLimit",
+      "resources": [
+        {
+          "match": "new\\s+Map<string,\\s*\\{\\s*count:\\s*number;\\s*windowStart:\\s*number\\s*\\}>",
+          "reason": "a hand-rolled fixed-window ipCounts Map in a proxy is per-instance, unpruned and doubles a burst at the window boundary (code scan 2026-11-20 M7/M8). Use createRateLimiter() from web-core/rateLimit."
+        }
+      ]
+    },
     "signedRequest": {
       "owner": "@/web-core/signedRequest",
       "resources": [],

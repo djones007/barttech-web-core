@@ -88,3 +88,43 @@ test("lead-store-ordering: a real primary write is still checked and a bad order
     assert.equal(run("check-lead-store-ordering.mjs", bad).status, 1);
   } finally { rmSync(good, { recursive: true, force: true }); rmSync(bad, { recursive: true, force: true }); }
 });
+
+// ---- M8 follow-ups (b4bd94c4): gates that passed without really checking ----
+
+test("lead-store-ordering: a `received: true` success return above the primary write FAILS", () => {
+  const d = repo({ "src/app/api/optin/route.ts": "export async function POST(r:Request){\n if (x) { return NextResponse.json({ received: true }) }\n await bartmailOptin({email:'a'}); return Response.json({ok:true}) }\n" }, true);
+  try { assert.equal(run("check-lead-store-ordering.mjs", d).status, 1); } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+test("lead-store-ordering: a fire-and-forget primary write FAILS, an awaited or returned one passes", () => {
+  const bare = repo({ "src/app/api/optin/route.ts": "export async function POST(r:Request){\n bartmailOptin({email:'a'});\n return Response.json({ok:true}) }\n" }, true);
+  const voided = repo({ "src/app/api/optin/route.ts": "export async function POST(r:Request){\n void bartmailOptin({email:'a'});\n return Response.json({ok:true}) }\n" }, true);
+  const ret = repo({ "src/app/api/optin/route.ts": "export async function POST(r:Request){\n return bartmailOptin({email:'a'}) }\n" }, true);
+  try {
+    const rb = run("check-lead-store-ordering.mjs", bare);
+    assert.equal(rb.status, 1);
+    assert.match(rb.out, /not awaited/);
+    assert.equal(run("check-lead-store-ordering.mjs", voided).status, 1);
+    assert.equal(run("check-lead-store-ordering.mjs", ret).status, 0);
+  } finally { for (const d of [bare, voided, ret]) rmSync(d, { recursive: true, force: true }); }
+});
+
+// Built by concatenation so this file does not itself contain a storage call for the gate to scan.
+const STORE = "await supabase" + ".stor" + "age.from('b').upload(key, file);\n";
+// This gate walks process.cwd() rather than taking a directory argument.
+function runInCwd(script: string, dir: string) {
+  const r = spawnSync(process.execPath, [S(script)], { encoding: "utf8", cwd: dir });
+  return { status: r.status, out: r.stdout + r.stderr };
+}
+test("storage-path-traversal: an import with no call FAILS; an import that is called passes", () => {
+  const unused = repo({ "src/a.ts": "import { safeUploadFilename } from '@/lib/uploads';\n" + STORE }, false);
+  const used = repo({ "src/a.ts": "import { safeUploadFilename } from '@/lib/uploads';\nconst key = safeUploadFilename(n);\n" + STORE }, false);
+  const aliased = repo({ "src/a.ts": "import { safeUploadFilename as clean } from '@/lib/uploads';\nconst key = clean(n);\n" + STORE }, false);
+  const none = repo({ "src/a.ts": STORE }, false);
+  try {
+    assert.equal(runInCwd("check-storage-path-traversal.mjs", unused).status, 1);
+    assert.equal(runInCwd("check-storage-path-traversal.mjs", used).status, 0);
+    assert.equal(runInCwd("check-storage-path-traversal.mjs", aliased).status, 0);
+    assert.equal(runInCwd("check-storage-path-traversal.mjs", none).status, 1);
+  } finally { for (const d of [unused, used, aliased, none]) rmSync(d, { recursive: true, force: true }); }
+});

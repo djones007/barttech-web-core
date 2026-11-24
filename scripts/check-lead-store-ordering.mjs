@@ -120,7 +120,7 @@ const SECONDARY = new RegExp(`await\\s+[\\w.]*\\b(${cfg.secondary})\\s*\\(`, "i"
 
 // A return that tells the caller "we're done, all good".
 const SUCCESSY =
-  /status:\s*(200|201|202|204|301|302|307|308)\b|\b(ok|success)\s*:\s*true|\.redirect\s*\(/;
+  /status:\s*(200|201|202|204|301|302|307|308)\b|\b(ok|success|received|saved|submitted|subscribed|done)\s*:\s*true|\.redirect\s*\(/;
 // A return that refuses the request outright — no lead exists to lose.
 const REJECTY = /status:\s*(4\d\d|5\d\d)\b/;
 
@@ -211,6 +211,20 @@ for (const rel of trackedSourceFiles()) {
   if (firstPrimary < 0) continue;
   filesWithPrimary++;
 
+  // The primary write must be AWAITED (standard §20). A bare `bartmailOptin(...)` statement, or
+  // `void bartmailOptin(...)`, fire-and-forgets it: the handler returns success and the serverless
+  // instance can freeze before the write lands, so the lead is lost with a clean-looking response.
+  const bareLine = lines[firstPrimary];
+  if (new RegExp(`^\\s*(void\\s+)?[\\w.]*\\b(${cfg.primary})\\s*\\(`).test(bareLine) && !annotatedReason(lines, firstPrimary)) {
+    findings.push({
+      file: rel,
+      line: firstPrimary + 1,
+      primaryLine: firstPrimary + 1,
+      kind: "primary write is not awaited",
+      text: bareLine.trim().slice(0, 100),
+    });
+  }
+
   // Scan only the enclosing handler, not the whole file. Helper functions
   // defined ABOVE the handler routinely contain their own awaited sends and
   // their own returns; those are not in the request path ahead of the primary
@@ -266,7 +280,7 @@ if (findings.length) {
       ' (a honeypot, typically), annotate the line "// primary-store-ordering-ok: <reason>".'
   );
   for (const f of findings) {
-    console.log(`  ${f.file}:${f.line}  ${f.kind} — precedes the primary write at line ${f.primaryLine}`);
+    console.log(`  ${f.file}:${f.line}  ${f.kind}${f.kind === "primary write is not awaited" ? "" : ` — precedes the primary write at line ${f.primaryLine}`}`);
     console.log(`      ${f.text}`);
   }
   process.exit(1);
