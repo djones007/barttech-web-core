@@ -428,6 +428,11 @@
       "owner": "@/web-core/cronPause",
       "resources": [],
       "why": "Reads one service-role RPC (`cron_control_check`) and writes the paused heartbeat THROUGH cronHeartbeat, which owns that write. No resource rule on purpose: the Command Centre's /agents admin screen legitimately reads and upserts `cron_controls` (the only writer), so a match on the table would fire on correct code. The Node twin for launchd/Paperclip agents is Barttech OS tools/cron-control.js — same table, same modes, same fail-open rule; change both together."
+    },
+    "siteLock": {
+      "owner": "@/web-core/siteLock",
+      "resources": [],
+      "why": "a pure WebCrypto HMAC token (no Node crypto, so it runs in Edge middleware and in a Node server action alike). It reads and writes nothing: the consumer owns the cookie name, the password env var, the lock page and the rate limit, because those are per-site. No resource match was added: the thing worth forbidding is a constant-valued unlock cookie, and a regex for that (a cookie value compared to '1') would fire on unrelated flags. Enforced by review. Estate issue 82e6f187 (the same code had been copied into two repos)."
     }
   }
 }

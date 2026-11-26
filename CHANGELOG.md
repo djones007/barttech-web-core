@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-11-26b] — `siteLock.ts`: signed site-lock cookie token moves into web-core
+
+### Added
+- **`siteLock.ts`**: `siteLockToken()`, `isValidSiteLockToken()`, `checkSiteLockPassword()`, `constantTimeStringEqual()`, `DEFAULT_SITE_LOCK_MARKER`, `SITE_LOCK_COOKIE_MAX_AGE_SEC`. The unlock cookie value is hex(HMAC-SHA256(password, marker)) instead of a constant, so it cannot be forged by sending the header and rotating the password invalidates every issued cookie. WebCrypto only and no imports: the same code issues the cookie in a Node server action and verifies it in Edge middleware. Fails closed on an empty password or missing cookie. The marker is a parameter (default `site-unlock-v1`) so each consumer can keep or bump its own. Cookie name, password env var, lock page and rate limiting stay per-site. Tests in `siteLock.test.ts`; declared in `shared-modules.json`. Adds no external import. Estate issue 82e6f187 (two repos each carried a copy; one still used a literal `1` cookie).
+- Not done here: consumer pin bumps and replacing the local copies (a consumer that keeps its old marker string keeps existing cookies valid).
+
+
 ## [2026-11-26] — `sentryNoise` drops the injected `src/preload/document.js` canPlayType recursion
 
 ### Fixed
