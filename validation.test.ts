@@ -60,3 +60,32 @@ test("every suggestion is itself a valid address", () => {
     assert.equal(isValidEmail(suggestEmailCorrection(e)?.suggestion), true, e);
   }
 });
+
+// --- isAuthenticatedOptinHealthProbe -------------------------------------
+import { isAuthenticatedOptinHealthProbe } from "./validation";
+
+test("optin-health probe: sentinel + secret header needs env, shape and header", () => {
+  // The sentinel user/domain are read at module load, so set them and re-import.
+  process.env.OPTIN_HEALTH_SENTINEL_USER = "probe";
+  process.env.OPTIN_HEALTH_SENTINEL_DOMAIN = "example.test";
+  delete require.cache[require.resolve("./validation")];
+  const fn = require("./validation").isAuthenticatedOptinHealthProbe as typeof isAuthenticatedOptinHealthProbe;
+  const good = "probe+optin-health-brand-a@example.test";
+  const hdr = (v?: string) => new Headers(v === undefined ? {} : { "x-optin-health-secret": v });
+
+  delete process.env.OPTIN_HEALTH_SECRET;
+  assert.equal(fn(good, hdr("s3cret")), false, "env unset fails closed");
+  process.env.OPTIN_HEALTH_SECRET = "";
+  assert.equal(fn(good, hdr("")), false, "empty env + empty header fails closed");
+
+  process.env.OPTIN_HEALTH_SECRET = "s3cret";
+  assert.equal(fn(good, hdr("wrong")), false, "wrong header");
+  assert.equal(fn(good, hdr("s3cret-longer")), false, "different length header");
+  assert.equal(fn(good, hdr()), false, "missing header");
+  assert.equal(fn(good, null), false, "no headers");
+  assert.equal(fn("someone@example.test", hdr("s3cret")), false, "right header, wrong shape");
+  assert.equal(fn(null, hdr("s3cret")), false, "no email");
+  assert.equal(fn(good, hdr("s3cret")), true, "right header + shape");
+  assert.equal(fn(good, { "X-Optin-Health-Secret": "s3cret" }), true, "plain record, any case");
+  assert.equal(fn(good, new Request("https://x.test", { headers: { "x-optin-health-secret": "s3cret" } })), true, "Request");
+});

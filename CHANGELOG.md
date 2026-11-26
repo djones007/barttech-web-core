@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-11-26b] — optin-health captcha exemption now needs a secret header (estate issue c12d191c)
+
+### Added
+- `validation.ts` `isAuthenticatedOptinHealthProbe(email, headers)` and `OPTIN_HEALTH_SECRET_HEADER` (`x-optin-health-secret`). True only when the address has the sentinel shape AND the header equals env `OPTIN_HEALTH_SECRET`, compared with `crypto.timingSafeEqual` over SHA-256 digests (length-safe). Fails closed: env unset or empty means false. Accepts `Headers`, `Request` or a plain record. Tests in `validation.test.ts`.
+
+### Changed
+- `isOptinHealthSentinel` is unchanged (additive, golden rule 4) but its doc now says shape alone must never skip a captcha: the pattern is derivable from this source. Consumers should switch their captcha exemption to `isAuthenticatedOptinHealthProbe`; notification suppression may keep the shape check. Rollout: set the secret on the monitor first, then on consumers, then switch the call sites.
+
+
 ## [2026-11-26] — `sentryNoise` drops the injected `src/preload/document.js` canPlayType recursion
 
 ### Fixed
