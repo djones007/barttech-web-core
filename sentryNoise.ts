@@ -127,6 +127,16 @@ const NATIVE_BRIDGE_MESSAGES = [
  * would make a substring rule certain to swallow a real error eventually.
  */
 const TRANSLATE_PROXY_FRAME = "translate_http";
+
+/**
+ * A script some iOS WebViews / privacy tools inject into the page, reported as
+ * `src/preload/document.js`, which wraps `HTMLMediaElement.canPlayType` and
+ * recurses into itself ("Maximum call stack size exceeded", seen live on
+ * iOS 15 Safari). No consumer ships a bundle at that path: ours
+ * come from `/_next/`. Matched on the exact path suffix, never on a bare
+ * `document.js` or on the message.
+ */
+const INJECTED_PRELOAD_FRAME = /(?:^|\/)src\/preload\/document\.js(?:[?#]|$)/;
 const TRANSLATE_PROXY_HOST = ".translate.goog";
 
 /**
@@ -272,6 +282,7 @@ export function isNoiseEvent(event: NoiseEvent | undefined, hint?: NoiseEventHin
     const filename = frame?.filename ?? "";
     if (INJECTED_SCRIPT_SCHEMES.some((scheme) => filename.startsWith(scheme))) return true;
     if (filename.includes(TRANSLATE_PROXY_FRAME)) return true;
+    if (INJECTED_PRELOAD_FRAME.test(filename)) return true;
   }
 
   if ((event?.request?.url ?? "").includes(TRANSLATE_PROXY_HOST)) return true;

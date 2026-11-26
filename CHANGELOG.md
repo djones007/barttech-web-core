@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — grouped by date, newest first. Entries use **Added** (new features), **Changed** (behavior changes), **Fixed** (bug fixes), **Removed** (deleted features).
 
+## [2026-11-26] — `sentryNoise` drops the injected `src/preload/document.js` canPlayType recursion
+
+### Fixed
+- `isNoiseEvent()` now drops events with a frame at `src/preload/document.js`, an injected script that wraps `HTMLMediaElement.canPlayType` and overflows the stack (seen live on iOS 15 Safari). Exact path match only; our `/_next/` bundles and look-alike names still report. Tests in `sentryNoise.test.ts`.
+
 
 ## [2026-11-24b] — Gates: helper-wrapped writes followed, `/cron/` no longer a blanket skip, unreadable files fail
 

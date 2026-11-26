@@ -108,7 +108,21 @@ test("drops the Google app's injected-script throws on iOS", () => {
   }
 });
 
+test("drops the injected src/preload/document.js canPlayType recursion", () => {
+  const event = errorEvent("Maximum call stack size exceeded", [
+    "src/preload/document.js",
+    "app:///src/preload/document.js",
+  ]);
+  assert.equal(isNoiseEvent(event), true);
+});
+
 // --- must NOT be filtered ---------------------------------------------------
+
+test("keeps a stack overflow from our own bundle and look-alike filenames", () => {
+  assert.equal(isNoiseEvent(errorEvent("Maximum call stack size exceeded", ["app:///_next/static/chunks/page-abc.js"])), false);
+  assert.equal(isNoiseEvent(errorEvent("x", ["app:///_next/static/chunks/document.js"])), false);
+  assert.equal(isNoiseEvent(errorEvent("x", ["app:///src/preload/documents.js"])), false);
+});
 
 test("keeps an application error thrown inside the Google app", () => {
   const event = errorEvent("Cannot read properties of null (reading 'id')", [
