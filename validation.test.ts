@@ -69,6 +69,7 @@ test("optin-health probe: sentinel + secret header needs env, shape and header",
   process.env.OPTIN_HEALTH_SENTINEL_USER = "probe";
   process.env.OPTIN_HEALTH_SENTINEL_DOMAIN = "example.test";
   delete require.cache[require.resolve("./validation")];
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const fn = require("./validation").isAuthenticatedOptinHealthProbe as typeof isAuthenticatedOptinHealthProbe;
   const good = "probe+optin-health-brand-a@example.test";
   const hdr = (v?: string) => new Headers(v === undefined ? {} : { "x-optin-health-secret": v });
