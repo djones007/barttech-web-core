@@ -12,6 +12,8 @@
 // Next build via the @barttech/web-core submodule; import as `@/web-core/validation`.
 // ---------------------------------------------------------------------------
 
+import { createHash, timingSafeEqual } from "node:crypto";
+
 /** Maximum accepted request body size, in bytes (32 KB). */
 export const MAX_BODY_BYTES = 32 * 1024;
 /** Alias for callers that named the cap `BODY_BYTE_CAP`. */
@@ -267,6 +269,44 @@ export function isOptinHealthSentinel(email: string | null | undefined): boolean
   const domain = escapeRegExpLiteral(OPTIN_HEALTH_SENTINEL_DOMAIN);
   const re = new RegExp(`^${user}\\+optin-health-[a-z0-9-]+@${domain}$`, "i");
   return re.test(email.trim());
+}
+
+/** Header the optin-health monitor must send to be exempted from a captcha. */
+export const OPTIN_HEALTH_SECRET_HEADER = "x-optin-health-secret";
+
+/**
+ * True only when the request is genuinely the optin-health monitor: the address
+ * has the sentinel shape (`isOptinHealthSentinel`) AND the request carries
+ * `x-optin-health-secret` equal to env `OPTIN_HEALTH_SECRET`, compared in
+ * constant time. Use THIS, never the shape check alone, to skip a captcha: the
+ * shape is derivable from this public source, so shape alone lets anyone who
+ * guesses an address walk past the captcha.
+ *
+ * Fails closed: `OPTIN_HEALTH_SECRET` unset/empty, a missing or wrong header, or
+ * a non-sentinel address all return false. The secret is read at call time.
+ * `headers` accepts a `Headers`, a `Request`, or a plain header record.
+ */
+export function isAuthenticatedOptinHealthProbe(
+  email: string | null | undefined,
+  headers: Headers | Request | Record<string, string | string[] | undefined> | null | undefined,
+): boolean {
+  const secret = process.env.OPTIN_HEALTH_SECRET ?? "";
+  if (!secret || !headers) return false;
+  if (!isOptinHealthSentinel(email)) return false;
+  let supplied: string | null | undefined;
+  const h = typeof Request !== "undefined" && headers instanceof Request ? headers.headers : headers;
+  if (typeof Headers !== "undefined" && h instanceof Headers) {
+    supplied = h.get(OPTIN_HEALTH_SECRET_HEADER);
+  } else {
+    const rec = h as Record<string, string | string[] | undefined>;
+    const key = Object.keys(rec).find((k) => k.toLowerCase() === OPTIN_HEALTH_SECRET_HEADER);
+    const v = key ? rec[key] : undefined;
+    supplied = Array.isArray(v) ? v[0] : v;
+  }
+  if (typeof supplied !== "string" || !supplied) return false;
+  const a = createHash("sha256").update(supplied).digest();
+  const b = createHash("sha256").update(secret).digest();
+  return timingSafeEqual(a, b);
 }
 
 // ---------------------------------------------------------------------------
